@@ -1,6 +1,5 @@
 local mod = get_mod('CombatStats')
 
-local Breed = mod:original_require('scripts/utilities/breed')
 local BuffTemplates = mod:original_require('scripts/settings/buff/buff_templates')
 
 local function _get_gameplay_time()
@@ -63,114 +62,6 @@ local function _should_show_buff(buff_template_name, uptime_percent, duration)
     end
 
     return false
-end
-
-local function _show_damage_stats(stats, prefix)
-    prefix = prefix or ''
-
-    Imgui.text(string.format('%sTotal Damage: %d', prefix, stats.total_damage))
-    Imgui.same_line()
-    if stats.total_hits > 0 then
-        Imgui.text(string.format('(Avg: %.0f per hit)', stats.total_damage / stats.total_hits))
-    end
-
-    if stats.melee_damage > 0 or stats.ranged_damage > 0 then
-        Imgui.indent()
-        if stats.melee_damage > 0 then
-            Imgui.text(
-                string.format(
-                    '%sMelee: %d (%.1f%%)',
-                    prefix,
-                    stats.melee_damage,
-                    stats.total_damage > 0 and (stats.melee_damage / stats.total_damage * 100) or 0
-                )
-            )
-        end
-        if stats.ranged_damage > 0 then
-            Imgui.text(
-                string.format(
-                    '%sRanged: %d (%.1f%%)',
-                    prefix,
-                    stats.ranged_damage,
-                    stats.total_damage > 0 and (stats.ranged_damage / stats.total_damage * 100) or 0
-                )
-            )
-        end
-        Imgui.unindent()
-    end
-
-    if stats.crit_damage > 0 then
-        Imgui.text(
-            string.format(
-                '%sCrit Damage: %d (%.1f%% of total)',
-                prefix,
-                stats.crit_damage,
-                stats.total_damage > 0 and (stats.crit_damage / stats.total_damage * 100) or 0
-            )
-        )
-    end
-
-    if stats.weakspot_damage > 0 then
-        Imgui.text(
-            string.format(
-                '%sWeakspot Damage: %d (%.1f%% of total)',
-                prefix,
-                stats.weakspot_damage,
-                stats.total_damage > 0 and (stats.weakspot_damage / stats.total_damage * 100) or 0
-            )
-        )
-    end
-
-    local dot_damage = stats.bleed_damage + stats.burn_damage + stats.toxin_damage
-    if dot_damage > 0 then
-        Imgui.text(
-            string.format(
-                '%sDOT Damage: %d (%.1f%% of total)',
-                prefix,
-                dot_damage,
-                stats.total_damage > 0 and (dot_damage / stats.total_damage * 100) or 0
-            )
-        )
-        Imgui.indent()
-        if stats.bleed_damage > 0 then
-            Imgui.text(string.format('%sBleed: %d', prefix, stats.bleed_damage))
-        end
-        if stats.burn_damage > 0 then
-            Imgui.text(string.format('%sBurn: %d', prefix, stats.burn_damage))
-        end
-        if stats.toxin_damage > 0 then
-            Imgui.text(string.format('%sToxin: %d', prefix, stats.toxin_damage))
-        end
-        Imgui.unindent()
-    end
-end
-
-local function _show_hit_stats(stats, prefix)
-    prefix = prefix or ''
-
-    Imgui.text(string.format('%sTotal Hits: %d', prefix, stats.total_hits))
-
-    if stats.crit_hits > 0 then
-        Imgui.text(
-            string.format(
-                '%sCrit Hits: %d (%.1f%%)',
-                prefix,
-                stats.crit_hits,
-                stats.total_hits > 0 and (stats.crit_hits / stats.total_hits * 100) or 0
-            )
-        )
-    end
-
-    if stats.weakspot_hits > 0 then
-        Imgui.text(
-            string.format(
-                '%sWeakspot Hits: %d (%.1f%%)',
-                prefix,
-                stats.weakspot_hits,
-                stats.total_hits > 0 and (stats.weakspot_hits / stats.total_hits * 100) or 0
-            )
-        )
-    end
 end
 
 local function _show_complete_stats(stats, duration, buff_uptime, title_prefix)
@@ -719,7 +610,7 @@ function CombatStatsTracker:update(dt)
         return
     end
 
-    local _, closed = Imgui.begin_window('Combat Stats Tracker')
+    local _, closed = Imgui.begin_window('Combat Stats Tracker', 'always_auto_resize')
 
     if closed then
         self:close()
