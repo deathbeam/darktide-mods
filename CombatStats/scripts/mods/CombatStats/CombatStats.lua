@@ -64,12 +64,10 @@ local function _should_show_buff(buff_template_name, uptime_percent, duration)
     return false
 end
 
-local function _show_complete_stats(stats, duration, buff_uptime, title_prefix)
-    title_prefix = title_prefix or ''
-
+local function _show_complete_stats(stats, duration, buff_uptime)
     Imgui.spacing()
 
-    if Imgui.collapsing_header(title_prefix .. 'Damage Stats', 'default_open') then
+    if Imgui.collapsing_header('Damage Stats', true) then
         Imgui.indent()
 
         local dps = duration > 0 and stats.total_damage / duration or 0
@@ -150,7 +148,7 @@ local function _show_complete_stats(stats, duration, buff_uptime, title_prefix)
 
     Imgui.spacing()
 
-    if Imgui.collapsing_header(title_prefix .. 'Hit Stats') then
+    if Imgui.collapsing_header('Hit Stats', true) then
         Imgui.indent()
 
         Imgui.text(string.format('Total Hits: %d', stats.total_hits))
@@ -203,7 +201,7 @@ local function _show_complete_stats(stats, duration, buff_uptime, title_prefix)
     if duration > 0 and buff_uptime then
         Imgui.spacing()
 
-        if Imgui.collapsing_header(title_prefix .. 'Buff Uptime') then
+        if Imgui.collapsing_header('Buff Uptime', true) then
             Imgui.indent()
 
             local sorted_buffs = {}
@@ -643,7 +641,7 @@ function CombatStatsTracker:update(dt)
     Imgui.spacing()
     Imgui.separator()
 
-    _show_complete_stats(stats, duration, self._buff_uptime, 'Session ')
+    _show_complete_stats(stats, duration, self._buff_uptime)
 
     if #self._engagements > 0 then
         Imgui.spacing()
