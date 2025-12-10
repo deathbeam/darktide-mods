@@ -30,6 +30,10 @@ function mod.toggle_window()
 end
 
 function mod.toggle_window_focus()
+    if not mod.tracker._is_open then
+        mod.tracker:open()
+    end
+
     if mod.tracker._is_focused then
         mod.tracker:unfocus()
     else
