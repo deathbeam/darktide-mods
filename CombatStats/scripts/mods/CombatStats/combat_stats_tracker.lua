@@ -645,7 +645,7 @@ function CombatStatsTracker:_finish_enemy_engagement(unit)
     self._session_stats_dirty = true
 end
 
-function CombatStatsTracker:_update_enemy_buffs(dt)
+function CombatStatsTracker:_update_active_engagements()
     if not self:_has_active_engagements() then
         return
     end
@@ -654,18 +654,7 @@ function CombatStatsTracker:_update_enemy_buffs(dt)
     local to_remove = {}
 
     for i, engagement in ipairs(self._active_engagements) do
-        if ALIVE[engagement.unit] then
-            engagement.duration = current_time - engagement.start_time
-            engagement.dps = engagement.duration > 0 and engagement.total_damage / engagement.duration or 0
-
-            for buff_name, _ in pairs(self._active_buffs) do
-                if not engagement.buffs[buff_name] then
-                    engagement.buffs[buff_name] = 0
-                end
-                engagement.buffs[buff_name] = engagement.buffs[buff_name] + dt
-            end
-        else
-            -- Enemy died, mark for removal
+        if not ALIVE[engagement.unit] then
             engagement.in_progress = false
             engagement.end_time = current_time
             engagement.duration = current_time - engagement.start_time
@@ -674,13 +663,32 @@ function CombatStatsTracker:_update_enemy_buffs(dt)
         end
     end
 
-    -- Remove dead engagements (iterate backwards to avoid index issues)
     for i = #to_remove, 1, -1 do
         table.remove(self._active_engagements, to_remove[i])
     end
 
     if #to_remove > 0 then
         self._session_stats_dirty = true
+    end
+end
+
+function CombatStatsTracker:_update_enemy_buffs(dt)
+    if not self:_has_active_engagements() then
+        return
+    end
+
+    local current_time = _get_gameplay_time()
+
+    for i, engagement in ipairs(self._active_engagements) do
+        engagement.duration = current_time - engagement.start_time
+        engagement.dps = engagement.duration > 0 and engagement.total_damage / engagement.duration or 0
+
+        for buff_name, _ in pairs(self._active_buffs) do
+            if not engagement.buffs[buff_name] then
+                engagement.buffs[buff_name] = 0
+            end
+            engagement.buffs[buff_name] = engagement.buffs[buff_name] + dt
+        end
     end
 end
 
@@ -736,6 +744,7 @@ function CombatStatsTracker:update(dt)
         return
     end
 
+    self:_update_active_engagements()
     self:_update_buffs(dt)
     self:_update_combat_time(dt)
 
