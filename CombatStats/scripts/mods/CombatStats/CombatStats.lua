@@ -21,7 +21,7 @@ function mod.update(dt)
     mod.tracker:draw()
 end
 
-function mod.toggle_combat_stats()
+function mod.toggle_window()
     if mod.tracker._is_open then
         mod.tracker:close()
     else
@@ -29,7 +29,7 @@ function mod.toggle_combat_stats()
     end
 end
 
-function mod.toggle_focus_combat_stats()
+function mod.toggl_window_focus()
     if mod.tracker._is_focused then
         mod.tracker:unfocus()
     else

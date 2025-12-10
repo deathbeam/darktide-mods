@@ -755,8 +755,8 @@ function CombatStatsTracker:draw()
         return
     end
 
-    Imgui.set_next_window_pos(20, 20)
-    Imgui.set_next_window_size(600, 800)
+    Imgui.set_next_window_pos(mod:get('window_x'), mod:get('window_y'))
+    Imgui.set_next_window_size(mod:get('window_width'), mod:get('window_height'))
     local _, closed = Imgui.begin_window(mod:localize('mod_name'), 'always_auto_resize', 'no_move')
 
     if closed then

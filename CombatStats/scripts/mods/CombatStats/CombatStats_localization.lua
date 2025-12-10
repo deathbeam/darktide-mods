@@ -29,10 +29,27 @@ return {
     max_kill_history_tooltip = {
         en = 'Maximum number of kills to show in history (5-50).',
     },
-    toggle_stats_keybind = {
+
+    -- Window
+    window_group = {
+        en = 'Stats Window Settings',
+    },
+    window_width = {
+        en = 'Window Width',
+    },
+    window_height = {
+        en = 'Window Height',
+    },
+    window_x = {
+        en = 'Window X Position',
+    },
+    window_y = {
+        en = 'Window Y Position',
+    },
+    toggle_window_keybind = {
         en = 'Toggle Stats Window',
     },
-    toggle_focus_stats_keybind = {
+    toggle_window_focus_keybind = {
         en = 'Toggle Focus on Stats Window',
     },
 
