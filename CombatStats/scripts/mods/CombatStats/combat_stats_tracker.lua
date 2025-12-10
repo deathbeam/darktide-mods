@@ -292,7 +292,7 @@ function CombatStatsTracker:is_enabled(ui_only)
         return ui_only and mod:get('persist_stats_in_hub')
     end
 
-    if not (gamemode_name == 'shooting_range') then
+    if gamemode_name == 'shooting_range' then
         return mod:get('only_in_psykanium')
     end
 
