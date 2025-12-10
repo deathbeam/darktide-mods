@@ -6,28 +6,22 @@ return {
         en = 'Track detailed combat statistics including damage, kills, buff uptime, and more.',
     },
     show_hud_overlay = {
-        en = 'Show HUD Overlay',
+        en = 'Show Overlay',
     },
     show_hud_overlay_tooltip = {
-        en = 'Display the minimal stats overlay on your HUD during combat.',
+        en = 'Display the minimal stats overlay during combat.',
     },
-    only_in_psykanium = {
-        en = 'Track Only in Psykanium',
+    enable_in_missions = {
+        en = 'Enable in Missions',
     },
-    only_in_psykanium_tooltip = {
-        en = 'If enabled, combat stats will only be tracked while in the Psykanium training grounds.',
+    enable_in_missions_tooltip = {
+        en = 'Enables stat tracking while in missions.',
     },
-    persist_stats_in_hub = {
-        en = 'Persist Stats in Hub',
+    enable_in_hub = {
+        en = 'Enable in Hub',
     },
-    persist_stats_in_hub_tooltip = {
-        en = 'Keep the stats overlay visible in the hub after completing a mission. Stats reset when entering a new mission.',
-    },
-    max_kill_history = {
-        en = 'Max Kill History',
-    },
-    max_kill_history_tooltip = {
-        en = 'Maximum number of kills to show in history (5-50).',
+    enable_in_hub_tooltip = {
+        en = 'Shows stats from last session while in the hub area.',
     },
 
     -- Window
@@ -51,6 +45,12 @@ return {
     },
     toggle_window_focus_keybind = {
         en = 'Toggle Focus on Stats Window',
+    },
+    max_kill_history = {
+        en = 'Max Kill History',
+    },
+    max_kill_history_tooltip = {
+        en = 'Maximum number of kills to show in history (5-50).',
     },
 
     -- Common Stats

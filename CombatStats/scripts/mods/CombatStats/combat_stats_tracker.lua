@@ -23,10 +23,10 @@ local function _get_buff_icon(buff_template_name)
     return nil
 end
 
-local function _should_show_buff(buff_template_name, uptime_percent, duration)
+local function _should_show_buff(buff_template_name)
     local template = BuffTemplates[buff_template_name]
     if not template then
-        return uptime_percent < 99.9 and uptime_percent >= 0
+        return false
     end
 
     if not template.hud_icon then
@@ -37,15 +37,7 @@ local function _should_show_buff(buff_template_name, uptime_percent, duration)
         return false
     end
 
-    if template.max_duration or template.duration then
-        return uptime_percent >= 0
-    end
-
-    if uptime_percent < 99.9 and uptime_percent >= 0 then
-        return true
-    end
-
-    return false
+    return true
 end
 
 local function _show_complete_stats(stats, duration, buff_uptime)
@@ -217,8 +209,7 @@ local function _show_complete_stats(stats, duration, buff_uptime)
     if duration > 0 and buff_uptime then
         local sorted_buffs = {}
         for buff_name, uptime in pairs(buff_uptime) do
-            local uptime_percent = (uptime / duration) * 100
-            if _should_show_buff(buff_name, uptime_percent, duration) then
+            if _should_show_buff(buff_name) then
                 local icon = _get_buff_icon(buff_name)
                 table.insert(sorted_buffs, {
                     name = buff_name,
@@ -289,11 +280,11 @@ function CombatStatsTracker:is_enabled(ui_only)
     end
 
     if gamemode_name == 'hub' or gamemode_name == 'prologue_hub' then
-        return ui_only and mod:get('persist_stats_in_hub')
+        return ui_only and mod:get('enable_in_hub')
     end
 
-    if gamemode_name ~= 'shooting_range' and mod:get('only_in_psykanium') then
-        return false
+    if gamemode_name ~= 'shooting_range' then
+        return mod:get('enable_in_missions')
     end
 
     return true
@@ -357,6 +348,13 @@ function CombatStatsTracker:reset_stats()
     self._session_stats_dirty = true
 end
 
+function CombatStatsTracker:stop()
+    self:_end_combat()
+    for _, engagement in ipairs(self._active_engagements) do
+        self:_finish_enemy_engagement(engagement.unit)
+    end
+end
+
 function CombatStatsTracker:_get_session_duration()
     local total = self._total_combat_time
 
@@ -391,7 +389,7 @@ function CombatStatsTracker:_end_combat()
     end
 end
 
-function CombatStatsTracker:_update_combat_time(dt)
+function CombatStatsTracker:_update_combat()
     if self._is_in_combat then
         local has_active = self:_has_active_engagements()
         if not has_active then
@@ -747,7 +745,7 @@ function CombatStatsTracker:update(dt)
 
     self:_update_active_engagements()
     self:_update_buffs(dt)
-    self:_update_combat_time(dt)
+    self:_update_combat()
 end
 
 function CombatStatsTracker:draw()

@@ -44,6 +44,7 @@ end
 function mod.on_game_state_changed(status, state_name)
     if (status == 'enter' or status == 'exit') and state_name == 'StateGameplay' then
         mod.tracker:close()
+        mod.tracker:stop()
     end
 
     -- Preload icon packages
@@ -62,10 +63,10 @@ end
 mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, creation_context, ...)
     func(self, parent, params, creation_context, ...)
 
+    -- Reset stats when starting new mission
     local mission_name = params.mission_name
     local is_hub = mission_name == 'hub_ship'
-
-    if is_hub and not mod:get('persist_stats_in_hub') then
+    if not is_hub then
         mod.tracker:reset_stats()
     end
 end)
