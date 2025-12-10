@@ -752,7 +752,8 @@ function CombatStatsTracker:update(dt)
         return
     end
 
-    local _, closed = Imgui.begin_window(mod:localize('mod_name'), 'always_auto_resize')
+    Imgui.set_next_window_pos(20, 20)
+    local _, closed = Imgui.begin_window(mod:localize('mod_name'), 'always_auto_resize', 'no_move')
 
     if closed then
         self:close()
