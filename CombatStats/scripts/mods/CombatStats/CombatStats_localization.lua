@@ -23,34 +23,8 @@ return {
     enable_in_hub_tooltip = {
         en = 'Shows stats from last session while in the hub area.',
     },
-
-    -- Window
-    window_group = {
-        en = 'Stats Window Settings',
-    },
-    window_width = {
-        en = 'Window Width',
-    },
-    window_height = {
-        en = 'Window Height',
-    },
-    window_x = {
-        en = 'Window X Position',
-    },
-    window_y = {
-        en = 'Window Y Position',
-    },
-    toggle_window_keybind = {
-        en = 'Toggle Stats Window',
-    },
-    toggle_window_focus_keybind = {
-        en = 'Toggle Focus on Stats Window',
-    },
-    max_kill_history = {
-        en = 'Max Kill History',
-    },
-    max_kill_history_tooltip = {
-        en = 'Maximum number of kills to show in history (5-50).',
+    toggle_view_keybind = {
+        en = 'Toggle Stats View',
     },
 
     -- Common Stats
@@ -97,7 +71,16 @@ return {
         en = 'Toxin',
     },
 
-    -- Window
+    -- View
+    combat_stats_view_title = {
+        en = 'Combat Statistics',
+    },
+    overall_stats = {
+        en = 'Overall Stats',
+    },
+    engagement = {
+        en = 'Engagement',
+    },
     reset_stats = {
         en = 'Reset Stats',
     },
@@ -110,9 +93,6 @@ return {
     buff_uptime = {
         en = 'Buff Uptime',
     },
-    engagements = {
-        en = 'Engagements',
-    },
 
     -- Status
     in_progress = {
@@ -120,9 +100,6 @@ return {
     },
     killed = {
         en = 'KILLED',
-    },
-    and_more = {
-        en = 'more engagements',
     },
 
     -- Breed Types
