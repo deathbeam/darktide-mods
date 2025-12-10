@@ -78,11 +78,6 @@ return {
     reset_stats = {
         en = 'Reset Stats',
     },
-    seconds = {
-        en = 'seconds',
-    },
-
-    -- Sections
     damage_stats = {
         en = 'Damage Stats',
     },

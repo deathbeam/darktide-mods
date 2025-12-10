@@ -752,7 +752,7 @@ function CombatStatsTracker:update(dt)
     local duration = self:_get_session_duration()
     local stats = self:_calculate_session_stats()
 
-    Imgui.text(string.format('%s: %.1f %s', mod:localize('time'), duration, mod:localize('seconds')))
+    Imgui.text(string.format('%s: %.1fs', mod:localize('time'), duration))
     Imgui.same_line()
     if Imgui.button(mod:localize('reset_stats')) then
         self:reset_stats()
