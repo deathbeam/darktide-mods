@@ -29,7 +29,7 @@ function mod.toggle_window()
     end
 end
 
-function mod.toggl_window_focus()
+function mod.toggle_window_focus()
     if mod.tracker._is_focused then
         mod.tracker:unfocus()
     else

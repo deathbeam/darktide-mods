@@ -46,7 +46,7 @@ return {
                         default_value = {},
                         keybind_trigger = 'pressed',
                         keybind_type = 'function_call',
-                        function_name = 'toggl_window_focus',
+                        function_name = 'toggle_window_focus',
                     },
                     {
                         setting_id = 'window_width',
