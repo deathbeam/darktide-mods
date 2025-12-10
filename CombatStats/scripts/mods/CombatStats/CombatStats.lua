@@ -24,11 +24,19 @@ function mod.update(dt)
     mod.tracker:update(dt)
 end
 
-function mod.toggle_kill_stats()
-    if mod.tracker._is_open or not mod.tracker:is_enabled() then
+function mod.toggle_combat_stats()
+    if mod.tracker._is_open then
         mod.tracker:close()
     else
         mod.tracker:open()
+    end
+end
+
+function mod.toggle_focus_combat_stats()
+    if mod.tracker._is_focused then
+        mod.tracker:unfocus()
+    else
+        mod.tracker:focus()
     end
 end
 
@@ -105,5 +113,5 @@ mod:hook(
 )
 
 mod:hook('UIManager', 'using_input', function(func, ...)
-    return mod.tracker._is_open or func(...)
+    return mod.tracker._is_focused or func(...)
 end)

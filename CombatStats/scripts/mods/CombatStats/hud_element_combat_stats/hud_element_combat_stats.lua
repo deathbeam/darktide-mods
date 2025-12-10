@@ -29,7 +29,7 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
     local duration = tracker:_get_session_duration()
     local stats = tracker:_calculate_session_stats()
 
-    widget.content.duration_text = string.format('Combat Time: %.1fs', duration)
+    widget.content.duration_text = string.format('Time: %.1fs', duration)
 
     local kill_text = string.format('Kills: %d', stats.total_kills)
     if next(stats.kills) then

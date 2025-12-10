@@ -26,4 +26,7 @@ return {
     toggle_stats_keybind = {
         en = 'Toggle Stats Window',
     },
+    toggle_focus_stats_keybind = {
+        en = 'Toggle Focus on Stats Window',
+    },
 }

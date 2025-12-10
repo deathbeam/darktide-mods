@@ -55,7 +55,7 @@ local function _show_complete_stats(stats, duration, buff_uptime)
         Imgui.indent()
 
         local dps = duration > 0 and stats.total_damage / duration or 0
-        Imgui.text(string.format('Total Damage: %d', stats.total_damage))
+        Imgui.text(string.format('Total: %d', stats.total_damage))
         if duration > 0 then
             Imgui.same_line()
             Imgui.text_colored(0, 255, 0, 255, string.format('(%.1f DPS)', dps))
@@ -135,12 +135,12 @@ local function _show_complete_stats(stats, duration, buff_uptime)
     if Imgui.collapsing_header('Hit Stats', true) then
         Imgui.indent()
 
-        Imgui.text(string.format('Total Hits: %d', stats.total_hits))
+        Imgui.text(string.format('Total: %d', stats.total_hits))
 
         if stats.melee_hits and stats.melee_hits > 0 then
             Imgui.spacing()
             local melee_hit_pct = stats.total_hits > 0 and (stats.melee_hits / stats.total_hits * 100) or 0
-            Imgui.text(string.format('Melee Hits: %d', stats.melee_hits))
+            Imgui.text(string.format('Melee: %d', stats.melee_hits))
             Imgui.same_line()
             Imgui.progress_bar(melee_hit_pct / 100, 150, 20, string.format('%.1f%%', melee_hit_pct))
 
@@ -160,7 +160,7 @@ local function _show_complete_stats(stats, duration, buff_uptime)
         if stats.ranged_hits and stats.ranged_hits > 0 then
             Imgui.spacing()
             local ranged_hit_pct = stats.total_hits > 0 and (stats.ranged_hits / stats.total_hits * 100) or 0
-            Imgui.text(string.format('Ranged Hits: %d', stats.ranged_hits))
+            Imgui.text(string.format('Ranged: %d', stats.ranged_hits))
             Imgui.same_line()
             Imgui.progress_bar(ranged_hit_pct / 100, 150, 20, string.format('%.1f%%', ranged_hit_pct))
 
@@ -235,13 +235,19 @@ local CombatStatsTracker = class('CombatStatsTracker')
 
 function CombatStatsTracker:init()
     self._is_open = false
+    self._is_focused = false
     self._active_buffs = {}
     self._buff_uptime = {}
     self._engagements = {}
-    self._engagements_by_unit = {}
     self._total_combat_time = 0
     self._is_in_combat = false
     self._last_combat_start = nil
+
+    -- Performance caching and lookup tables
+    self._active_engagements = {}
+    self._engagements_by_unit = {}
+    self._cached_session_stats = nil
+    self._session_stats_dirty = true
 end
 
 function CombatStatsTracker:is_enabled()
@@ -261,11 +267,8 @@ function CombatStatsTracker:is_enabled()
 end
 
 function CombatStatsTracker:open()
-    local input_manager = Managers.input
-    local name = self.__class_name
-
-    if not input_manager:cursor_active() then
-        input_manager:push_cursor(name)
+    if not self:is_enabled() then
+        return
     end
 
     self._is_open = true
@@ -277,25 +280,47 @@ function CombatStatsTracker:close()
         return
     end
 
+    Imgui.close_imgui()
+    self._is_open = false
+end
+
+function CombatStatsTracker:focus()
+    if not self._is_open or not self:is_enabled() then
+        return
+    end
+
+    self._is_focused = true
     local input_manager = Managers.input
     local name = self.__class_name
+    if not input_manager:cursor_active() then
+        input_manager:push_cursor(name)
+    end
+end
 
+function CombatStatsTracker:unfocus()
+    if not self._is_focused then
+        return
+    end
+
+    local input_manager = Managers.input
+    local name = self.__class_name
     if input_manager:cursor_active() then
         input_manager:pop_cursor(name)
     end
-
-    self._is_open = false
-    Imgui.close_imgui()
+    self._is_focused = false
 end
 
 function CombatStatsTracker:reset_stats()
     self._active_buffs = {}
     self._buff_uptime = {}
     self._engagements = {}
+    self._active_engagements = {}
     self._engagements_by_unit = {}
     self._total_combat_time = 0
     self._is_in_combat = false
     self._last_combat_start = nil
+    self._cached_session_stats = nil
+    self._session_stats_dirty = true
 end
 
 function CombatStatsTracker:_get_session_duration()
@@ -311,12 +336,7 @@ function CombatStatsTracker:_get_session_duration()
 end
 
 function CombatStatsTracker:_has_active_engagements()
-    for _, engagement in ipairs(self._engagements) do
-        if engagement.in_progress then
-            return true
-        end
-    end
-    return false
+    return #self._active_engagements > 0
 end
 
 function CombatStatsTracker:_start_combat()
@@ -347,6 +367,11 @@ function CombatStatsTracker:_update_combat_time(dt)
 end
 
 function CombatStatsTracker:_calculate_session_stats()
+    -- Return cached stats if not dirty
+    if not self._session_stats_dirty and self._cached_session_stats then
+        return self._cached_session_stats
+    end
+
     local stats = {
         total_damage = 0,
         melee_damage = 0,
@@ -420,6 +445,10 @@ function CombatStatsTracker:_calculate_session_stats()
         end
     end
 
+    -- Cache the result
+    self._cached_session_stats = stats
+    self._session_stats_dirty = false
+
     return stats
 end
 
@@ -481,7 +510,9 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
     end
 
     table.insert(self._engagements, engagement)
+    table.insert(self._active_engagements, engagement)
     self._engagements_by_unit[unit] = engagement
+    self._session_stats_dirty = true
 
     self:_start_combat()
 end
@@ -556,6 +587,8 @@ function CombatStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_cr
     elseif damage_type == 'toxin' then
         engagement.toxin_damage = engagement.toxin_damage + damage
     end
+
+    self._session_stats_dirty = true
 end
 
 function CombatStatsTracker:_finish_enemy_engagement(unit)
@@ -569,30 +602,54 @@ function CombatStatsTracker:_finish_enemy_engagement(unit)
     engagement.duration = current_time - engagement.start_time
     engagement.in_progress = false
     engagement.dps = engagement.duration > 0 and engagement.total_damage / engagement.duration or 0
+
+    -- Remove from active engagements
+    for i, active_engagement in ipairs(self._active_engagements) do
+        if active_engagement == engagement then
+            table.remove(self._active_engagements, i)
+            break
+        end
+    end
+
+    self._session_stats_dirty = true
 end
 
 function CombatStatsTracker:_update_enemy_buffs(dt)
+    if not self:_has_active_engagements() then
+        return
+    end
+
     local current_time = _get_gameplay_time()
+    local to_remove = {}
 
-    for _, engagement in ipairs(self._engagements) do
-        if engagement.in_progress then
-            if ALIVE[engagement.unit] then
-                engagement.duration = current_time - engagement.start_time
-                engagement.dps = engagement.duration > 0 and engagement.total_damage / engagement.duration or 0
+    for i, engagement in ipairs(self._active_engagements) do
+        if ALIVE[engagement.unit] then
+            engagement.duration = current_time - engagement.start_time
+            engagement.dps = engagement.duration > 0 and engagement.total_damage / engagement.duration or 0
 
-                for buff_name, _ in pairs(self._active_buffs) do
-                    if not engagement.buffs[buff_name] then
-                        engagement.buffs[buff_name] = 0
-                    end
-                    engagement.buffs[buff_name] = engagement.buffs[buff_name] + dt
+            for buff_name, _ in pairs(self._active_buffs) do
+                if not engagement.buffs[buff_name] then
+                    engagement.buffs[buff_name] = 0
                 end
-            else
-                engagement.in_progress = false
-                engagement.end_time = current_time
-                engagement.duration = current_time - engagement.start_time
-                engagement.dps = engagement.duration > 0 and engagement.total_damage / engagement.duration or 0
+                engagement.buffs[buff_name] = engagement.buffs[buff_name] + dt
             end
+        else
+            -- Enemy died, mark for removal
+            engagement.in_progress = false
+            engagement.end_time = current_time
+            engagement.duration = current_time - engagement.start_time
+            engagement.dps = engagement.duration > 0 and engagement.total_damage / engagement.duration or 0
+            table.insert(to_remove, i)
         end
+    end
+
+    -- Remove dead engagements (iterate backwards to avoid index issues)
+    for i = #to_remove, 1, -1 do
+        table.remove(self._active_engagements, to_remove[i])
+    end
+
+    if #to_remove > 0 then
+        self._session_stats_dirty = true
     end
 end
 
