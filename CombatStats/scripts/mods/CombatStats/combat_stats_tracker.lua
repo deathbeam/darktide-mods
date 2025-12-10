@@ -282,6 +282,7 @@ function CombatStatsTracker:close()
 
     Imgui.close_imgui()
     self._is_open = false
+    self:unfocus()
 end
 
 function CombatStatsTracker:focus()
