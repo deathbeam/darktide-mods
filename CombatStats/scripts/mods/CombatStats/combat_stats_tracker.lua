@@ -49,13 +49,14 @@ local function _should_show_buff(buff_template_name, uptime_percent, duration)
 end
 
 local function _show_complete_stats(stats, duration, buff_uptime)
+    local mod = get_mod('CombatStats')
     Imgui.spacing()
 
-    if Imgui.collapsing_header('Damage Stats', true) then
+    if Imgui.collapsing_header(mod:localize('damage_stats'), true) then
         Imgui.indent()
 
         local dps = duration > 0 and stats.total_damage / duration or 0
-        Imgui.text(string.format('Total: %d', stats.total_damage))
+        Imgui.text(string.format('%s: %d', mod:localize('total'), stats.total_damage))
         if duration > 0 then
             Imgui.same_line()
             Imgui.text_colored(0, 255, 0, 255, string.format('(%.1f DPS)', dps))
@@ -65,7 +66,7 @@ local function _show_complete_stats(stats, duration, buff_uptime)
 
         if stats.melee_damage > 0 then
             local melee_pct = stats.total_damage > 0 and (stats.melee_damage / stats.total_damage * 100) or 0
-            Imgui.text(string.format('Melee: %d', stats.melee_damage))
+            Imgui.text(string.format('%s: %d', mod:localize('melee'), stats.melee_damage))
             Imgui.same_line()
             Imgui.progress_bar(melee_pct / 100, 150, 20, string.format('%.1f%%', melee_pct))
 
@@ -73,19 +74,28 @@ local function _show_complete_stats(stats, duration, buff_uptime)
             if stats.melee_crit_damage and stats.melee_crit_damage > 0 then
                 local melee_crit_pct = stats.melee_damage > 0 and (stats.melee_crit_damage / stats.melee_damage * 100)
                     or 0
-                Imgui.text(string.format('Crit: %d (%.1f%%)', stats.melee_crit_damage, melee_crit_pct))
+                Imgui.text(
+                    string.format('%s: %d (%.1f%%)', mod:localize('crit'), stats.melee_crit_damage, melee_crit_pct)
+                )
             end
             if stats.melee_weakspot_damage and stats.melee_weakspot_damage > 0 then
                 local melee_ws_pct = stats.melee_damage > 0 and (stats.melee_weakspot_damage / stats.melee_damage * 100)
                     or 0
-                Imgui.text(string.format('Weakspot: %d (%.1f%%)', stats.melee_weakspot_damage, melee_ws_pct))
+                Imgui.text(
+                    string.format(
+                        '%s: %d (%.1f%%)',
+                        mod:localize('weakspot'),
+                        stats.melee_weakspot_damage,
+                        melee_ws_pct
+                    )
+                )
             end
             Imgui.unindent()
         end
 
         if stats.ranged_damage > 0 then
             local ranged_pct = stats.total_damage > 0 and (stats.ranged_damage / stats.total_damage * 100) or 0
-            Imgui.text(string.format('Ranged: %d', stats.ranged_damage))
+            Imgui.text(string.format('%s: %d', mod:localize('ranged'), stats.ranged_damage))
             Imgui.same_line()
             Imgui.progress_bar(ranged_pct / 100, 150, 20, string.format('%.1f%%', ranged_pct))
 
@@ -94,35 +104,44 @@ local function _show_complete_stats(stats, duration, buff_uptime)
                 local ranged_crit_pct = stats.ranged_damage > 0
                         and (stats.ranged_crit_damage / stats.ranged_damage * 100)
                     or 0
-                Imgui.text(string.format('Crit: %d (%.1f%%)', stats.ranged_crit_damage, ranged_crit_pct))
+                Imgui.text(
+                    string.format('%s: %d (%.1f%%)', mod:localize('crit'), stats.ranged_crit_damage, ranged_crit_pct)
+                )
             end
             if stats.ranged_weakspot_damage and stats.ranged_weakspot_damage > 0 then
                 local ranged_ws_pct = stats.ranged_damage > 0
                         and (stats.ranged_weakspot_damage / stats.ranged_damage * 100)
                     or 0
-                Imgui.text(string.format('Weakspot: %d (%.1f%%)', stats.ranged_weakspot_damage, ranged_ws_pct))
+                Imgui.text(
+                    string.format(
+                        '%s: %d (%.1f%%)',
+                        mod:localize('weakspot'),
+                        stats.ranged_weakspot_damage,
+                        ranged_ws_pct
+                    )
+                )
             end
             Imgui.unindent()
         end
 
         if stats.buff_damage and stats.buff_damage > 0 then
             local buff_pct = stats.total_damage > 0 and (stats.buff_damage / stats.total_damage * 100) or 0
-            Imgui.text(string.format('Buff: %d', stats.buff_damage))
+            Imgui.text(string.format('%s: %d', mod:localize('buff'), stats.buff_damage))
             Imgui.same_line()
             Imgui.progress_bar(buff_pct / 100, 150, 20, string.format('%.1f%%', buff_pct))
 
             Imgui.indent()
             if stats.bleed_damage > 0 then
                 local bleed_pct = stats.buff_damage > 0 and (stats.bleed_damage / stats.buff_damage * 100) or 0
-                Imgui.text(string.format('Bleed: %d (%.1f%%)', stats.bleed_damage, bleed_pct))
+                Imgui.text(string.format('%s: %d (%.1f%%)', mod:localize('bleed'), stats.bleed_damage, bleed_pct))
             end
             if stats.burn_damage > 0 then
                 local burn_pct = stats.buff_damage > 0 and (stats.burn_damage / stats.buff_damage * 100) or 0
-                Imgui.text(string.format('Burn: %d (%.1f%%)', stats.burn_damage, burn_pct))
+                Imgui.text(string.format('%s: %d (%.1f%%)', mod:localize('burn'), stats.burn_damage, burn_pct))
             end
             if stats.toxin_damage > 0 then
                 local toxin_pct = stats.buff_damage > 0 and (stats.toxin_damage / stats.buff_damage * 100) or 0
-                Imgui.text(string.format('Toxin: %d (%.1f%%)', stats.toxin_damage, toxin_pct))
+                Imgui.text(string.format('%s: %d (%.1f%%)', mod:localize('toxin'), stats.toxin_damage, toxin_pct))
             end
             Imgui.unindent()
         end
@@ -132,27 +151,31 @@ local function _show_complete_stats(stats, duration, buff_uptime)
 
     Imgui.spacing()
 
-    if Imgui.collapsing_header('Hit Stats', true) then
+    if Imgui.collapsing_header(mod:localize('hit_stats'), true) then
         Imgui.indent()
 
-        Imgui.text(string.format('Total: %d', stats.total_hits))
+        Imgui.text(string.format('%s: %d', mod:localize('total'), stats.total_hits))
 
         if stats.melee_hits and stats.melee_hits > 0 then
             Imgui.spacing()
             local melee_hit_pct = stats.total_hits > 0 and (stats.melee_hits / stats.total_hits * 100) or 0
-            Imgui.text(string.format('Melee: %d', stats.melee_hits))
+            Imgui.text(string.format('%s: %d', mod:localize('melee'), stats.melee_hits))
             Imgui.same_line()
             Imgui.progress_bar(melee_hit_pct / 100, 150, 20, string.format('%.1f%%', melee_hit_pct))
 
             Imgui.indent()
             if stats.melee_crit_hits and stats.melee_crit_hits > 0 then
                 local melee_crit_rate = stats.melee_hits > 0 and (stats.melee_crit_hits / stats.melee_hits * 100) or 0
-                Imgui.text(string.format('Crit: %d (%.1f%%)', stats.melee_crit_hits, melee_crit_rate))
+                Imgui.text(
+                    string.format('%s: %d (%.1f%%)', mod:localize('crit'), stats.melee_crit_hits, melee_crit_rate)
+                )
             end
 
             if stats.melee_weakspot_hits and stats.melee_weakspot_hits > 0 then
                 local melee_ws_rate = stats.melee_hits > 0 and (stats.melee_weakspot_hits / stats.melee_hits * 100) or 0
-                Imgui.text(string.format('Weakspot: %d (%.1f%%)', stats.melee_weakspot_hits, melee_ws_rate))
+                Imgui.text(
+                    string.format('%s: %d (%.1f%%)', mod:localize('weakspot'), stats.melee_weakspot_hits, melee_ws_rate)
+                )
             end
             Imgui.unindent()
         end
@@ -160,7 +183,7 @@ local function _show_complete_stats(stats, duration, buff_uptime)
         if stats.ranged_hits and stats.ranged_hits > 0 then
             Imgui.spacing()
             local ranged_hit_pct = stats.total_hits > 0 and (stats.ranged_hits / stats.total_hits * 100) or 0
-            Imgui.text(string.format('Ranged: %d', stats.ranged_hits))
+            Imgui.text(string.format('%s: %d', mod:localize('ranged'), stats.ranged_hits))
             Imgui.same_line()
             Imgui.progress_bar(ranged_hit_pct / 100, 150, 20, string.format('%.1f%%', ranged_hit_pct))
 
@@ -168,13 +191,22 @@ local function _show_complete_stats(stats, duration, buff_uptime)
             if stats.ranged_crit_hits and stats.ranged_crit_hits > 0 then
                 local ranged_crit_rate = stats.ranged_hits > 0 and (stats.ranged_crit_hits / stats.ranged_hits * 100)
                     or 0
-                Imgui.text(string.format('Crit: %d (%.1f%%)', stats.ranged_crit_hits, ranged_crit_rate))
+                Imgui.text(
+                    string.format('%s: %d (%.1f%%)', mod:localize('crit'), stats.ranged_crit_hits, ranged_crit_rate)
+                )
             end
 
             if stats.ranged_weakspot_hits and stats.ranged_weakspot_hits > 0 then
                 local ranged_ws_rate = stats.ranged_hits > 0 and (stats.ranged_weakspot_hits / stats.ranged_hits * 100)
                     or 0
-                Imgui.text(string.format('Weakspot: %d (%.1f%%)', stats.ranged_weakspot_hits, ranged_ws_rate))
+                Imgui.text(
+                    string.format(
+                        '%s: %d (%.1f%%)',
+                        mod:localize('weakspot'),
+                        stats.ranged_weakspot_hits,
+                        ranged_ws_rate
+                    )
+                )
             end
             Imgui.unindent()
         end
@@ -185,7 +217,7 @@ local function _show_complete_stats(stats, duration, buff_uptime)
     if duration > 0 and buff_uptime then
         Imgui.spacing()
 
-        if Imgui.collapsing_header('Buff Uptime', true) then
+        if Imgui.collapsing_header(mod:localize('buff_uptime'), true) then
             Imgui.indent()
 
             local sorted_buffs = {}
@@ -223,7 +255,7 @@ local function _show_complete_stats(stats, duration, buff_uptime)
                     )
                 end
             else
-                Imgui.text('No buffs tracked (permanent buffs hidden)')
+                Imgui.text(mod:localize('no_buffs_tracked'))
             end
 
             Imgui.unindent()
@@ -713,7 +745,7 @@ function CombatStatsTracker:update(dt)
         return
     end
 
-    local _, closed = Imgui.begin_window('Combat Stats', 'always_auto_resize')
+    local _, closed = Imgui.begin_window(mod:localize('mod_name'), 'always_auto_resize')
 
     if closed then
         self:close()
@@ -722,17 +754,18 @@ function CombatStatsTracker:update(dt)
     local duration = self:_get_session_duration()
     local stats = self:_calculate_session_stats()
 
-    Imgui.text(string.format('Combat Time: %.1f seconds', duration))
+    Imgui.text(string.format('%s: %.1f %s', mod:localize('time'), duration, mod:localize('seconds')))
     Imgui.same_line()
-    if Imgui.button('Reset Stats') then
+    if Imgui.button(mod:localize('reset_stats')) then
         self:reset_stats()
     end
 
-    local kill_text = 'Kills: ' .. stats.total_kills
+    local kill_text = mod:localize('kills') .. ': ' .. stats.total_kills
     if next(stats.kills) then
         local kill_details = {}
         for breed_type, count in pairs(stats.kills) do
-            table.insert(kill_details, string.format('%s: %d', breed_type, count))
+            local localized_breed = mod:localize('breed_' .. breed_type)
+            table.insert(kill_details, string.format('%s: %d', localized_breed, count))
         end
         kill_text = kill_text .. ' (' .. table.concat(kill_details, ', ') .. ')'
     end
@@ -740,7 +773,13 @@ function CombatStatsTracker:update(dt)
     Imgui.text(kill_text)
 
     if duration > 0 and stats.total_damage > 0 then
-        Imgui.text_colored(0, 255, 0, 255, string.format('Session DPS: %.0f', stats.total_damage / duration))
+        Imgui.text_colored(
+            0,
+            255,
+            0,
+            255,
+            string.format('%s: %.0f', mod:localize('dps'), stats.total_damage / duration)
+        )
     end
 
     _show_complete_stats(stats, duration, self._buff_uptime)
@@ -748,7 +787,7 @@ function CombatStatsTracker:update(dt)
     if #self._engagements > 0 then
         Imgui.spacing()
 
-        if Imgui.collapsing_header('Engagements', true) then
+        if Imgui.collapsing_header(mod:localize('engagements'), true) then
             Imgui.indent()
 
             local max_display = mod:get('max_kill_history') or 10
@@ -761,8 +800,8 @@ function CombatStatsTracker:update(dt)
 
                 local engagement = self._engagements[i]
 
-                local status = engagement.in_progress and 'IN PROGRESS' or 'KILLED'
-                local breed_type_str = engagement.breed_type or 'unknown'
+                local status = engagement.in_progress and mod:localize('in_progress') or mod:localize('killed')
+                local breed_type_str = mod:localize('breed_' .. (engagement.breed_type or 'unknown'))
                 local header_text = string.format(
                     '#%d: %s [%s] (%s) - %.1fs - %d dmg (%.0f DPS)##%d',
                     i,
@@ -784,7 +823,7 @@ function CombatStatsTracker:update(dt)
             end
 
             if #self._engagements > max_display then
-                Imgui.text(string.format('... and %d more engagements', #self._engagements - max_display))
+                Imgui.text(string.format('%d ' .. mod:localize('and_more'), #self._engagements - max_display))
             end
 
             Imgui.unindent()

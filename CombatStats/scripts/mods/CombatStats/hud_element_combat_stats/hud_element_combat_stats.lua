@@ -29,9 +29,9 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
     local duration = tracker:_get_session_duration()
     local stats = tracker:_calculate_session_stats()
 
-    widget.content.duration_text = string.format('Time: %.1fs', duration)
+    widget.content.duration_text = string.format('%s: %.1fs', mod:localize('time'), duration)
 
-    local kill_text = string.format('Kills: %d', stats.total_kills)
+    local kill_text = string.format('%s: %d', mod:localize('kills'), stats.total_kills)
     if next(stats.kills) then
         local kill_details = {}
         for breed_type, count in pairs(stats.kills) do
@@ -47,13 +47,13 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
 
     if duration > 0 and stats.total_damage > 0 then
         local dps = stats.total_damage / duration
-        widget.content.dps_text = string.format('DPS: %.0f', dps)
+        widget.content.dps_text = string.format('%s: %.0f', mod:localize('dps'), dps)
     else
-        widget.content.dps_text = 'DPS: 0'
+        widget.content.dps_text = string.format('%s: 0', mod:localize('dps'))
     end
 
-    widget.content.damage_text = string.format('Damage: %d', stats.total_damage)
-    widget.content.hits_text = string.format('Hits: %d', stats.total_hits)
+    widget.content.damage_text = string.format('%s: %d', mod:localize('damage'), stats.total_damage)
+    widget.content.hits_text = string.format('%s: %d', mod:localize('hits'), stats.total_hits)
 
     local breakdown_parts = {}
     if stats.melee_damage > 0 then

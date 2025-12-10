@@ -29,4 +29,104 @@ return {
     toggle_focus_stats_keybind = {
         en = 'Toggle Focus on Stats Window',
     },
+
+    -- Common Stats
+    time = {
+        en = 'Time',
+    },
+    kills = {
+        en = 'Kills',
+    },
+    dps = {
+        en = 'DPS',
+    },
+    damage = {
+        en = 'Damage',
+    },
+    hits = {
+        en = 'Hits',
+    },
+    total = {
+        en = 'Total',
+    },
+    melee = {
+        en = 'Melee',
+    },
+    ranged = {
+        en = 'Ranged',
+    },
+    buff = {
+        en = 'Buff',
+    },
+    crit = {
+        en = 'Crit',
+    },
+    weakspot = {
+        en = 'Weakspot',
+    },
+    bleed = {
+        en = 'Bleed',
+    },
+    burn = {
+        en = 'Burn',
+    },
+    toxin = {
+        en = 'Toxin',
+    },
+
+    -- Window
+    reset_stats = {
+        en = 'Reset Stats',
+    },
+    seconds = {
+        en = 'seconds',
+    },
+
+    -- Sections
+    damage_stats = {
+        en = 'Damage Stats',
+    },
+    hit_stats = {
+        en = 'Hit Stats',
+    },
+    buff_uptime = {
+        en = 'Buff Uptime',
+    },
+    engagements = {
+        en = 'Engagements',
+    },
+
+    -- Status
+    in_progress = {
+        en = 'IN PROGRESS',
+    },
+    killed = {
+        en = 'KILLED',
+    },
+    no_buffs_tracked = {
+        en = 'No buffs tracked (permanent buffs hidden)',
+    },
+    and_more = {
+        en = 'more engagements',
+    },
+
+    -- Breed Types
+    breed_monster = {
+        en = 'monster',
+    },
+    breed_ritualist = {
+        en = 'ritualist',
+    },
+    breed_special = {
+        en = 'special',
+    },
+    breed_elite = {
+        en = 'elite',
+    },
+    breed_horde = {
+        en = 'horde',
+    },
+    breed_unknown = {
+        en = 'unknown',
+    },
 }
