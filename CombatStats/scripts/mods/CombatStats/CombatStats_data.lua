@@ -7,6 +7,11 @@ return {
     options = {
         widgets = {
             {
+                setting_id = 'show_hud_overlay',
+                type = 'checkbox',
+                default_value = true,
+            },
+            {
                 setting_id = 'only_in_psykanium',
                 type = 'checkbox',
                 default_value = true,

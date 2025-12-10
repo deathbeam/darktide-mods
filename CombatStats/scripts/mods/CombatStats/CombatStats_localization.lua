@@ -5,6 +5,12 @@ return {
     mod_description = {
         en = 'Track detailed combat statistics including damage, kills, buff uptime, and more.',
     },
+    show_hud_overlay = {
+        en = 'Show HUD Overlay',
+    },
+    show_hud_overlay_tooltip = {
+        en = 'Display the minimal stats overlay on your HUD during combat.',
+    },
     only_in_psykanium = {
         en = 'Track Only in Psykanium',
     },
