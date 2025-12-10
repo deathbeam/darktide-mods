@@ -215,28 +215,28 @@ local function _show_complete_stats(stats, duration, buff_uptime)
     end
 
     if duration > 0 and buff_uptime then
-        Imgui.spacing()
-
-        if Imgui.collapsing_header(mod:localize('buff_uptime'), true) then
-            Imgui.indent()
-
-            local sorted_buffs = {}
-            for buff_name, uptime in pairs(buff_uptime) do
-                local uptime_percent = (uptime / duration) * 100
-                if _should_show_buff(buff_name, uptime_percent, duration) then
-                    local icon = _get_buff_icon(buff_name)
-                    table.insert(sorted_buffs, {
-                        name = buff_name,
-                        uptime = uptime,
-                        icon = icon,
-                    })
-                end
+        local sorted_buffs = {}
+        for buff_name, uptime in pairs(buff_uptime) do
+            local uptime_percent = (uptime / duration) * 100
+            if _should_show_buff(buff_name, uptime_percent, duration) then
+                local icon = _get_buff_icon(buff_name)
+                table.insert(sorted_buffs, {
+                    name = buff_name,
+                    uptime = uptime,
+                    icon = icon,
+                })
             end
-            table.sort(sorted_buffs, function(a, b)
-                return a.uptime > b.uptime
-            end)
+        end
+        table.sort(sorted_buffs, function(a, b)
+            return a.uptime > b.uptime
+        end)
 
-            if #sorted_buffs > 0 then
+        if #sorted_buffs > 0 then
+            Imgui.spacing()
+
+            if Imgui.collapsing_header(mod:localize('buff_uptime'), true) then
+                Imgui.indent()
+
                 for i, buff_data in ipairs(sorted_buffs) do
                     local uptime_percent = (buff_data.uptime / duration) * 100
 
@@ -254,11 +254,9 @@ local function _show_complete_stats(stats, duration, buff_uptime)
                         string.format('%.1f%%', uptime_percent)
                     )
                 end
-            else
-                Imgui.text(mod:localize('no_buffs_tracked'))
-            end
 
-            Imgui.unindent()
+                Imgui.unindent()
+            end
         end
     end
 end

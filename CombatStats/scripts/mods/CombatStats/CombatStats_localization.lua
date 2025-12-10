@@ -103,9 +103,6 @@ return {
     killed = {
         en = 'KILLED',
     },
-    no_buffs_tracked = {
-        en = 'No buffs tracked (permanent buffs hidden)',
-    },
     and_more = {
         en = 'more engagements',
     },
