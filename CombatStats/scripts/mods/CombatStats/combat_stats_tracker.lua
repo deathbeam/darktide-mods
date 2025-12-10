@@ -764,14 +764,15 @@ function CombatStatsTracker:update(dt)
                 local status = engagement.in_progress and 'IN PROGRESS' or 'KILLED'
                 local breed_type_str = engagement.breed_type or 'unknown'
                 local header_text = string.format(
-                    '#%d: %s [%s] (%s) - %.1fs - %d dmg (%.0f DPS)',
+                    '#%d: %s [%s] (%s) - %.1fs - %d dmg (%.0f DPS)##%d',
                     i,
                     engagement.breed_name,
                     status,
                     breed_type_str,
                     engagement.duration,
                     engagement.total_damage,
-                    engagement.dps
+                    engagement.dps,
+                    i
                 )
 
                 if Imgui.tree_node(header_text) then
