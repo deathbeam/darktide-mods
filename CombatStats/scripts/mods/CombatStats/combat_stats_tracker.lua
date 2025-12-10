@@ -280,24 +280,27 @@ function CombatStatsTracker:init()
     self._session_stats_dirty = true
 end
 
-function CombatStatsTracker:is_enabled()
+function CombatStatsTracker:is_enabled(ui_only)
     local game_mode_manager = Managers.state and Managers.state.game_mode
     local gamemode_name = game_mode_manager and game_mode_manager:game_mode_name()
 
-    if not gamemode_name or gamemode_name == 'hub' or gamemode_name == 'prologue_hub' then
+    if not gamemode_name then
         return false
     end
 
-    local only_in_psykanium = mod:get('only_in_psykanium')
-    if only_in_psykanium and gamemode_name ~= 'shooting_range' then
-        return false
+    if gamemode_name == 'hub' or gamemode_name == 'prologue_hub' then
+        return ui_only and mod:get('persist_stats_in_hub')
+    end
+
+    if not (gamemode_name == 'shooting_range') then
+        return mod:get('only_in_psykanium')
     end
 
     return true
 end
 
 function CombatStatsTracker:open()
-    if not self:is_enabled() then
+    if not self:is_enabled(true) then
         return
     end
 
@@ -316,7 +319,7 @@ function CombatStatsTracker:close()
 end
 
 function CombatStatsTracker:focus()
-    if not self._is_open or not self:is_enabled() then
+    if not self._is_open or not self:is_enabled(true) then
         return
     end
 
@@ -398,7 +401,6 @@ function CombatStatsTracker:_update_combat_time(dt)
 end
 
 function CombatStatsTracker:_calculate_session_stats()
-    -- Return cached stats if not dirty
     if not self._session_stats_dirty and self._cached_session_stats then
         return self._cached_session_stats
     end
@@ -739,16 +741,17 @@ function CombatStatsTracker:_update_buffs(dt)
 end
 
 function CombatStatsTracker:update(dt)
-    local current_time = _get_gameplay_time()
-    if current_time == 0 then
+    if not self:is_enabled() then
         return
     end
 
     self:_update_active_engagements()
     self:_update_buffs(dt)
     self:_update_combat_time(dt)
+end
 
-    if not self._is_open then
+function CombatStatsTracker:draw()
+    if not self._is_open or not self:is_enabled(true) then
         return
     end
 
@@ -757,6 +760,7 @@ function CombatStatsTracker:update(dt)
 
     if closed then
         self:close()
+        return
     end
 
     local duration = self:_get_session_duration()

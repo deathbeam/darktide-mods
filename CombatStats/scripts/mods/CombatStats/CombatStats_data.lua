@@ -17,6 +17,11 @@ return {
                 default_value = true,
             },
             {
+                setting_id = 'persist_stats_in_hub',
+                type = 'checkbox',
+                default_value = false,
+            },
+            {
                 setting_id = 'max_kill_history',
                 type = 'numeric',
                 default_value = 10,

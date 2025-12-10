@@ -17,7 +17,7 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
     end
 
     local tracker = mod.tracker
-    if not tracker or not tracker:is_enabled() then
+    if not tracker or not tracker:is_enabled(true) then
         return
     end
 
@@ -87,7 +87,7 @@ function HudElementCombatStats:draw(dt, t, ui_renderer, render_settings, input_s
     end
 
     local tracker = mod.tracker
-    if not tracker or not tracker:is_enabled() then
+    if not tracker or not tracker:is_enabled(true) then
         return
     end
 

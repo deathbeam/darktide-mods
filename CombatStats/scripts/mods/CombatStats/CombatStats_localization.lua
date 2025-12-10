@@ -17,6 +17,12 @@ return {
     only_in_psykanium_tooltip = {
         en = 'If enabled, combat stats will only be tracked while in the Psykanium training grounds.',
     },
+    persist_stats_in_hub = {
+        en = 'Persist Stats in Hub',
+    },
+    persist_stats_in_hub_tooltip = {
+        en = 'Keep the stats overlay visible in the hub after completing a mission. Stats reset when entering a new mission.',
+    },
     max_kill_history = {
         en = 'Max Kill History',
     },

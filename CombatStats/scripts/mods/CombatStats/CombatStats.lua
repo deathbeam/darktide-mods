@@ -17,11 +17,8 @@ mod:register_hud_element({
 mod.tracker = CombatStatsTracker:new()
 
 function mod.update(dt)
-    if not mod.tracker:is_enabled() then
-        return
-    end
-
     mod.tracker:update(dt)
+    mod.tracker:draw()
 end
 
 function mod.toggle_combat_stats()
@@ -41,12 +38,21 @@ function mod.toggle_focus_combat_stats()
 end
 
 function mod.on_game_state_changed(status, state_name)
-    if status == 'enter' and state_name == 'StateGameplay' then
-        mod.tracker:reset_stats()
-    elseif status == 'exit' and state_name == 'StateGameplay' then
+    if (status == 'enter' or status == 'exit') and state_name == 'StateGameplay' then
         mod.tracker:close()
     end
 end
+
+mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, creation_context, ...)
+    func(self, parent, params, creation_context, ...)
+
+    local mission_name = params.mission_name
+    local is_hub = mission_name == 'hub_ship'
+
+    if is_hub and not mod:get('persist_stats_in_hub') then
+        mod.tracker:reset_stats()
+    end
+end)
 
 mod:hook(
     CLASS.AttackReportManager,
