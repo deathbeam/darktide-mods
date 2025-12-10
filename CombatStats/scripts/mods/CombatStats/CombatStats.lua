@@ -45,6 +45,18 @@ function mod.on_game_state_changed(status, state_name)
     if (status == 'enter' or status == 'exit') and state_name == 'StateGameplay' then
         mod.tracker:close()
     end
+
+    -- Preload icon packages
+    if status == 'enter' then
+        Managers.package:load('packages/ui/views/inventory_view/inventory_view', 'CombatStats', nil, true)
+        Managers.package:load(
+            'packages/ui/views/inventory_weapons_view/inventory_weapons_view',
+            'CombatStats',
+            nil,
+            true
+        )
+        Managers.package:load('packages/ui/hud/player_weapon/player_weapon', 'CombatStats', nil, true)
+    end
 end
 
 mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, creation_context, ...)
