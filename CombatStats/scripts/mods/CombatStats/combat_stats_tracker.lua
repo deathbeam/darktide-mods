@@ -292,8 +292,8 @@ function CombatStatsTracker:is_enabled(ui_only)
         return ui_only and mod:get('persist_stats_in_hub')
     end
 
-    if gamemode_name == 'shooting_range' then
-        return mod:get('only_in_psykanium')
+    if gamemode_name ~= 'shooting_range' and mod:get('only_in_psykanium') then
+        return false
     end
 
     return true
@@ -756,6 +756,7 @@ function CombatStatsTracker:draw()
     end
 
     Imgui.set_next_window_pos(20, 20)
+    Imgui.set_next_window_size(600, 800)
     local _, closed = Imgui.begin_window(mod:localize('mod_name'), 'always_auto_resize', 'no_move')
 
     if closed then
