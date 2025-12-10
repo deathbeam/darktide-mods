@@ -13,22 +13,22 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Create and push tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "v${{ inputs.version }}" -m "Release v${{ inputs.version }}"
           git push origin "v${{ inputs.version }}"
-      
+
       - name: Zip mod folders
         run: |
           VERSION="${{ inputs.version }}"
-          
+
           # Find all directories containing .mod files
           for dir in */; do
             dir_name="${dir%/}"
@@ -37,9 +37,9 @@ jobs:
               zip -r "${dir_name}-${VERSION}.zip" "$dir_name/"
             fi
           done
-      
+
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ inputs.version }}
           files: '*.zip'
