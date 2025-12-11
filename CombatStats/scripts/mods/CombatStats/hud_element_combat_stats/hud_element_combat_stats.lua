@@ -36,9 +36,7 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
     if next(stats.kills) then
         local kill_details = {}
         for breed_type, count in pairs(stats.kills) do
-            if breed_type ~= 'horde' then
-                table.insert(kill_details, string.format('%s:%d', breed_type:sub(1, 1):upper(), count))
-            end
+            table.insert(kill_details, string.format('%s:%d', breed_type:sub(1, 1):upper(), count))
         end
         if #kill_details > 0 then
             kill_text = kill_text .. ' (' .. table.concat(kill_details, ' ') .. ')'

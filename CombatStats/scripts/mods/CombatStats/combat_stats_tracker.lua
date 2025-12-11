@@ -289,6 +289,10 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
         end
     end
 
+    if not mod:get('breed_' .. breed_type) then
+        return
+    end
+
     engagement = {
         unit = unit,
         breed_name = breed_name,

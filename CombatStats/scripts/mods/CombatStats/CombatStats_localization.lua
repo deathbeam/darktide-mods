@@ -14,6 +14,8 @@ return {
     mod_description = {
         en = 'Track detailed combat statistics including damage, kills, buff uptime, and more.',
     },
+
+    -- Config
     show_hud_overlay = {
         en = 'Show Overlay',
     },
@@ -34,6 +36,9 @@ return {
     },
     toggle_view_keybind = {
         en = 'Toggle Stats View',
+    },
+    enemy_types_to_track = {
+        en = 'Enemy Types to Track',
     },
 
     -- Common Stats
@@ -113,14 +118,6 @@ return {
     },
     buff_uptime = {
         en = 'Buff Uptime',
-    },
-
-    -- Status
-    in_progress = {
-        en = 'IN PROGRESS',
-    },
-    killed = {
-        en = 'KILLED',
     },
 
     -- Breed Types
