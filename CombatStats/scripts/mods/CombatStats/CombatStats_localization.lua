@@ -1,3 +1,12 @@
+local mod = get_mod('CombatStats')
+
+-- Register global localization strings (for input legend, etc.)
+mod:add_global_localize_strings({
+    loc_combat_stats_reset_stats = {
+        en = 'Reset Stats',
+    },
+})
+
 return {
     mod_name = {
         en = 'Combat Stats',
@@ -70,19 +79,19 @@ return {
     toxin = {
         en = 'Toxin',
     },
+    enemy = {
+        en = 'Enemy',
+    },
 
     -- View
     combat_stats_view_title = {
         en = 'Combat Statistics',
     },
+    search_placeholder = {
+        en = 'Search enemies...',
+    },
     overall_stats = {
         en = 'Overall Stats',
-    },
-    engagement = {
-        en = 'Engagement',
-    },
-    reset_stats = {
-        en = 'Reset Stats',
     },
     damage_stats = {
         en = 'Damage Stats',

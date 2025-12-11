@@ -40,6 +40,10 @@ mod.tracker = CombatStatsTracker:new()
 
 function mod.toggle_view()
     local ui_manager = Managers.ui
+    if ui_manager:using_input() then
+        return
+    end
+
     if ui_manager:view_active('combat_stats_view') then
         ui_manager:close_view('combat_stats_view')
     elseif mod.tracker:is_enabled(true) then

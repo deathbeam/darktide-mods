@@ -25,7 +25,25 @@ function CombatStatsView:on_enter()
     CombatStatsView.super.on_enter(self)
 
     self:_setup_input_legend()
+    self:_setup_search()
     self:_setup_entries()
+end
+
+function CombatStatsView:_setup_search()
+    local search_widget = self._widgets_by_name.combat_stats_search
+    if search_widget then
+        search_widget.content.input_text = ''
+        search_widget.content.placeholder_text = mod:localize('search_placeholder')
+
+        -- Adjust colors to match the view better
+        local style = search_widget.style
+        if style then
+            -- Make background slightly lighter
+            style.background.color = { 255, 30, 30, 30 }
+            -- Make baseline more subtle
+            style.baseline.color = Color.terminal_text_body(100, true)
+        end
+    end
 end
 
 function CombatStatsView:_setup_input_legend()
@@ -64,14 +82,20 @@ function CombatStatsView:_setup_entries()
     local entries = {}
     local current_time = Managers.time:time('gameplay')
 
+    -- Get search filter
+    local search_widget = self._widgets_by_name.combat_stats_search
+    local search_text = search_widget and search_widget.content.input_text or ''
+    search_text = search_text:lower()
+
     -- Get all engagement stats
     local engagements = tracker:get_engagement_stats()
     local session = tracker:get_session_stats()
 
-    -- Add session stats (overall) at the end
+    -- Always add session stats (overall) first
+    local overall_name = mod:localize('overall_stats')
     entries[#entries + 1] = {
         widget_type = 'stats_entry',
-        name = mod:localize('overall_stats'),
+        name = overall_name,
         start_time = nil,
         end_time = nil,
         duration = session.duration,
@@ -83,24 +107,28 @@ function CombatStatsView:_setup_entries()
         end,
     }
 
-    -- Add all engagements in reverse order (newest first)
+    -- Add all engagements in reverse order (newest first) if they match search
     for i = #engagements, 1, -1 do
         local engagement = engagements[i]
         local duration = (engagement.end_time or current_time) - engagement.start_time
+        local name = engagement.name or (mod:localize('enemy') .. ' ' .. i)
 
-        entries[#entries + 1] = {
-            widget_type = 'stats_entry',
-            name = engagement.name or (mod:localize('engagement') .. ' ' .. i),
-            start_time = engagement.start_time,
-            end_time = engagement.end_time,
-            duration = duration,
-            stats = engagement.stats,
-            buffs = engagement.buffs,
-            is_session = false,
-            pressed_function = function(parent, widget, entry)
-                parent:_select_entry(widget, entry)
-            end,
-        }
+        -- Filter by search text
+        if search_text == '' or name:lower():find(search_text, 1, true) then
+            entries[#entries + 1] = {
+                widget_type = 'stats_entry',
+                name = name,
+                start_time = engagement.start_time,
+                end_time = engagement.end_time,
+                duration = duration,
+                stats = engagement.stats,
+                buffs = engagement.buffs,
+                is_session = false,
+                pressed_function = function(parent, widget, entry)
+                    parent:_select_entry(widget, entry)
+                end,
+            }
+        end
     end
 
     local scenegraph_id = 'combat_stats_list_pivot'
@@ -164,8 +192,17 @@ end
 function CombatStatsView:_setup_grid(widgets, alignment_list, grid_scenegraph_id, spacing)
     local ui_scenegraph = self._ui_scenegraph
     local direction = 'down'
-    local grid =
-        UIWidgetGrid:new(widgets, alignment_list, ui_scenegraph, grid_scenegraph_id, direction, spacing, nil, true)
+
+    local grid = UIWidgetGrid:new(
+        widgets,
+        alignment_list,
+        ui_scenegraph,
+        grid_scenegraph_id,
+        direction,
+        spacing,
+        nil, -- fill_section_spacing
+        true -- use_is_focused_for_navigation
+    )
     local render_scale = self._render_scale
 
     grid:set_render_scale(render_scale)
@@ -550,7 +587,30 @@ function CombatStatsView:cb_on_close_pressed()
     Managers.ui:close_view(self.view_name)
 end
 
+function CombatStatsView:cb_on_reset_pressed()
+    -- Don't reset if typing in search
+    local search_widget = self._widgets_by_name.combat_stats_search
+    if search_widget and search_widget.content.is_writing then
+        return
+    end
+
+    if mod.tracker then
+        mod.tracker:reset()
+        self:_setup_entries()
+    end
+end
+
 function CombatStatsView:update(dt, t, input_service)
+    -- Check if search text changed
+    local search_widget = self._widgets_by_name.combat_stats_search
+    if search_widget then
+        local current_search = search_widget.content.input_text or ''
+        if current_search ~= self._last_search_text then
+            self._last_search_text = current_search
+            self:_setup_entries()
+        end
+    end
+
     -- Update grids with proper input handling
     local widgets_by_name = self._widgets_by_name
 
