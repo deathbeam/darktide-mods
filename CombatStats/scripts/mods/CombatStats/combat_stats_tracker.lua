@@ -442,41 +442,47 @@ function CombatStatsTracker:_update_buffs_from_hud(active_buffs_data, dt)
         local buff_instance = buff_data.buff_instance
 
         if not buff_data.remove and buff_instance and buff_data.show then
+            local buff_template_name = buff_instance:template_name()
             local buff_title = buff_instance:title()
             local icon = buff_instance:_hud_icon()
+            local gradient_map = buff_instance:hud_icon_gradient_map()
 
-            if buff_title then
-                currently_active_buffs[buff_title] = true
+            if buff_template_name then
+                currently_active_buffs[buff_template_name] = true
 
-                if not self._tracked_buffs[buff_title] then
-                    self._tracked_buffs[buff_title] = {
+                if not self._tracked_buffs[buff_template_name] then
+                    self._tracked_buffs[buff_template_name] = {
                         uptime = 0,
                         ui_tracked = true,
                         icon = icon,
+                        gradient_map = gradient_map,
+                        title = buff_title,
                     }
                 end
 
-                self._tracked_buffs[buff_title].uptime = self._tracked_buffs[buff_title].uptime + dt
+                self._tracked_buffs[buff_template_name].uptime = self._tracked_buffs[buff_template_name].uptime + dt
 
                 -- Update active engagements
                 for _, engagement in ipairs(self._active_engagements) do
-                    if not engagement.buffs[buff_title] then
-                        engagement.buffs[buff_title] = {
+                    if not engagement.buffs[buff_template_name] then
+                        engagement.buffs[buff_template_name] = {
                             uptime = 0,
                             ui_tracked = true,
                             icon = icon,
+                            gradient_map = gradient_map,
+                            title = buff_title,
                         }
                     end
-                    engagement.buffs[buff_title].uptime = engagement.buffs[buff_title].uptime + dt
+                    engagement.buffs[buff_template_name].uptime = engagement.buffs[buff_template_name].uptime + dt
                 end
             end
         end
     end
 
     -- Clean up removed buffs from session tracking
-    for buff_title, _ in pairs(self._tracked_buffs) do
-        if not currently_active_buffs[buff_title] then
-            self._tracked_buffs[buff_title] = nil
+    for buff_template_name, _ in pairs(self._tracked_buffs) do
+        if not currently_active_buffs[buff_template_name] then
+            self._tracked_buffs[buff_template_name] = nil
         end
     end
 end
