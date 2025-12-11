@@ -35,11 +35,8 @@ mod:register_view({
     },
 })
 
+-- Initialize tracker
 mod.tracker = CombatStatsTracker:new()
-
-function mod.update(dt)
-    mod.tracker:update(dt)
-end
 
 function mod.toggle_view()
     local ui_manager = Managers.ui
@@ -48,6 +45,10 @@ function mod.toggle_view()
     elseif mod.tracker:is_enabled(true) then
         ui_manager:open_view('combat_stats_view')
     end
+end
+
+function mod.update(dt)
+    mod.tracker:update(dt)
 end
 
 function mod.on_game_state_changed(status, state_name)
@@ -150,5 +151,5 @@ mod:hook_safe('HudElementPlayerBuffs', '_update_buffs', function(self)
 
     local active_buffs_data = self._active_buffs_data
     local dt = Managers.time and Managers.time:has_timer('gameplay') and Managers.time:delta_time('gameplay') or 0
-    mod.tracker:_update_buffs_from_hud(active_buffs_data, dt)
+    mod.tracker:_update_buffs(active_buffs_data, dt)
 end)

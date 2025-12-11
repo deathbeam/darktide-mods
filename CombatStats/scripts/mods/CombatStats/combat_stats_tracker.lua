@@ -269,12 +269,11 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
         end
     end
 
-    local current_time = _get_gameplay_time()
-    local engagement = {
+    engagement = {
         unit = unit,
         breed_name = breed_name,
         breed_type = breed_type,
-        start_time = current_time,
+        start_time = _get_gameplay_time(),
         end_time = nil,
         total_damage = 0,
         melee_damage = 0,
@@ -431,7 +430,7 @@ function CombatStatsTracker:_update_active_engagements()
     end
 end
 
-function CombatStatsTracker:_update_buffs_from_hud(active_buffs_data, dt)
+function CombatStatsTracker:_update_buffs(active_buffs_data, dt)
     if not active_buffs_data then
         return
     end
