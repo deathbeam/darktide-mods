@@ -42,11 +42,12 @@ end
 function CombatStatsTracker:reset()
     self._tracked_buffs = {}
     self._engagements = {}
-    self._active_engagements = {}
-    self._engagements_by_unit = {}
     self._total_combat_time = 0
     self._is_in_combat = false
     self._last_combat_start = nil
+
+    self._active_engagements = {}
+    self._engagements_by_unit = {}
     self._cached_session_stats = nil
     self._session_stats_dirty = true
 end
@@ -435,8 +436,6 @@ function CombatStatsTracker:_update_buffs_from_hud(active_buffs_data, dt)
         return
     end
 
-    local currently_active_buffs = {}
-
     for i = 1, #active_buffs_data do
         local buff_data = active_buffs_data[i]
         local buff_instance = buff_data.buff_instance
@@ -448,8 +447,7 @@ function CombatStatsTracker:_update_buffs_from_hud(active_buffs_data, dt)
             local gradient_map = buff_instance:hud_icon_gradient_map()
 
             if buff_template_name then
-                currently_active_buffs[buff_template_name] = true
-
+                -- Update tracked buffs
                 if not self._tracked_buffs[buff_template_name] then
                     self._tracked_buffs[buff_template_name] = {
                         uptime = 0,
@@ -459,7 +457,6 @@ function CombatStatsTracker:_update_buffs_from_hud(active_buffs_data, dt)
                         title = buff_title,
                     }
                 end
-
                 self._tracked_buffs[buff_template_name].uptime = self._tracked_buffs[buff_template_name].uptime + dt
 
                 -- Update active engagements
@@ -476,13 +473,6 @@ function CombatStatsTracker:_update_buffs_from_hud(active_buffs_data, dt)
                     engagement.buffs[buff_template_name].uptime = engagement.buffs[buff_template_name].uptime + dt
                 end
             end
-        end
-    end
-
-    -- Clean up removed buffs from session tracking
-    for buff_template_name, _ in pairs(self._tracked_buffs) do
-        if not currently_active_buffs[buff_template_name] then
-            self._tracked_buffs[buff_template_name] = nil
         end
     end
 end
