@@ -88,6 +88,9 @@ return {
     enemy = {
         en = 'Enemy',
     },
+    enemy_type = {
+        en = 'Enemy Type',
+    },
 
     -- View
     combat_stats_view_title = {
@@ -101,6 +104,9 @@ return {
     },
     damage_stats = {
         en = 'Damage Stats',
+    },
+    damage_by_enemy_type = {
+        en = 'Damage by Enemy Type',
     },
     hit_stats = {
         en = 'Hit Stats',

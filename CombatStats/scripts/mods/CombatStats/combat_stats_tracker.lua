@@ -79,6 +79,7 @@ function CombatStatsTracker:get_engagement_stats()
 
         engagements[i] = {
             name = engagement.breed_name,
+            breed_type = engagement.breed_type,
             start_time = engagement.start_time,
             end_time = engagement.end_time,
             stats = stats,
@@ -152,6 +153,7 @@ function CombatStatsTracker:_calculate_session_stats()
         toxin_damage = 0,
         total_kills = 0,
         kills = {},
+        damage_by_type = {},
         total_hits = 0,
         melee_hits = 0,
         ranged_hits = 0,
@@ -214,6 +216,12 @@ function CombatStatsTracker:_calculate_session_stats()
 
         if engagement.end_time then
             stats.kills[engagement.breed_type] = (stats.kills[engagement.breed_type] or 0) + 1
+        end
+
+        -- Track damage by breed type
+        if engagement.total_damage and engagement.total_damage > 0 then
+            stats.damage_by_type[engagement.breed_type] = (stats.damage_by_type[engagement.breed_type] or 0)
+                + engagement.total_damage
         end
     end
 

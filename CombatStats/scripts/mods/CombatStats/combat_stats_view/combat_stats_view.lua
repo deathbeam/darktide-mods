@@ -118,6 +118,7 @@ function CombatStatsView:_setup_entries()
             entries[#entries + 1] = {
                 widget_type = 'stats_entry',
                 name = name,
+                breed_type = engagement.breed_type,
                 start_time = engagement.start_time,
                 end_time = engagement.end_time,
                 duration = duration,
@@ -385,22 +386,45 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     -- Title
     create_text(entry.name, Color.terminal_text_header(255, true), 26)
 
-    -- Basic stats
-    create_text(string.format('%s: %.1fs', mod:localize('time'), duration))
+    -- Basic stats header - match left side format for individual enemies
+    if not entry.is_session then
+        -- Calculate DPS
+        local dps = 0
+        if duration > 0 and stats.total_damage > 0 then
+            dps = stats.total_damage / duration
+        end
 
-    local kill_text = string.format('%s: %d', mod:localize('kills'), stats.total_kills)
-    if next(stats.kills) then
-        local kill_details = {}
-        for breed_type, count in pairs(stats.kills) do
-            table.insert(kill_details, string.format('%s:%d', mod:localize('breed_' .. breed_type), count))
+        -- Show header: ENEMY_TYPE | TIME | DPS (color indicates status)
+        local status_color = Color.terminal_text_body(255, true)
+        if entry.end_time then
+            status_color = Color.ui_green_light(255, true)
+        elseif entry.start_time then
+            status_color = Color.ui_hud_yellow_light(255, true)
         end
-        if #kill_details > 0 then
-            kill_text = kill_text .. ' (' .. table.concat(kill_details, ', ') .. ')'
+
+        local enemy_type_label = entry.breed_type and mod:localize('breed_' .. entry.breed_type)
+            or mod:localize('breed_unknown')
+
+        create_text(string.format('%s | %.1fs | %.0f DPS', enemy_type_label, duration, dps), status_color, 18)
+    else
+        -- Session stats - show time
+        create_text(string.format('%s: %.1fs', mod:localize('time'), duration))
+
+        -- For session stats, show kill count
+        local kill_text = string.format('%s: %d', mod:localize('kills'), stats.total_kills)
+        if next(stats.kills) then
+            local kill_details = {}
+            for breed_type, count in pairs(stats.kills) do
+                table.insert(kill_details, string.format('%s:%d', mod:localize('breed_' .. breed_type), count))
+            end
+            if #kill_details > 0 then
+                kill_text = kill_text .. ' (' .. table.concat(kill_details, ', ') .. ')'
+            end
         end
+        create_text(kill_text)
     end
-    create_text(kill_text)
 
-    if duration > 0 and stats.total_damage > 0 then
+    if entry.is_session and duration > 0 and stats.total_damage > 0 then
         local dps = stats.total_damage / duration
         create_text(string.format('%.0f %s', dps, mod:localize('dps')), Color.ui_green_light(255, true))
     end
@@ -488,6 +512,44 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
         if stats.toxin_damage and stats.toxin_damage > 0 then
             local pct = (stats.toxin_damage / stats.buff_damage * 100)
             create_text(string.format('  %s: %d (%.1f%%)', mod:localize('toxin'), stats.toxin_damage, pct))
+        end
+    end
+
+    -- Damage by Enemy Type (only for session stats)
+    if entry.is_session and stats.damage_by_type and next(stats.damage_by_type) then
+        create_spacer(10)
+        create_text(mod:localize('damage_by_enemy_type'), Color.terminal_text_header(255, true), 20)
+
+        -- Sort by damage (highest first)
+        local sorted_types = {}
+        for breed_type, damage in pairs(stats.damage_by_type) do
+            table.insert(sorted_types, { type = breed_type, damage = damage })
+        end
+        table.sort(sorted_types, function(a, b)
+            return a.damage > b.damage
+        end)
+
+        for _, type_data in ipairs(sorted_types) do
+            local breed_type = type_data.type
+            local damage = type_data.damage
+            local pct = (damage / stats.total_damage * 100)
+
+            -- Color coding by enemy type
+            local color = Color.white(255, true)
+            if breed_type == 'monster' then
+                color = Color.ui_red_medium(255, true)
+            elseif breed_type == 'disabler' or breed_type == 'special' then
+                color = { 255, 255, 165, 0 } -- Orange
+            elseif breed_type == 'elite' then
+                color = Color.ui_hud_yellow_medium(255, true)
+            end
+
+            create_progress_bar(
+                string.format('%s: %d (%.1f%%)', mod:localize('breed_' .. breed_type), damage, pct),
+                damage,
+                stats.total_damage,
+                color
+            )
         end
     end
 

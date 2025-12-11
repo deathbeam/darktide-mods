@@ -70,6 +70,12 @@ function mod.on_game_state_changed(status, state_name)
             true
         )
         Managers.package:load('packages/ui/hud/player_weapon/player_weapon', 'CombatStats', nil, true)
+        Managers.package:load(
+            'packages/ui/views/inventory_background_view/inventory_background_view',
+            'CombatStats',
+            nil,
+            true
+        )
     end
 end
 

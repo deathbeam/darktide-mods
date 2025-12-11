@@ -89,12 +89,32 @@ local blueprints = {
 
             -- Format display name and subtext in the view
             content.text = entry.name
-            if entry.end_time then
-                content.subtext = string.format('%.1fs', entry.duration)
-            elseif entry.start_time then
-                content.subtext = mod:localize('in_progress')
+
+            -- For single enemy engagements, show status, time, and DPS
+            if not entry.is_session then
+                local status_color = Color.terminal_text_body(255, true)
+
+                if entry.end_time then
+                    status_color = Color.ui_green_light(255, true)
+                elseif entry.start_time then
+                    status_color = Color.ui_hud_yellow_light(255, true)
+                end
+
+                -- Calculate DPS
+                local dps = 0
+                if entry.duration > 0 and entry.stats and entry.stats.total_damage then
+                    dps = entry.stats.total_damage / entry.duration
+                end
+
+                local enemy_type_label = entry.breed_type and mod:localize('breed_' .. entry.breed_type)
+                    or mod:localize('breed_unknown')
+
+                content.subtext = string.format('%s | %.1fs | %.0f DPS', enemy_type_label, entry.duration, dps)
+                widget.style.subtext.text_color = status_color
             else
+                -- Session stats - just show duration
                 content.subtext = string.format('%.1fs', entry.duration)
+                widget.style.subtext.text_color = Color.terminal_text_body_sub_header(255, true)
             end
 
             content.entry = entry

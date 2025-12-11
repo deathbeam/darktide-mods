@@ -86,7 +86,7 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
     if stats.explosion_damage > 0 then
         local pct = (stats.explosion_damage / stats.total_damage * 100)
         table.insert(damage_types, {
-            icon = 'content/ui/materials/icons/weapons/actions/grenade_throw',
+            icon = 'content/ui/materials/icons/throwables/hud/small/party_grenade',
             color = { 255, 255, 100, 0 },
             text = string.format('%.0f%%', pct),
         })
