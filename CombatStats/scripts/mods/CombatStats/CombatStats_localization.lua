@@ -61,6 +61,12 @@ return {
     ranged = {
         en = 'Ranged',
     },
+    explosion = {
+        en = 'Explosion',
+    },
+    companion = {
+        en = 'Companion',
+    },
     buff = {
         en = 'Buff',
     },
@@ -117,6 +123,9 @@ return {
     },
     breed_ritualist = {
         en = 'ritualist',
+    },
+    breed_disabler = {
+        en = 'disabler',
     },
     breed_special = {
         en = 'special',

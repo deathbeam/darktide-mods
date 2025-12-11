@@ -140,6 +140,8 @@ function CombatStatsTracker:_calculate_session_stats()
         total_damage = 0,
         melee_damage = 0,
         ranged_damage = 0,
+        explosion_damage = 0,
+        companion_damage = 0,
         buff_damage = 0,
         melee_crit_damage = 0,
         melee_weakspot_damage = 0,
@@ -178,6 +180,12 @@ function CombatStatsTracker:_calculate_session_stats()
         end
         if engagement.ranged_damage then
             stats.ranged_damage = stats.ranged_damage + engagement.ranged_damage
+        end
+        if engagement.explosion_damage then
+            stats.explosion_damage = stats.explosion_damage + engagement.explosion_damage
+        end
+        if engagement.companion_damage then
+            stats.companion_damage = stats.companion_damage + engagement.companion_damage
         end
         if engagement.buff_damage then
             stats.buff_damage = stats.buff_damage + engagement.buff_damage
@@ -221,6 +229,8 @@ function CombatStatsTracker:_calculate_engagement_stats(engagement)
         total_damage = engagement.total_damage or 0,
         melee_damage = engagement.melee_damage or 0,
         ranged_damage = engagement.ranged_damage or 0,
+        explosion_damage = engagement.explosion_damage or 0,
+        companion_damage = engagement.companion_damage or 0,
         buff_damage = engagement.buff_damage or 0,
         melee_crit_damage = engagement.melee_crit_damage or 0,
         melee_weakspot_damage = engagement.melee_weakspot_damage or 0,
@@ -260,6 +270,8 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
             breed_type = 'monster'
         elseif breed.tags.ritualist then
             breed_type = 'ritualist'
+        elseif breed.tags.disabler then
+            breed_type = 'disabler'
         elseif breed.tags.special then
             breed_type = 'special'
         elseif breed.tags.elite then
@@ -278,6 +290,8 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
         total_damage = 0,
         melee_damage = 0,
         ranged_damage = 0,
+        explosion_damage = 0,
+        companion_damage = 0,
         buff_damage = 0,
         melee_crit_damage = 0,
         melee_weakspot_damage = 0,
@@ -371,6 +385,10 @@ function CombatStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_cr
             engagement.ranged_weakspot_damage = engagement.ranged_weakspot_damage + damage
             engagement.ranged_weakspot_hits = engagement.ranged_weakspot_hits + 1
         end
+    elseif attack_type == 'explosion' then
+        engagement.explosion_damage = engagement.explosion_damage + damage
+    elseif attack_type == 'companion_dog' then
+        engagement.companion_damage = engagement.companion_damage + damage
     elseif attack_type == 'buff' then
         engagement.buff_damage = engagement.buff_damage + damage
     end

@@ -83,6 +83,22 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
             text = string.format('%.0f%%%s', pct, crit_text),
         })
     end
+    if stats.explosion_damage > 0 then
+        local pct = (stats.explosion_damage / stats.total_damage * 100)
+        table.insert(damage_types, {
+            icon = 'content/ui/materials/icons/weapons/actions/grenade_throw',
+            color = { 255, 255, 100, 0 },
+            text = string.format('%.0f%%', pct),
+        })
+    end
+    if stats.companion_damage > 0 then
+        local pct = (stats.companion_damage / stats.total_damage * 100)
+        table.insert(damage_types, {
+            icon = 'content/ui/materials/icons/throwables/hud/adamant_whistle',
+            color = { 255, 100, 149, 237 },
+            text = string.format('%.0f%%', pct),
+        })
+    end
 
     widget.content.damage_type_1_icon = damage_types[1] and damage_types[1].icon or nil
     widget.style.damage_type_1_icon.color = damage_types[1] and damage_types[1].color or Color.white(255, true)
@@ -90,6 +106,12 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
     widget.content.damage_type_2_icon = damage_types[2] and damage_types[2].icon or nil
     widget.style.damage_type_2_icon.color = damage_types[2] and damage_types[2].color or Color.white(255, true)
     widget.content.damage_type_2_text = damage_types[2] and damage_types[2].text or ''
+    widget.content.damage_type_3_icon = damage_types[3] and damage_types[3].icon or nil
+    widget.style.damage_type_3_icon.color = damage_types[3] and damage_types[3].color or Color.white(255, true)
+    widget.content.damage_type_3_text = damage_types[3] and damage_types[3].text or ''
+    widget.content.damage_type_4_icon = damage_types[4] and damage_types[4].icon or nil
+    widget.style.damage_type_4_icon.color = damage_types[4] and damage_types[4].color or Color.white(255, true)
+    widget.content.damage_type_4_text = damage_types[4] and damage_types[4].text or ''
 
     local buff_types = {}
     if stats.bleed_damage > 0 then

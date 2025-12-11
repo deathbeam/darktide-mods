@@ -129,6 +129,64 @@ local widget_definitions = {
         },
         {
             pass_type = 'texture',
+            style_id = 'damage_type_3_icon',
+            value_id = 'damage_type_3_icon',
+            style = {
+                size = { 18, 18 },
+                offset = { 220, 95, 3 },
+                color = Color.white(255, true),
+            },
+            visibility_function = function(content, style)
+                return content.damage_type_3_icon ~= nil
+            end,
+        },
+        {
+            pass_type = 'text',
+            style_id = 'damage_type_3_text',
+            value_id = 'damage_type_3_text',
+            style = {
+                font_size = 14,
+                text_vertical_alignment = 'top',
+                text_horizontal_alignment = 'left',
+                font_type = 'proxima_nova_bold',
+                text_color = UIHudSettings.color_tint_main_2,
+                offset = { 242, 95, 2 },
+            },
+            visibility_function = function(content, style)
+                return content.damage_type_3_text ~= nil and content.damage_type_3_text ~= ''
+            end,
+        },
+        {
+            pass_type = 'texture',
+            style_id = 'damage_type_4_icon',
+            value_id = 'damage_type_4_icon',
+            style = {
+                size = { 18, 18 },
+                offset = { 305, 95, 3 },
+                color = Color.white(255, true),
+            },
+            visibility_function = function(content, style)
+                return content.damage_type_4_icon ~= nil
+            end,
+        },
+        {
+            pass_type = 'text',
+            style_id = 'damage_type_4_text',
+            value_id = 'damage_type_4_text',
+            style = {
+                font_size = 14,
+                text_vertical_alignment = 'top',
+                text_horizontal_alignment = 'left',
+                font_type = 'proxima_nova_bold',
+                text_color = UIHudSettings.color_tint_main_2,
+                offset = { 327, 95, 2 },
+            },
+            visibility_function = function(content, style)
+                return content.damage_type_4_text ~= nil and content.damage_type_4_text ~= ''
+            end,
+        },
+        {
+            pass_type = 'texture',
             style_id = 'buff_type_1_icon',
             value_id = 'buff_type_1_icon',
             style = {

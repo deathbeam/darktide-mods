@@ -448,6 +448,26 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
         end
     end
 
+    -- Explosion damage
+    if stats.explosion_damage and stats.explosion_damage > 0 then
+        create_progress_bar(
+            string.format('%s: %d', mod:localize('explosion'), stats.explosion_damage),
+            stats.explosion_damage,
+            stats.total_damage,
+            { 255, 255, 100, 0 }
+        )
+    end
+
+    -- Companion damage
+    if stats.companion_damage and stats.companion_damage > 0 then
+        create_progress_bar(
+            string.format('%s: %d', mod:localize('companion'), stats.companion_damage),
+            stats.companion_damage,
+            stats.total_damage,
+            { 255, 100, 149, 237 }
+        )
+    end
+
     -- Buff damage
     if stats.buff_damage and stats.buff_damage > 0 then
         create_progress_bar(
