@@ -107,11 +107,11 @@ return {
     overall_stats = {
         en = 'Overall Stats',
     },
+    enemy_stats = {
+        en = 'Enemy Stats',
+    },
     damage_stats = {
         en = 'Damage Stats',
-    },
-    damage_by_enemy_type = {
-        en = 'Damage by Enemy Type',
     },
     hit_stats = {
         en = 'Hit Stats',

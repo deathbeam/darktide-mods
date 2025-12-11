@@ -386,15 +386,13 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     -- Title
     create_text(entry.name, Color.terminal_text_header(255, true), 26)
 
-    -- Basic stats header - match left side format for individual enemies
     if not entry.is_session then
-        -- Calculate DPS
+        -- Enemy stats
         local dps = 0
         if duration > 0 and stats.total_damage > 0 then
             dps = stats.total_damage / duration
         end
 
-        -- Show header: ENEMY_TYPE | TIME | DPS (color indicates status)
         local status_color = Color.terminal_text_body(255, true)
         if entry.end_time then
             status_color = Color.ui_green_light(255, true)
@@ -402,128 +400,35 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
             status_color = Color.ui_hud_yellow_light(255, true)
         end
 
-        local enemy_type_label = entry.breed_type and mod:localize('breed_' .. entry.breed_type)
-            or mod:localize('breed_unknown')
-
-        create_text(string.format('%s | %.1fs | %.0f DPS', enemy_type_label, duration, dps), status_color, 18)
+        local enemy_type_label = mod:localize('breed_' .. entry.breed_type)
+        create_text(
+            string.format('%s | %.1fs | %.0f %s', enemy_type_label, duration, dps, mod:localize('dps')),
+            status_color,
+            18
+        )
     else
-        -- Session stats - show time
-        create_text(string.format('%s: %.1fs', mod:localize('time'), duration))
-
-        -- For session stats, show kill count
-        local kill_text = string.format('%s: %d', mod:localize('kills'), stats.total_kills)
-        if next(stats.kills) then
-            local kill_details = {}
-            for breed_type, count in pairs(stats.kills) do
-                table.insert(kill_details, string.format('%s:%d', mod:localize('breed_' .. breed_type), count))
-            end
-            if #kill_details > 0 then
-                kill_text = kill_text .. ' (' .. table.concat(kill_details, ', ') .. ')'
-            end
+        -- Session stats
+        local dps = 0
+        if duration > 0 and stats.total_damage > 0 then
+            dps = stats.total_damage / duration
         end
-        create_text(kill_text)
-    end
-
-    if entry.is_session and duration > 0 and stats.total_damage > 0 then
-        local dps = stats.total_damage / duration
-        create_text(string.format('%.0f %s', dps, mod:localize('dps')), Color.ui_green_light(255, true))
-    end
-
-    -- Damage Stats Header
-    create_spacer(10)
-    create_text(mod:localize('damage_stats'), Color.terminal_text_header(255, true), 20)
-    create_text(string.format('%s: %d', mod:localize('total'), stats.total_damage))
-
-    -- Melee damage
-    if stats.melee_damage and stats.melee_damage > 0 then
-        create_progress_bar(
-            string.format('%s: %d', mod:localize('melee'), stats.melee_damage),
-            stats.melee_damage,
-            stats.total_damage,
-            Color.gray(255, true)
-        )
-
-        if stats.melee_crit_damage and stats.melee_crit_damage > 0 then
-            local pct = (stats.melee_crit_damage / stats.melee_damage * 100)
-            create_text(string.format('  %s: %d (%.1f%%)', mod:localize('crit'), stats.melee_crit_damage, pct))
-        end
-        if stats.melee_weakspot_damage and stats.melee_weakspot_damage > 0 then
-            local pct = (stats.melee_weakspot_damage / stats.melee_damage * 100)
-            create_text(string.format('  %s: %d (%.1f%%)', mod:localize('weakspot'), stats.melee_weakspot_damage, pct))
-        end
-    end
-
-    -- Ranged damage
-    if stats.ranged_damage and stats.ranged_damage > 0 then
-        create_progress_bar(
-            string.format('%s: %d', mod:localize('ranged'), stats.ranged_damage),
-            stats.ranged_damage,
-            stats.total_damage,
-            { 255, 139, 101, 69 }
-        )
-
-        if stats.ranged_crit_damage and stats.ranged_crit_damage > 0 then
-            local pct = (stats.ranged_crit_damage / stats.ranged_damage * 100)
-            create_text(string.format('  %s: %d (%.1f%%)', mod:localize('crit'), stats.ranged_crit_damage, pct))
-        end
-        if stats.ranged_weakspot_damage and stats.ranged_weakspot_damage > 0 then
-            local pct = (stats.ranged_weakspot_damage / stats.ranged_damage * 100)
-            create_text(string.format('  %s: %d (%.1f%%)', mod:localize('weakspot'), stats.ranged_weakspot_damage, pct))
-        end
-    end
-
-    -- Explosion damage
-    if stats.explosion_damage and stats.explosion_damage > 0 then
-        create_progress_bar(
-            string.format('%s: %d', mod:localize('explosion'), stats.explosion_damage),
-            stats.explosion_damage,
-            stats.total_damage,
-            { 255, 255, 100, 0 }
+        create_text(
+            string.format('%.1fs | %.0f %s', duration, dps, mod:localize('dps')),
+            Color.terminal_text_body(255, true),
+            18
         )
     end
 
-    -- Companion damage
-    if stats.companion_damage and stats.companion_damage > 0 then
-        create_progress_bar(
-            string.format('%s: %d', mod:localize('companion'), stats.companion_damage),
-            stats.companion_damage,
-            stats.total_damage,
-            { 255, 100, 149, 237 }
-        )
-    end
-
-    -- Buff damage
-    if stats.buff_damage and stats.buff_damage > 0 then
-        create_progress_bar(
-            string.format('%s: %d', mod:localize('buff'), stats.buff_damage),
-            stats.buff_damage,
-            stats.total_damage,
-            Color.ui_hud_green_light(255, true)
-        )
-
-        if stats.bleed_damage and stats.bleed_damage > 0 then
-            local pct = (stats.bleed_damage / stats.buff_damage * 100)
-            create_text(string.format('  %s: %d (%.1f%%)', mod:localize('bleed'), stats.bleed_damage, pct))
-        end
-        if stats.burn_damage and stats.burn_damage > 0 then
-            local pct = (stats.burn_damage / stats.buff_damage * 100)
-            create_text(string.format('  %s: %d (%.1f%%)', mod:localize('burn'), stats.burn_damage, pct))
-        end
-        if stats.toxin_damage and stats.toxin_damage > 0 then
-            local pct = (stats.toxin_damage / stats.buff_damage * 100)
-            create_text(string.format('  %s: %d (%.1f%%)', mod:localize('toxin'), stats.toxin_damage, pct))
-        end
-    end
-
-    -- Damage by Enemy Type (only for session stats)
+    -- Enemy Stats (only for session stats)
     if entry.is_session and stats.damage_by_type and next(stats.damage_by_type) then
         create_spacer(10)
-        create_text(mod:localize('damage_by_enemy_type'), Color.terminal_text_header(255, true), 20)
+        create_text(mod:localize('enemy_stats'), Color.terminal_text_header(255, true), 20)
 
         -- Sort by damage (highest first)
         local sorted_types = {}
         for breed_type, damage in pairs(stats.damage_by_type) do
-            table.insert(sorted_types, { type = breed_type, damage = damage })
+            local kills = stats.kills[breed_type] or 0
+            table.insert(sorted_types, { type = breed_type, damage = damage, kills = kills })
         end
         table.sort(sorted_types, function(a, b)
             return a.damage > b.damage
@@ -532,6 +437,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
         for _, type_data in ipairs(sorted_types) do
             local breed_type = type_data.type
             local damage = type_data.damage
+            local kills = type_data.kills
             local pct = (damage / stats.total_damage * 100)
 
             -- Color coding by enemy type
@@ -545,7 +451,13 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
             end
 
             create_progress_bar(
-                string.format('%s: %d (%.1f%%)', mod:localize('breed_' .. breed_type), damage, pct),
+                string.format(
+                    '%s: %d kills | %d dmg (%.1f%%)',
+                    mod:localize('breed_' .. breed_type),
+                    kills,
+                    damage,
+                    pct
+                ),
                 damage,
                 stats.total_damage,
                 color
@@ -553,46 +465,144 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
         end
     end
 
-    -- Hit Stats Header
-    create_spacer(10)
-    create_text(mod:localize('hit_stats'), Color.terminal_text_header(255, true), 20)
-    create_text(string.format('%s: %d', mod:localize('total'), stats.total_hits))
+    -- Damage Stats Header
+    if stats.total_damage > 0 then
+        create_spacer(10)
+        create_text(mod:localize('damage_stats'), Color.terminal_text_header(255, true), 20)
+        create_text(string.format('%s: %d', mod:localize('total'), stats.total_damage))
 
-    -- Melee hits
-    if stats.melee_hits and stats.melee_hits > 0 then
-        create_progress_bar(
-            string.format('%s: %d', mod:localize('melee'), stats.melee_hits),
-            stats.melee_hits,
-            stats.total_hits,
-            Color.gray(255, true)
-        )
+        -- Melee damage
+        if stats.melee_damage and stats.melee_damage > 0 then
+            create_progress_bar(
+                string.format('%s: %d', mod:localize('melee'), stats.melee_damage),
+                stats.melee_damage,
+                stats.total_damage,
+                Color.gray(255, true)
+            )
 
-        if stats.melee_crit_hits and stats.melee_crit_hits > 0 then
-            local pct = (stats.melee_crit_hits / stats.melee_hits * 100)
-            create_text(string.format('  %s: %d (%.1f%%)', mod:localize('crit'), stats.melee_crit_hits, pct))
+            if stats.melee_crit_damage and stats.melee_crit_damage > 0 then
+                local pct = (stats.melee_crit_damage / stats.melee_damage * 100)
+                create_text(string.format('  %s: %d (%.1f%%)', mod:localize('crit'), stats.melee_crit_damage, pct))
+            end
+            if stats.melee_weakspot_damage and stats.melee_weakspot_damage > 0 then
+                local pct = (stats.melee_weakspot_damage / stats.melee_damage * 100)
+                create_text(
+                    string.format('  %s: %d (%.1f%%)', mod:localize('weakspot'), stats.melee_weakspot_damage, pct)
+                )
+            end
         end
-        if stats.melee_weakspot_hits and stats.melee_weakspot_hits > 0 then
-            local pct = (stats.melee_weakspot_hits / stats.melee_hits * 100)
-            create_text(string.format('  %s: %d (%.1f%%)', mod:localize('weakspot'), stats.melee_weakspot_hits, pct))
+
+        -- Ranged damage
+        if stats.ranged_damage and stats.ranged_damage > 0 then
+            create_progress_bar(
+                string.format('%s: %d', mod:localize('ranged'), stats.ranged_damage),
+                stats.ranged_damage,
+                stats.total_damage,
+                { 255, 139, 101, 69 }
+            )
+
+            if stats.ranged_crit_damage and stats.ranged_crit_damage > 0 then
+                local pct = (stats.ranged_crit_damage / stats.ranged_damage * 100)
+                create_text(string.format('  %s: %d (%.1f%%)', mod:localize('crit'), stats.ranged_crit_damage, pct))
+            end
+            if stats.ranged_weakspot_damage and stats.ranged_weakspot_damage > 0 then
+                local pct = (stats.ranged_weakspot_damage / stats.ranged_damage * 100)
+                create_text(
+                    string.format('  %s: %d (%.1f%%)', mod:localize('weakspot'), stats.ranged_weakspot_damage, pct)
+                )
+            end
+        end
+
+        -- Explosion damage
+        if stats.explosion_damage and stats.explosion_damage > 0 then
+            create_progress_bar(
+                string.format('%s: %d', mod:localize('explosion'), stats.explosion_damage),
+                stats.explosion_damage,
+                stats.total_damage,
+                { 255, 255, 100, 0 }
+            )
+        end
+
+        -- Companion damage
+        if stats.companion_damage and stats.companion_damage > 0 then
+            create_progress_bar(
+                string.format('%s: %d', mod:localize('companion'), stats.companion_damage),
+                stats.companion_damage,
+                stats.total_damage,
+                { 255, 100, 149, 237 }
+            )
+        end
+
+        -- Buff damage
+        if stats.buff_damage and stats.buff_damage > 0 then
+            create_progress_bar(
+                string.format('%s: %d', mod:localize('buff'), stats.buff_damage),
+                stats.buff_damage,
+                stats.total_damage,
+                Color.ui_hud_green_light(255, true)
+            )
+
+            if stats.bleed_damage and stats.bleed_damage > 0 then
+                local pct = (stats.bleed_damage / stats.buff_damage * 100)
+                create_text(string.format('  %s: %d (%.1f%%)', mod:localize('bleed'), stats.bleed_damage, pct))
+            end
+            if stats.burn_damage and stats.burn_damage > 0 then
+                local pct = (stats.burn_damage / stats.buff_damage * 100)
+                create_text(string.format('  %s: %d (%.1f%%)', mod:localize('burn'), stats.burn_damage, pct))
+            end
+            if stats.toxin_damage and stats.toxin_damage > 0 then
+                local pct = (stats.toxin_damage / stats.buff_damage * 100)
+                create_text(string.format('  %s: %d (%.1f%%)', mod:localize('toxin'), stats.toxin_damage, pct))
+            end
         end
     end
 
-    -- Ranged hits
-    if stats.ranged_hits and stats.ranged_hits > 0 then
-        create_progress_bar(
-            string.format('%s: %d', mod:localize('ranged'), stats.ranged_hits),
-            stats.ranged_hits,
-            stats.total_hits,
-            { 255, 139, 101, 69 }
-        )
+    -- Hit Stats Header
+    if stats.total_hits > 0 then
+        create_spacer(10)
+        create_text(mod:localize('hit_stats'), Color.terminal_text_header(255, true), 20)
+        create_text(string.format('%s: %d', mod:localize('total'), stats.total_hits))
 
-        if stats.ranged_crit_hits and stats.ranged_crit_hits > 0 then
-            local pct = (stats.ranged_crit_hits / stats.ranged_hits * 100)
-            create_text(string.format('  %s: %d (%.1f%%)', mod:localize('crit'), stats.ranged_crit_hits, pct))
+        -- Melee hits
+        if stats.melee_hits and stats.melee_hits > 0 then
+            create_progress_bar(
+                string.format('%s: %d', mod:localize('melee'), stats.melee_hits),
+                stats.melee_hits,
+                stats.total_hits,
+                Color.gray(255, true)
+            )
+
+            if stats.melee_crit_hits and stats.melee_crit_hits > 0 then
+                local pct = (stats.melee_crit_hits / stats.melee_hits * 100)
+                create_text(string.format('  %s: %d (%.1f%%)', mod:localize('crit'), stats.melee_crit_hits, pct))
+            end
+            if stats.melee_weakspot_hits and stats.melee_weakspot_hits > 0 then
+                local pct = (stats.melee_weakspot_hits / stats.melee_hits * 100)
+                create_text(
+                    string.format('  %s: %d (%.1f%%)', mod:localize('weakspot'), stats.melee_weakspot_hits, pct)
+                )
+            end
         end
-        if stats.ranged_weakspot_hits and stats.ranged_weakspot_hits > 0 then
-            local pct = (stats.ranged_weakspot_hits / stats.ranged_hits * 100)
-            create_text(string.format('  %s: %d (%.1f%%)', mod:localize('weakspot'), stats.ranged_weakspot_hits, pct))
+
+        -- Ranged hits
+        if stats.ranged_hits and stats.ranged_hits > 0 then
+            create_progress_bar(
+                string.format('%s: %d', mod:localize('ranged'), stats.ranged_hits),
+                stats.ranged_hits,
+                stats.total_hits,
+                { 255, 139, 101, 69 }
+            )
+
+            if stats.ranged_crit_hits and stats.ranged_crit_hits > 0 then
+                local pct = (stats.ranged_crit_hits / stats.ranged_hits * 100)
+                create_text(string.format('  %s: %d (%.1f%%)', mod:localize('crit'), stats.ranged_crit_hits, pct))
+            end
+            if stats.ranged_weakspot_hits and stats.ranged_weakspot_hits > 0 then
+                local pct = (stats.ranged_weakspot_hits / stats.ranged_hits * 100)
+                create_text(
+                    string.format('  %s: %d (%.1f%%)', mod:localize('weakspot'), stats.ranged_weakspot_hits, pct)
+                )
+            end
         end
     end
 

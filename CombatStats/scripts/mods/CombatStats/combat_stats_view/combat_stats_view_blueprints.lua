@@ -87,11 +87,10 @@ local blueprints = {
                 callback(parent, callback_name, widget, entry)()
             end
 
-            -- Format display name and subtext in the view
             content.text = entry.name
 
-            -- For single enemy engagements, show status, time, and DPS
             if not entry.is_session then
+                -- Enemy stats
                 local status_color = Color.terminal_text_body(255, true)
 
                 if entry.end_time then
@@ -100,20 +99,22 @@ local blueprints = {
                     status_color = Color.ui_hud_yellow_light(255, true)
                 end
 
-                -- Calculate DPS
                 local dps = 0
                 if entry.duration > 0 and entry.stats and entry.stats.total_damage then
                     dps = entry.stats.total_damage / entry.duration
                 end
 
-                local enemy_type_label = entry.breed_type and mod:localize('breed_' .. entry.breed_type)
-                    or mod:localize('breed_unknown')
-
-                content.subtext = string.format('%s | %.1fs | %.0f DPS', enemy_type_label, entry.duration, dps)
+                local enemy_type_label = mod:localize('breed_' .. entry.breed_type)
+                content.subtext =
+                    string.format('%s | %.1fs | %.0f %s', enemy_type_label, entry.duration, dps, mod:localize('dps'))
                 widget.style.subtext.text_color = status_color
             else
-                -- Session stats - just show duration
-                content.subtext = string.format('%.1fs', entry.duration)
+                -- Session stats
+                local dps = 0
+                if entry.duration > 0 and entry.stats and entry.stats.total_damage > 0 then
+                    dps = entry.stats.total_damage / entry.duration
+                end
+                content.subtext = string.format('%.1fs | %.0f %s', entry.duration, dps, mod:localize('dps'))
                 widget.style.subtext.text_color = Color.terminal_text_body_sub_header(255, true)
             end
 
