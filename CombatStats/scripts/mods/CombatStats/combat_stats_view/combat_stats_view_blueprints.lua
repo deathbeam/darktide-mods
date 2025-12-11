@@ -87,8 +87,16 @@ local blueprints = {
                 callback(parent, callback_name, widget, entry)()
             end
 
-            content.text = entry.display_name
-            content.subtext = entry.subtext or ''
+            -- Format display name and subtext in the view
+            content.text = entry.name
+            if entry.end_time then
+                content.subtext = string.format('%.1fs', entry.duration)
+            elseif entry.start_time then
+                content.subtext = mod:localize('in_progress')
+            else
+                content.subtext = string.format('%.1fs', entry.duration)
+            end
+
             content.entry = entry
         end,
     },

@@ -62,23 +62,41 @@ function CombatStatsView:_setup_entries()
     end
 
     local entries = {}
+    local current_time = Managers.time:time('gameplay')
 
     -- Get all engagement stats
     local engagements = tracker:get_engagement_stats()
-    engagements[#engagements + 1] = tracker:get_session_stats()
+    local session = tracker:get_session_stats()
 
-    -- Add all entries in reverse order (newest first, overall last)
+    -- Add session stats (overall) at the end
+    entries[#entries + 1] = {
+        widget_type = 'stats_entry',
+        name = mod:localize('overall_stats'),
+        start_time = nil,
+        end_time = nil,
+        duration = session.duration,
+        stats = session.stats,
+        buffs = session.buffs,
+        is_session = true,
+        pressed_function = function(parent, widget, entry)
+            parent:_select_entry(widget, entry)
+        end,
+    }
+
+    -- Add all engagements in reverse order (newest first)
     for i = #engagements, 1, -1 do
-        local data = engagements[i]
+        local engagement = engagements[i]
+        local duration = (engagement.end_time or current_time) - engagement.start_time
+
         entries[#entries + 1] = {
             widget_type = 'stats_entry',
-            display_name = data.display_name,
-            subtext = data.subtext,
-            stats = data.stats,
-            duration = data.duration,
-            buff_uptime = data.buff_uptime,
-            is_overall = data.is_overall,
-            in_progress = data.in_progress,
+            name = engagement.name or (mod:localize('engagement') .. ' ' .. i),
+            start_time = engagement.start_time,
+            end_time = engagement.end_time,
+            duration = duration,
+            stats = engagement.stats,
+            buffs = engagement.buffs,
+            is_session = false,
             pressed_function = function(parent, widget, entry)
                 parent:_select_entry(widget, entry)
             end,
@@ -176,7 +194,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
 
     local stats = entry.stats
     local duration = entry.duration
-    local buff_uptime = entry.buff_uptime or {}
+    local buffs = entry.buffs or {}
 
     local detail_scenegraph = self._ui_scenegraph.combat_stats_detail_content
     local detail_content_width = detail_scenegraph.size[1]
@@ -277,7 +295,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     end
 
     -- Title
-    create_text(entry.display_name, Color.terminal_text_header(255, true), 26)
+    create_text(entry.name, Color.terminal_text_header(255, true), 26)
 
     -- Basic stats
     create_text(string.format('%s: %.1fs', mod:localize('time'), duration))
@@ -407,12 +425,31 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     end
 
     -- Buff Uptime
-    if duration > 0 and #buff_uptime > 0 then
-        create_text(mod:localize('buff_uptime'), Color.terminal_text_header(255, true), 20)
+    if duration > 0 and buffs then
+        -- Convert raw buff data to sorted array for display
+        local buff_array = {}
+        for buff_name, data in pairs(buffs) do
+            if data.ui_tracked then
+                buff_array[#buff_array + 1] = {
+                    name = buff_name,
+                    uptime = data.uptime,
+                    icon = data.icon,
+                }
+            end
+        end
 
-        for i = 1, #buff_uptime do
-            local buff = buff_uptime[i]
-            create_progress_bar(buff.name, buff.uptime, duration, Color.ui_terminal(255, true))
+        -- Sort by uptime descending
+        table.sort(buff_array, function(a, b)
+            return a.uptime > b.uptime
+        end)
+
+        if #buff_array > 0 then
+            create_text(mod:localize('buff_uptime'), Color.terminal_text_header(255, true), 20)
+
+            for i = 1, #buff_array do
+                local buff = buff_array[i]
+                create_progress_bar(buff.name, buff.uptime, duration, Color.ui_terminal(255, true))
+            end
         end
     end
 

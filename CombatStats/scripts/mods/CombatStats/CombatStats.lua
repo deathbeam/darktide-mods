@@ -75,7 +75,7 @@ mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, c
     local mission_name = params.mission_name
     local is_hub = mission_name == 'hub_ship'
     if not is_hub then
-        mod.tracker:reset_stats()
+        mod.tracker:reset()
     end
 end)
 
@@ -143,6 +143,12 @@ mod:hook(
     end
 )
 
-mod:hook('UIManager', 'using_input', function(func, ...)
-    return mod.tracker._is_focused or func(...)
+mod:hook_safe('HudElementPlayerBuffs', '_update_buffs', function(self)
+    if not mod.tracker:is_enabled() then
+        return
+    end
+
+    local active_buffs_data = self._active_buffs_data
+    local dt = Managers.time and Managers.time:has_timer('gameplay') and Managers.time:delta_time('gameplay') or 0
+    mod.tracker:_update_buffs_from_hud(active_buffs_data, dt)
 end)

@@ -26,8 +26,9 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
         return
     end
 
-    local duration = tracker:_get_session_duration()
-    local stats = tracker:_calculate_session_stats()
+    local session_data = tracker:get_session_stats()
+    local stats = session_data.stats
+    local duration = session_data.duration
 
     widget.content.duration_text = string.format('%s: %.1fs', mod:localize('time'), duration)
 

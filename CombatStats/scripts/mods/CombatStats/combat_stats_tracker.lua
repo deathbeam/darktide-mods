@@ -1,75 +1,13 @@
 local mod = get_mod('CombatStats')
 
-local BuffTemplates = mod:original_require('scripts/settings/buff/buff_templates')
-
 local function _get_gameplay_time()
     return Managers.time and Managers.time:has_timer('gameplay') and Managers.time:time('gameplay') or 0
-end
-
-local function _get_buff_icon(buff_template_name)
-    local template = BuffTemplates[buff_template_name]
-    if not template then
-        return nil
-    end
-
-    if template.hide_icon_in_hud then
-        return nil
-    end
-
-    if template.hud_icon then
-        return template.hud_icon
-    end
-
-    return nil
-end
-
-local function _should_show_buff(buff_template_name)
-    local template = BuffTemplates[buff_template_name]
-    if not template then
-        return false
-    end
-
-    if not template.hud_icon then
-        return false
-    end
-
-    if template.hide_icon_in_hud then
-        return false
-    end
-
-    return true
-end
-
-local function _process_buff_uptime(buff_uptime, duration)
-    if not buff_uptime or not duration or duration <= 0 then
-        return {}
-    end
-
-    local processed_buffs = {}
-    for buff_name, uptime in pairs(buff_uptime) do
-        if _should_show_buff(buff_name) then
-            processed_buffs[#processed_buffs + 1] = {
-                name = buff_name,
-                uptime = uptime,
-                uptime_percent = (uptime / duration) * 100,
-                icon = _get_buff_icon(buff_name),
-            }
-        end
-    end
-
-    -- Sort by uptime descending
-    table.sort(processed_buffs, function(a, b)
-        return a.uptime > b.uptime
-    end)
-
-    return processed_buffs
 end
 
 local CombatStatsTracker = class('CombatStatsTracker')
 
 function CombatStatsTracker:init()
-    self._active_buffs = {}
-    self._buff_uptime = {}
+    self._tracked_buffs = {}
     self._engagements = {}
     self._total_combat_time = 0
     self._is_in_combat = false
@@ -101,9 +39,8 @@ function CombatStatsTracker:is_enabled(ui_only)
     return true
 end
 
-function CombatStatsTracker:reset_stats()
-    self._active_buffs = {}
-    self._buff_uptime = {}
+function CombatStatsTracker:reset()
+    self._tracked_buffs = {}
     self._engagements = {}
     self._active_engagements = {}
     self._engagements_by_unit = {}
@@ -119,6 +56,36 @@ function CombatStatsTracker:stop()
     for _, engagement in ipairs(self._active_engagements) do
         self:_finish_enemy_engagement(engagement.unit)
     end
+end
+
+-- Get session stats
+function CombatStatsTracker:get_session_stats()
+    local stats = self:_calculate_session_stats()
+
+    return {
+        duration = self:_get_session_duration(),
+        stats = stats,
+        buffs = self._tracked_buffs,
+    }
+end
+
+-- Get all engagement stats
+function CombatStatsTracker:get_engagement_stats()
+    local engagements = {}
+
+    for i, engagement in ipairs(self._engagements or {}) do
+        local stats = self:_calculate_engagement_stats(engagement)
+
+        engagements[i] = {
+            name = engagement.breed_name,
+            start_time = engagement.start_time,
+            end_time = engagement.end_time,
+            stats = stats,
+            buffs = engagement.buffs,
+        }
+    end
+
+    return engagements
 end
 
 function CombatStatsTracker:_get_session_duration()
@@ -201,7 +168,7 @@ function CombatStatsTracker:_calculate_session_stats()
         stats.ranged_crit_hits = stats.ranged_crit_hits + (engagement.ranged_crit_hits or 0)
         stats.ranged_weakspot_hits = stats.ranged_weakspot_hits + (engagement.ranged_weakspot_hits or 0)
 
-        if not engagement.in_progress then
+        if engagement.end_time then
             stats.total_kills = stats.total_kills + 1
         end
 
@@ -236,7 +203,7 @@ function CombatStatsTracker:_calculate_session_stats()
             stats.toxin_damage = stats.toxin_damage + engagement.toxin_damage
         end
 
-        if not engagement.in_progress then
+        if engagement.end_time then
             stats.kills[engagement.breed_type] = (stats.kills[engagement.breed_type] or 0) + 1
         end
     end
@@ -261,7 +228,7 @@ function CombatStatsTracker:_calculate_engagement_stats(engagement)
         bleed_damage = engagement.bleed_damage or 0,
         burn_damage = engagement.burn_damage or 0,
         toxin_damage = engagement.toxin_damage or 0,
-        total_kills = engagement.in_progress and 0 or 1,
+        total_kills = engagement.end_time and 1 or 0,
         kills = {},
         total_hits = engagement.total_hits or 0,
         melee_hits = engagement.melee_hits or 0,
@@ -272,73 +239,16 @@ function CombatStatsTracker:_calculate_engagement_stats(engagement)
         ranged_weakspot_hits = engagement.ranged_weakspot_hits or 0,
     }
 
-    if not engagement.in_progress and engagement.breed_type then
+    if engagement.end_time and engagement.breed_type then
         stats.kills[engagement.breed_type] = 1
     end
 
     return stats
 end
 
--- Public API: Get session stats in consistent format
-function CombatStatsTracker:get_session_stats()
-    local current_time = _get_gameplay_time()
-    local duration = self:_get_session_duration()
-    local stats = self:_calculate_session_stats()
-    local buff_uptime_data = _process_buff_uptime(self._buff_uptime, duration)
-
-    return {
-        name = mod:localize('overall_stats'),
-        display_name = mod:localize('overall_stats'),
-        subtext = string.format('%.1fs', duration),
-        start_time = self._session_start_time,
-        end_time = current_time,
-        duration = duration,
-        stats = stats,
-        buff_uptime = buff_uptime_data,
-        in_progress = self:_has_active_engagements(),
-        is_overall = true,
-    }
-end
-
--- Public API: Get all engagement stats in consistent format
-function CombatStatsTracker:get_engagement_stats()
-    local engagements = {}
-    local current_time = _get_gameplay_time()
-
-    for i, engagement in ipairs(self._engagements or {}) do
-        local duration = (engagement.end_time or current_time) - engagement.start_time
-        local stats = self:_calculate_engagement_stats(engagement)
-        local buff_uptime_data = _process_buff_uptime(engagement.buffs, duration)
-
-        local subtext
-        if engagement.in_progress then
-            subtext = mod:localize('in_progress')
-        else
-            subtext = string.format('%.1fs', duration)
-        end
-
-        engagements[i] = {
-            name = engagement.breed_name or ('engagement_' .. i),
-            display_name = engagement.breed_name or (mod:localize('engagement') .. ' ' .. i),
-            subtext = subtext,
-            breed_name = engagement.breed_name,
-            breed_type = engagement.breed_type,
-            start_time = engagement.start_time,
-            end_time = engagement.end_time,
-            duration = duration,
-            stats = stats,
-            buff_uptime = buff_uptime_data,
-            in_progress = engagement.in_progress or false,
-            is_overall = false,
-        }
-    end
-
-    return engagements
-end
-
 function CombatStatsTracker:_start_enemy_engagement(unit, breed)
     local engagement = self:_find_engagement(unit)
-    if engagement and engagement.in_progress then
+    if engagement then
         return
     end
 
@@ -365,8 +275,6 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
         breed_type = breed_type,
         start_time = current_time,
         end_time = nil,
-        duration = 0,
-        in_progress = true,
         total_damage = 0,
         melee_damage = 0,
         ranged_damage = 0,
@@ -385,12 +293,15 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
         melee_weakspot_hits = 0,
         ranged_crit_hits = 0,
         ranged_weakspot_hits = 0,
-        dps = 0,
         buffs = {},
     }
 
-    for buff_name, _ in pairs(self._active_buffs) do
-        engagement.buffs[buff_name] = 0
+    for buff_name, buff_data in pairs(self._tracked_buffs) do
+        engagement.buffs[buff_name] = {
+            uptime = 0,
+            ui_tracked = buff_data.ui_tracked,
+            icon = buff_data.icon,
+        }
     end
 
     table.insert(self._engagements, engagement)
@@ -403,7 +314,7 @@ end
 
 function CombatStatsTracker:_find_engagement(unit)
     local engagement = self._engagements_by_unit[unit]
-    if engagement and engagement.in_progress then
+    if engagement and not engagement.end_time then
         return engagement
     end
     return nil
@@ -483,9 +394,6 @@ function CombatStatsTracker:_finish_enemy_engagement(unit)
 
     local current_time = _get_gameplay_time()
     engagement.end_time = current_time
-    engagement.duration = current_time - engagement.start_time
-    engagement.in_progress = false
-    engagement.dps = engagement.duration > 0 and engagement.total_damage / engagement.duration or 0
 
     -- Remove from active engagements
     for i, active_engagement in ipairs(self._active_engagements) do
@@ -508,10 +416,7 @@ function CombatStatsTracker:_update_active_engagements()
 
     for i, engagement in ipairs(self._active_engagements) do
         if not ALIVE[engagement.unit] then
-            engagement.in_progress = false
             engagement.end_time = current_time
-            engagement.duration = current_time - engagement.start_time
-            engagement.dps = engagement.duration > 0 and engagement.total_damage / engagement.duration or 0
             table.insert(to_remove, i)
         end
     end
@@ -525,79 +430,63 @@ function CombatStatsTracker:_update_active_engagements()
     end
 end
 
-function CombatStatsTracker:_update_enemy_buffs(dt)
-    if not self:_has_active_engagements() then
+function CombatStatsTracker:_update_buffs_from_hud(active_buffs_data, dt)
+    if not active_buffs_data then
         return
     end
 
-    local current_time = _get_gameplay_time()
+    local currently_active_buffs = {}
 
-    for i, engagement in ipairs(self._active_engagements) do
-        engagement.duration = current_time - engagement.start_time
-        engagement.dps = engagement.duration > 0 and engagement.total_damage / engagement.duration or 0
+    for i = 1, #active_buffs_data do
+        local buff_data = active_buffs_data[i]
+        local buff_instance = buff_data.buff_instance
 
-        for buff_name, _ in pairs(self._active_buffs) do
-            if not engagement.buffs[buff_name] then
-                engagement.buffs[buff_name] = 0
-            end
-            engagement.buffs[buff_name] = engagement.buffs[buff_name] + dt
-        end
-    end
-end
+        if not buff_data.remove and buff_instance and buff_data.show then
+            local buff_title = buff_instance:title()
+            local icon = buff_instance:_hud_icon()
 
-function CombatStatsTracker:_update_buffs(dt)
-    local player = Managers.player:local_player_safe(1)
-    if not player then
-        return
-    end
+            if buff_title then
+                currently_active_buffs[buff_title] = true
 
-    local unit = player.player_unit
-    if not unit then
-        return
-    end
+                if not self._tracked_buffs[buff_title] then
+                    self._tracked_buffs[buff_title] = {
+                        uptime = 0,
+                        ui_tracked = true,
+                        icon = icon,
+                    }
+                end
 
-    local buff_extension = ScriptUnit.has_extension(unit, 'buff_system')
-    if not buff_extension then
-        return
-    end
+                self._tracked_buffs[buff_title].uptime = self._tracked_buffs[buff_title].uptime + dt
 
-    local current_buffs = {}
-    local buffs = buff_extension:buffs()
-    for i = 1, #buffs do
-        local buff = buffs[i]
-        if buff then
-            local buff_name = buff:template_name()
-            if buff_name then
-                current_buffs[buff_name] = true
-                if not self._buff_uptime[buff_name] then
-                    self._buff_uptime[buff_name] = 0
+                -- Update active engagements
+                for _, engagement in ipairs(self._active_engagements) do
+                    if not engagement.buffs[buff_title] then
+                        engagement.buffs[buff_title] = {
+                            uptime = 0,
+                            ui_tracked = true,
+                            icon = icon,
+                        }
+                    end
+                    engagement.buffs[buff_title].uptime = engagement.buffs[buff_title].uptime + dt
                 end
             end
         end
     end
 
-    for buff_name, _ in pairs(current_buffs) do
-        self._buff_uptime[buff_name] = self._buff_uptime[buff_name] + dt
-    end
-
-    for buff_name, _ in pairs(self._active_buffs) do
-        if not current_buffs[buff_name] then
-            self._active_buffs[buff_name] = nil
+    -- Clean up removed buffs from session tracking
+    for buff_title, _ in pairs(self._tracked_buffs) do
+        if not currently_active_buffs[buff_title] then
+            self._tracked_buffs[buff_title] = nil
         end
     end
-
-    self._active_buffs = current_buffs
-
-    self:_update_enemy_buffs(dt)
 end
 
-function CombatStatsTracker:update(dt)
+function CombatStatsTracker:update()
     if not self:is_enabled() then
         return
     end
 
     self:_update_active_engagements()
-    self:_update_buffs(dt)
     self:_update_combat()
 end
 
