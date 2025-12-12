@@ -7,11 +7,6 @@ return {
     options = {
         widgets = {
             {
-                setting_id = 'show_hud_overlay',
-                type = 'checkbox',
-                default_value = true,
-            },
-            {
                 setting_id = 'save_history',
                 type = 'checkbox',
                 default_value = false,
@@ -33,6 +28,29 @@ return {
                 keybind_trigger = 'pressed',
                 keybind_type = 'function_call',
                 function_name = 'toggle_view',
+            },
+            {
+                setting_id = 'hud',
+                type = 'group',
+                sub_widgets = {
+                    {
+                        setting_id = 'show_hud_overlay',
+                        type = 'checkbox',
+                        default_value = true,
+                    },
+                    {
+                        setting_id = 'hud_pos_x',
+                        type = 'numeric',
+                        default_value = 20,
+                        range = { 0, 1920 },
+                    },
+                    {
+                        setting_id = 'hud_pos_y',
+                        type = 'numeric',
+                        default_value = 100,
+                        range = { 0, 1080 },
+                    },
+                },
             },
             {
                 setting_id = 'enemy_types_to_track',

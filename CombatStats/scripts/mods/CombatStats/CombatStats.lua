@@ -187,3 +187,13 @@ mod:hook_safe('HudElementPlayerBuffs', '_update_buffs', function(self)
     local dt = Managers.time and Managers.time:has_timer('gameplay') and Managers.time:delta_time('gameplay') or 0
     mod.tracker:_update_buffs(active_buffs_data, dt)
 end)
+
+function mod.on_setting_changed(setting_id)
+    if setting_id == 'hud_pos_x' or setting_id == 'hud_pos_y' then
+        local hud = Managers.ui and Managers.ui:get_hud()
+        local element = hud and hud:element('HudElementCombatStats')
+        if element and element._update_position then
+            element:_update_position()
+        end
+    end
+end

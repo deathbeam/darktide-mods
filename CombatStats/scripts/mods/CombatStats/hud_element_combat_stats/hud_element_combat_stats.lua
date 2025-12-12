@@ -7,6 +7,18 @@ local HudElementCombatStats = class('HudElementCombatStats', 'HudElementBase')
 
 function HudElementCombatStats:init(parent, draw_layer, start_scale)
     HudElementCombatStats.super.init(self, parent, draw_layer, start_scale, Definitions)
+    self:_update_position()
+end
+
+function HudElementCombatStats:_update_position()
+    local x = mod:get('hud_pos_x')
+    local y = mod:get('hud_pos_y')
+
+    local widget = self._widgets_by_name.session_stats
+    if widget then
+        widget.offset[1] = x
+        widget.offset[2] = y
+    end
 end
 
 function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input_service)

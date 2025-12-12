@@ -11,7 +11,7 @@ local scenegraph_definition = {
         vertical_alignment = 'top',
         horizontal_alignment = 'left',
         size = { 400, 200 },
-        position = { 20, 100, 55 },
+        position = { 0, 0, 55 },
     },
 }
 

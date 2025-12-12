@@ -27,14 +27,6 @@ return {
     },
 
     -- Config
-    show_hud_overlay = {
-        en = 'Show Overlay',
-        ['zh-cn'] = '显示覆盖层',
-    },
-    show_hud_overlay_tooltip = {
-        en = 'Display the minimal stats overlay during combat.',
-        ['zh-cn'] = '在战斗期间显示简化的统计覆盖层。',
-    },
     save_history = {
         en = 'Save History',
         ['zh-cn'] = '保存历史', -- FXIME: confirm translation, translated via google translate
@@ -62,6 +54,26 @@ return {
     toggle_view_keybind = {
         en = 'Toggle Stats View',
         ['zh-cn'] = '切换统计视图',
+    },
+    hud = {
+        en = 'HUD',
+        ['zh-cn'] = 'HUD',
+    },
+    show_hud_overlay = {
+        en = 'Show Overlay',
+        ['zh-cn'] = '显示覆盖层',
+    },
+    show_hud_overlay_tooltip = {
+        en = 'Display the minimal stats overlay during combat.',
+        ['zh-cn'] = '在战斗期间显示简化的统计覆盖层。',
+    },
+    hud_pos_x = {
+        en = 'X Position',
+        ['zh-cn'] = 'X位置',
+    },
+    hud_pos_y = {
+        en = 'Y Position',
+        ['zh-cn'] = 'Y位置',
     },
     enemy_types_to_track = {
         en = 'Enemy Types to Track',
