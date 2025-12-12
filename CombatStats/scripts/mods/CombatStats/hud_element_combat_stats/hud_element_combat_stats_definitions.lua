@@ -104,7 +104,7 @@ local widget_definitions = {
             value_id = 'damage_type_2_icon',
             style = {
                 size = { 18, 18 },
-                offset = { 110, 95, 3 },
+                offset = { 102, 95, 3 },
                 color = Color.white(255, true),
             },
             visibility_function = function(content, style)
@@ -121,7 +121,7 @@ local widget_definitions = {
                 text_horizontal_alignment = 'left',
                 font_type = 'proxima_nova_bold',
                 text_color = UIHudSettings.color_tint_main_2,
-                offset = { 132, 95, 2 },
+                offset = { 124, 95, 2 },
             },
             visibility_function = function(content, style)
                 return content.damage_type_2_text ~= nil and content.damage_type_2_text ~= ''
@@ -133,7 +133,7 @@ local widget_definitions = {
             value_id = 'damage_type_3_icon',
             style = {
                 size = { 18, 18 },
-                offset = { 220, 95, 3 },
+                offset = { 204, 95, 3 },
                 color = Color.white(255, true),
             },
             visibility_function = function(content, style)
@@ -150,7 +150,7 @@ local widget_definitions = {
                 text_horizontal_alignment = 'left',
                 font_type = 'proxima_nova_bold',
                 text_color = UIHudSettings.color_tint_main_2,
-                offset = { 242, 95, 2 },
+                offset = { 226, 95, 2 },
             },
             visibility_function = function(content, style)
                 return content.damage_type_3_text ~= nil and content.damage_type_3_text ~= ''
@@ -162,7 +162,7 @@ local widget_definitions = {
             value_id = 'damage_type_4_icon',
             style = {
                 size = { 18, 18 },
-                offset = { 305, 95, 3 },
+                offset = { 286, 95, 3 },
                 color = Color.white(255, true),
             },
             visibility_function = function(content, style)
@@ -179,7 +179,7 @@ local widget_definitions = {
                 text_horizontal_alignment = 'left',
                 font_type = 'proxima_nova_bold',
                 text_color = UIHudSettings.color_tint_main_2,
-                offset = { 327, 95, 2 },
+                offset = { 308, 95, 2 },
             },
             visibility_function = function(content, style)
                 return content.damage_type_4_text ~= nil and content.damage_type_4_text ~= ''
