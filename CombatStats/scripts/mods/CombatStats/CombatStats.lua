@@ -97,7 +97,14 @@ mod:hook(CLASS.GameModeManager, '_set_end_conditions_met', function(func, self, 
     func(self, outcome, ...)
 
     local mission_info = mod.tracker:get_mission()
-    if mission_info.name and mod:get('save_history') then
+
+    -- Skip saving history for hub and psykanium/training grounds
+    local mission_name = mission_info.name
+    if mission_name == 'tg_shooting_range' or mission_name == 'tg_training_grounds' then
+        return
+    end
+
+    if mission_name and mod:get('save_history') then
         mission_info.outcome = outcome
 
         local session = mod.tracker:get_session_stats()

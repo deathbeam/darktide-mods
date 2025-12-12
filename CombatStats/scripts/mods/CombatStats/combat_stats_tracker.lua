@@ -73,8 +73,8 @@ function CombatStatsTracker:load_from_history(history_data)
     for _, eng_data in ipairs(history_data.engagements or {}) do
         local engagement = {
             unit = nil,
-            breed_name = eng_data.name,
-            breed_type = eng_data.breed_type,
+            name = eng_data.name,
+            type = eng_data.type,
             start_time = eng_data.start_time,
             end_time = eng_data.end_time,
             total_damage = eng_data.stats.total_damage or 0,
@@ -131,8 +131,8 @@ function CombatStatsTracker:get_engagement_stats()
         local stats = self:_calculate_engagement_stats(engagement)
 
         engagements[i] = {
-            name = engagement.breed_name,
-            breed_type = engagement.breed_type,
+            name = engagement.name,
+            type = engagement.type,
             start_time = engagement.start_time,
             end_time = engagement.end_time,
             stats = stats,
@@ -268,12 +268,12 @@ function CombatStatsTracker:_calculate_session_stats()
         end
 
         if engagement.end_time then
-            stats.kills[engagement.breed_type] = (stats.kills[engagement.breed_type] or 0) + 1
+            stats.kills[engagement.type] = (stats.kills[engagement.type] or 0) + 1
         end
 
         -- Track damage by breed type
         if engagement.total_damage and engagement.total_damage > 0 then
-            stats.damage_by_type[engagement.breed_type] = (stats.damage_by_type[engagement.breed_type] or 0)
+            stats.damage_by_type[engagement.type] = (stats.damage_by_type[engagement.type] or 0)
                 + engagement.total_damage
         end
     end
@@ -311,8 +311,8 @@ function CombatStatsTracker:_calculate_engagement_stats(engagement)
         ranged_weakspot_hits = engagement.ranged_weakspot_hits or 0,
     }
 
-    if engagement.end_time and engagement.breed_type then
-        stats.kills[engagement.breed_type] = 1
+    if engagement.end_time and engagement.type then
+        stats.kills[engagement.type] = 1
     end
 
     return stats
@@ -348,8 +348,8 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
 
     engagement = {
         unit = unit,
-        breed_name = breed_name,
-        breed_type = breed_type,
+        name = breed_name,
+        type = breed_type,
         start_time = _get_gameplay_time(),
         end_time = nil,
         total_damage = 0,
@@ -375,12 +375,8 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
         buffs = {},
     }
 
-    for buff_name, buff_data in pairs(self._tracked_buffs) do
-        engagement.buffs[buff_name] = {
-            uptime = 0,
-            ui_tracked = buff_data.ui_tracked,
-            icon = buff_data.icon,
-        }
+    for buff_name, _ in pairs(self._tracked_buffs) do
+        engagement.buffs[buff_name] = 0
     end
 
     table.insert(self._engagements, engagement)
@@ -524,35 +520,20 @@ function CombatStatsTracker:_update_buffs(active_buffs_data, dt)
 
         if not buff_data.remove and buff_instance and buff_data.show then
             local buff_template_name = buff_instance:template_name()
-            local buff_title = buff_instance:title()
-            local icon = buff_instance:_hud_icon()
-            local gradient_map = buff_instance:hud_icon_gradient_map()
 
             if buff_template_name then
                 -- Update tracked buffs
                 if not self._tracked_buffs[buff_template_name] then
-                    self._tracked_buffs[buff_template_name] = {
-                        uptime = 0,
-                        ui_tracked = true,
-                        icon = icon,
-                        gradient_map = gradient_map,
-                        title = buff_title,
-                    }
+                    self._tracked_buffs[buff_template_name] = 0
                 end
-                self._tracked_buffs[buff_template_name].uptime = self._tracked_buffs[buff_template_name].uptime + dt
+                self._tracked_buffs[buff_template_name] = self._tracked_buffs[buff_template_name] + dt
 
                 -- Update active engagements
                 for _, engagement in ipairs(self._active_engagements) do
                     if not engagement.buffs[buff_template_name] then
-                        engagement.buffs[buff_template_name] = {
-                            uptime = 0,
-                            ui_tracked = true,
-                            icon = icon,
-                            gradient_map = gradient_map,
-                            title = buff_title,
-                        }
+                        engagement.buffs[buff_template_name] = 0
                     end
-                    engagement.buffs[buff_template_name].uptime = engagement.buffs[buff_template_name].uptime + dt
+                    engagement.buffs[buff_template_name] = engagement.buffs[buff_template_name] + dt
                 end
             end
         end

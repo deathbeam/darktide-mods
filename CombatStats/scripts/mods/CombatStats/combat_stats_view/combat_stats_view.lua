@@ -6,6 +6,7 @@ local UIRenderer = mod:original_require('scripts/managers/ui/ui_renderer')
 local ViewElementInputLegend =
     mod:original_require('scripts/ui/view_elements/view_element_input_legend/view_element_input_legend')
 local Missions = mod:original_require('scripts/settings/mission/mission_templates')
+local BuffTemplates = mod:original_require('scripts/settings/buff/buff_templates')
 
 local CombatStatsTracker = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_tracker')
 local CombatStatsView = class('CombatStatsView', 'BaseView')
@@ -158,12 +159,12 @@ function CombatStatsView:_setup_entries()
             if
                 search_text == ''
                 or name:lower():find(search_text, 1, true)
-                or engagement.breed_type:lower():find(search_text, 1, true)
+                or engagement.type:lower():find(search_text, 1, true)
             then
                 entries[#entries + 1] = {
                     widget_type = 'stats_entry',
                     name = name,
-                    breed_type = engagement.breed_type,
+                    type = engagement.type,
                     start_time = engagement.start_time,
                     end_time = engagement.end_time,
                     duration = duration,
@@ -446,7 +447,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
             status_color = Color.ui_hud_yellow_light(255, true)
         end
 
-        local enemy_type_label = mod:localize('breed_' .. entry.breed_type)
+        local enemy_type_label = mod:localize('breed_' .. entry.type)
         create_text(
             string.format('%s | %.1fs | %.0f %s', enemy_type_label, duration, dps, mod:localize('dps')),
             status_color,
@@ -656,19 +657,24 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     if duration > 0 and buffs then
         -- Convert raw buff data to sorted array for display
         local buff_array = {}
-        for buff_template_name, data in pairs(buffs) do
-            if data.ui_tracked then
-                -- Use title if available, fallback to template name
-                -- local display_name = data.title or buff_template_name
-                local display_name = buff_template_name
+        for buff_template_name, uptime in pairs(buffs) do
+            local template = BuffTemplates[buff_template_name]
+            local display_name = buff_template_name
+            local icon = nil
+            local gradient_map = nil
 
-                buff_array[#buff_array + 1] = {
-                    name = display_name,
-                    uptime = data.uptime,
-                    icon = data.icon,
-                    gradient_map = data.gradient_map,
-                }
+            if template then
+                -- display_name = template.title or buff_template_name
+                icon = template.hud_icon
+                gradient_map = template.hud_icon_gradient_map
             end
+
+            buff_array[#buff_array + 1] = {
+                name = display_name,
+                uptime = uptime,
+                icon = icon,
+                gradient_map = gradient_map,
+            }
         end
 
         -- Sort by uptime descending

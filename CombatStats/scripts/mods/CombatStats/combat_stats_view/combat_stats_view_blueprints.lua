@@ -104,7 +104,7 @@ local blueprints = {
                     dps = entry.stats.total_damage / entry.duration
                 end
 
-                local enemy_type_label = mod:localize('breed_' .. entry.breed_type)
+                local enemy_type_label = mod:localize('breed_' .. entry.type)
                 content.subtext =
                     string.format('%s | %.1fs | %.0f %s', enemy_type_label, entry.duration, dps, mod:localize('dps'))
                 widget.style.subtext.text_color = status_color
