@@ -509,33 +509,59 @@ function CombatStatsTracker:_update_active_engagements()
     end
 end
 
-function CombatStatsTracker:_update_buffs(active_buffs_data, dt)
-    if not active_buffs_data then
+function CombatStatsTracker:_update_buffs(active_buffs_data, hidden_buff_data, dt)
+    if not active_buffs_data and not hidden_buff_data then
         return
     end
 
-    for i = 1, #active_buffs_data do
-        local buff_data = active_buffs_data[i]
-        local buff_instance = buff_data.buff_instance
+    local templates = {}
 
-        if not buff_data.remove and buff_instance and buff_data.show then
-            local buff_template_name = buff_instance:template_name()
+    if active_buffs_data then
+        for i = 1, #active_buffs_data do
+            local buff_data = active_buffs_data[i]
+            local buff_instance = buff_data.buff_instance
 
-            if buff_template_name then
-                -- Update tracked buffs
-                if not self._tracked_buffs[buff_template_name] then
-                    self._tracked_buffs[buff_template_name] = 0
-                end
-                self._tracked_buffs[buff_template_name] = self._tracked_buffs[buff_template_name] + dt
-
-                -- Update active engagements
-                for _, engagement in ipairs(self._active_engagements) do
-                    if not engagement.buffs[buff_template_name] then
-                        engagement.buffs[buff_template_name] = 0
-                    end
-                    engagement.buffs[buff_template_name] = engagement.buffs[buff_template_name] + dt
+            if not buff_data.remove and buff_instance and buff_data.show then
+                local buff_template_name = buff_instance:template_name()
+                if buff_template_name then
+                    templates[buff_template_name] = true
                 end
             end
+        end
+    end
+
+    if hidden_buff_data then
+        for i = 1, #hidden_buff_data do
+            local buff_instance = hidden_buff_data[i]
+            if buff_instance then
+                local buff_template_name = buff_instance:template_name()
+
+                if buff_template_name and not templates[buff_template_name] then
+                    local buff_template = buff_instance:template()
+                    local has_duration = buff_template.duration or buff_template.active_duration
+                    local is_proc_buff = buff_instance.is_proc_active ~= nil
+                    local should_track = not is_proc_buff or (is_proc_buff and buff_instance:is_proc_active())
+                    if has_duration and should_track then
+                        templates[buff_template_name] = true
+                    end
+                end
+            end
+        end
+    end
+
+    for buff_template_name, _ in pairs(templates) do
+        -- Update tracked buffs
+        if not self._tracked_buffs[buff_template_name] then
+            self._tracked_buffs[buff_template_name] = 0
+        end
+        self._tracked_buffs[buff_template_name] = self._tracked_buffs[buff_template_name] + dt
+
+        -- Update active engagements
+        for _, engagement in ipairs(self._active_engagements) do
+            if not engagement.buffs[buff_template_name] then
+                engagement.buffs[buff_template_name] = 0
+            end
+            engagement.buffs[buff_template_name] = engagement.buffs[buff_template_name] + dt
         end
     end
 end

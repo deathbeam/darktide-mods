@@ -190,9 +190,22 @@ mod:hook_safe('HudElementPlayerBuffs', '_update_buffs', function(self)
         return
     end
 
-    local active_buffs_data = self._active_buffs_data
     local dt = Managers.time and Managers.time:has_timer('gameplay') and Managers.time:delta_time('gameplay') or 0
-    mod.tracker:_update_buffs(active_buffs_data, dt)
+
+    local active_buffs_data = self._active_buffs_data
+    local hidden_buffs_data = nil
+    local player = self._player
+    if player then
+        local player_unit = player.player_unit
+        if player_unit then
+            local buff_extension = ScriptUnit.has_extension(player_unit, 'buff_system')
+            if buff_extension then
+                hidden_buffs_data = buff_extension:buffs()
+            end
+        end
+    end
+
+    mod.tracker:_update_buffs(active_buffs_data, hidden_buffs_data, dt)
 end)
 
 function mod.on_setting_changed(setting_id)

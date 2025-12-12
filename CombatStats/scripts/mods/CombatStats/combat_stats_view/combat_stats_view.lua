@@ -667,6 +667,11 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
                 -- display_name = template.title or buff_template_name
                 icon = template.hud_icon
                 gradient_map = template.hud_icon_gradient_map
+
+                -- Fallback icon for buffs without hud_icon (like weapon trait parents)
+                if not icon then
+                    icon = 'content/ui/textures/icons/talents/broker/stimm_tree/broker_stimm_combat_1'
+                end
             end
 
             buff_array[#buff_array + 1] = {
@@ -679,7 +684,10 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
 
         -- Sort by uptime descending
         table.sort(buff_array, function(a, b)
-            return a.uptime > b.uptime
+            -- Safety check: ensure uptimes are numbers
+            local a_uptime = type(a.uptime) == 'number' and a.uptime or 0
+            local b_uptime = type(b.uptime) == 'number' and b.uptime or 0
+            return a_uptime > b_uptime
         end)
 
         if #buff_array > 0 then
