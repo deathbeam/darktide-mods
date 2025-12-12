@@ -5,6 +5,7 @@ local UIWidgetGrid = mod:original_require('scripts/ui/widget_logic/ui_widget_gri
 local UIRenderer = mod:original_require('scripts/managers/ui/ui_renderer')
 local ViewElementInputLegend =
     mod:original_require('scripts/ui/view_elements/view_element_input_legend/view_element_input_legend')
+local Missions = mod:original_require('scripts/settings/mission/mission_templates')
 
 local CombatStatsView = class('CombatStatsView', 'BaseView')
 
@@ -19,6 +20,7 @@ function CombatStatsView:init(settings, context)
 
     self._pass_draw = false
     self._using_cursor_navigation = Managers.ui:using_cursor_navigation()
+    self._viewing_history = false
 end
 
 function CombatStatsView:on_enter()
@@ -65,6 +67,19 @@ function CombatStatsView:_setup_input_legend()
     end
 end
 
+function CombatStatsView:_get_mission_display_name(mission_info)
+    if not mission_info or not mission_info.name then
+        return nil
+    end
+
+    local mission_settings = Missions[mission_info.name]
+    if mission_settings and mission_settings.mission_name then
+        return Localize(mission_settings.mission_name)
+    end
+
+    return mission_info.name
+end
+
 function CombatStatsView:_setup_entries()
     if self._entry_widgets then
         for i = 1, #self._entry_widgets do
@@ -74,65 +89,90 @@ function CombatStatsView:_setup_entries()
         self._entry_widgets = {}
     end
 
-    local tracker = mod.tracker
-    if not tracker then
-        return
-    end
-
     local entries = {}
-    local current_time = Managers.time:time('gameplay')
 
     -- Get search filter
     local search_widget = self._widgets_by_name.combat_stats_search
     local search_text = search_widget and search_widget.content.input_text or ''
     search_text = search_text:lower()
 
-    -- Get all engagement stats
-    local engagements = tracker:get_engagement_stats()
-    local session = tracker:get_session_stats()
+    if self._viewing_history then
+        -- Load history entries
+        local history_entries = mod.history:get_history_entries()
 
-    -- Always add session stats (overall) first
-    local overall_name = mod:localize('overall_stats')
-    entries[#entries + 1] = {
-        widget_type = 'stats_entry',
-        name = overall_name,
-        start_time = nil,
-        end_time = nil,
-        duration = session.duration,
-        stats = session.stats,
-        buffs = session.buffs,
-        is_session = true,
-        pressed_function = function(parent, widget, entry)
-            parent:_select_entry(widget, entry)
-        end,
-    }
+        for _, history_entry in ipairs(history_entries) do
+            local mission_display = self:_get_mission_display_name(history_entry.mission) or history_entry.mission.name
+            local display_name = history_entry.date .. ' | ' .. mission_display
 
-    -- Add all engagements in reverse order (newest first) if they match search
-    for i = #engagements, 1, -1 do
-        local engagement = engagements[i]
-        local duration = (engagement.end_time or current_time) - engagement.start_time
-        local name = engagement.name or (mod:localize('enemy') .. ' ' .. i)
+            if search_text == '' or display_name:lower():find(search_text, 1, true) then
+                entries[#entries + 1] = {
+                    widget_type = 'stats_entry',
+                    name = display_name,
+                    duration = history_entry.duration,
+                    stats = history_entry.stats,
+                    buffs = history_entry.buffs,
+                    is_session = true,
+                    is_history = true,
+                    history_data = history_entry,
+                    pressed_function = function(parent, widget, entry)
+                        parent:_load_history_entry(entry)
+                    end,
+                }
+            end
+        end
+    else
+        local tracker = mod.tracker
+        if not tracker then
+            return
+        end
 
-        -- Filter by search text
-        if
-            search_text == ''
-            or name:lower():find(search_text, 1, true)
-            or engagement.breed_type:lower():find(search_text, 1, true)
-        then
-            entries[#entries + 1] = {
-                widget_type = 'stats_entry',
-                name = name,
-                breed_type = engagement.breed_type,
-                start_time = engagement.start_time,
-                end_time = engagement.end_time,
-                duration = duration,
-                stats = engagement.stats,
-                buffs = engagement.buffs,
-                is_session = false,
-                pressed_function = function(parent, widget, entry)
-                    parent:_select_entry(widget, entry)
-                end,
-            }
+        local current_time = Managers.time:time('gameplay')
+        local engagements = tracker:get_engagement_stats()
+        local session = tracker:get_session_stats()
+
+        -- Add session stats with mission name from tracker
+        local session_name = self:_get_mission_display_name(tracker:get_mission()) or mod:localize('overall_stats')
+
+        entries[#entries + 1] = {
+            widget_type = 'stats_entry',
+            name = session_name,
+            start_time = nil,
+            end_time = nil,
+            duration = session.duration,
+            stats = session.stats,
+            buffs = session.buffs,
+            is_session = true,
+            pressed_function = function(parent, widget, entry)
+                parent:_select_entry(widget, entry)
+            end,
+        }
+
+        -- Add all engagements in reverse order (newest first) if they match search
+        for i = #engagements, 1, -1 do
+            local engagement = engagements[i]
+            local duration = (engagement.end_time or current_time) - engagement.start_time
+            local name = engagement.name or (mod:localize('enemy') .. ' ' .. i)
+
+            if
+                search_text == ''
+                or name:lower():find(search_text, 1, true)
+                or engagement.breed_type:lower():find(search_text, 1, true)
+            then
+                entries[#entries + 1] = {
+                    widget_type = 'stats_entry',
+                    name = name,
+                    breed_type = engagement.breed_type,
+                    start_time = engagement.start_time,
+                    end_time = engagement.end_time,
+                    duration = duration,
+                    stats = engagement.stats,
+                    buffs = engagement.buffs,
+                    is_session = false,
+                    pressed_function = function(parent, widget, entry)
+                        parent:_select_entry(widget, entry)
+                    end,
+                }
+            end
         end
     end
 
@@ -694,6 +734,40 @@ function CombatStatsView:cb_on_reset_pressed()
         mod.tracker:reset()
         self:_setup_entries()
     end
+end
+
+function CombatStatsView:cb_on_history_pressed()
+    self._viewing_history = true
+    self._selected_entry = nil
+    self:_setup_entries()
+end
+
+function CombatStatsView:cb_on_back_to_current_pressed()
+    self._viewing_history = false
+    self._selected_entry = nil
+
+    -- If tracker has loaded history, reset it to clear
+    if mod.tracker and mod.tracker:is_loaded_history() then
+        mod.tracker:reset()
+    end
+
+    self:_setup_entries()
+end
+
+function CombatStatsView:_load_history_entry(entry)
+    if not entry.history_data then
+        return
+    end
+
+    -- Load history data into tracker
+    mod.tracker:load_from_history(entry.history_data)
+
+    -- Switch back to normal view (not history list view) and clear selection
+    self._viewing_history = false
+    self._selected_entry = nil
+
+    -- Refresh entries - will now show the loaded history data
+    self:_setup_entries()
 end
 
 function CombatStatsView:update(dt, t, input_service)

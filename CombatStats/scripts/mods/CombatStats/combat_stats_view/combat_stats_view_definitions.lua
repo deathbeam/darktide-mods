@@ -168,10 +168,31 @@ local legend_inputs = {
         alignment = 'left_alignment',
     },
     {
+        input_action = 'hotkey_menu_special_2',
+        on_pressed_callback = 'cb_on_history_pressed',
+        display_name = 'loc_combat_stats_view_history',
+        alignment = 'right_alignment',
+        visibility_function = function(parent)
+            return not parent._viewing_history and not (mod.tracker and mod.tracker:is_loaded_history())
+        end,
+    },
+    {
+        input_action = 'hotkey_menu_special_2',
+        on_pressed_callback = 'cb_on_back_to_current_pressed',
+        display_name = 'loc_combat_stats_back_to_current',
+        alignment = 'right_alignment',
+        visibility_function = function(parent)
+            return parent._viewing_history or (mod.tracker and mod.tracker:is_loaded_history())
+        end,
+    },
+    {
         input_action = 'hotkey_menu_special_1',
         on_pressed_callback = 'cb_on_reset_pressed',
         display_name = 'loc_combat_stats_reset_stats',
         alignment = 'right_alignment',
+        visibility_function = function(parent)
+            return not parent._viewing_history and not (mod.tracker and mod.tracker:is_loaded_history())
+        end,
     },
 }
 

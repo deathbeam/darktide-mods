@@ -12,6 +12,11 @@ return {
                 default_value = true,
             },
             {
+                setting_id = 'save_history',
+                type = 'checkbox',
+                default_value = false,
+            },
+            {
                 setting_id = 'enable_in_hub',
                 type = 'checkbox',
                 default_value = false,

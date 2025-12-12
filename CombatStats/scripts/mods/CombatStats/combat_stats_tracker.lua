@@ -12,6 +12,7 @@ function CombatStatsTracker:init()
     self._total_combat_time = 0
     self._is_in_combat = false
     self._last_combat_start = nil
+    self._mission_info = {}
 
     -- Performance caching and lookup tables
     self._active_engagements = {}
@@ -45,11 +46,69 @@ function CombatStatsTracker:reset()
     self._total_combat_time = 0
     self._is_in_combat = false
     self._last_combat_start = nil
+    self._mission_info = {}
 
     self._active_engagements = {}
     self._engagements_by_unit = {}
     self._cached_session_stats = nil
     self._session_stats_dirty = true
+    self._is_loaded_history = false
+end
+
+function CombatStatsTracker:set_mission(mission_info)
+    self._mission_info = mission_info or {}
+end
+
+function CombatStatsTracker:get_mission()
+    return self._mission_info
+end
+
+function CombatStatsTracker:load_from_history(history_data)
+    self:reset()
+
+    self._tracked_buffs = history_data.buffs or {}
+    self._total_combat_time = history_data.duration or 0
+    self._is_loaded_history = true
+    self._mission_info = history_data.mission or {}
+
+    -- Reconstruct engagements from history
+    for _, eng_data in ipairs(history_data.engagements or {}) do
+        local engagement = {
+            unit = nil,
+            breed_name = eng_data.name,
+            breed_type = eng_data.breed_type,
+            start_time = eng_data.start_time,
+            end_time = eng_data.end_time,
+            total_damage = eng_data.stats.total_damage or 0,
+            melee_damage = eng_data.stats.melee_damage or 0,
+            ranged_damage = eng_data.stats.ranged_damage or 0,
+            explosion_damage = eng_data.stats.explosion_damage or 0,
+            companion_damage = eng_data.stats.companion_damage or 0,
+            buff_damage = eng_data.stats.buff_damage or 0,
+            melee_crit_damage = eng_data.stats.melee_crit_damage or 0,
+            melee_weakspot_damage = eng_data.stats.melee_weakspot_damage or 0,
+            ranged_crit_damage = eng_data.stats.ranged_crit_damage or 0,
+            ranged_weakspot_damage = eng_data.stats.ranged_weakspot_damage or 0,
+            bleed_damage = eng_data.stats.bleed_damage or 0,
+            burn_damage = eng_data.stats.burn_damage or 0,
+            toxin_damage = eng_data.stats.toxin_damage or 0,
+            total_hits = eng_data.stats.total_hits or 0,
+            melee_hits = eng_data.stats.melee_hits or 0,
+            ranged_hits = eng_data.stats.ranged_hits or 0,
+            melee_crit_hits = eng_data.stats.melee_crit_hits or 0,
+            melee_weakspot_hits = eng_data.stats.melee_weakspot_hits or 0,
+            ranged_crit_hits = eng_data.stats.ranged_crit_hits or 0,
+            ranged_weakspot_hits = eng_data.stats.ranged_weakspot_hits or 0,
+            buffs = eng_data.buffs or {},
+        }
+        table.insert(self._engagements, engagement)
+    end
+
+    self._session_stats_dirty = true
+end
+
+function CombatStatsTracker:is_loaded_history()
+    return self._is_loaded_history
 end
 
 function CombatStatsTracker:stop()

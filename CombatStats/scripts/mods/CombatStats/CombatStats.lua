@@ -1,6 +1,7 @@
 local mod = get_mod('CombatStats')
 
 local CombatStatsTracker = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_tracker')
+local CombatStatsHistory = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_history')
 
 -- Register Combat HUD element
 mod:register_hud_element({
@@ -35,8 +36,9 @@ mod:register_view({
     },
 })
 
--- Initialize tracker
+-- Initialize tracker and history
 mod.tracker = CombatStatsTracker:new()
+mod.history = CombatStatsHistory:new()
 
 function mod.toggle_view()
     local ui_manager = Managers.ui
@@ -82,11 +84,39 @@ end
 mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, creation_context, ...)
     func(self, parent, params, creation_context, ...)
 
-    -- Reset stats when starting new mission
+    -- Store mission info in tracker
     local mission_name = params.mission_name
     local is_hub = mission_name == 'hub_ship'
+
     if not is_hub then
         mod.tracker:reset()
+        mod.tracker:set_mission({
+            name = mission_name,
+            challenge = params.mechanism_data and params.mechanism_data.challenge or '',
+            circumstance = params.mechanism_data and params.mechanism_data.circumstance_name or '',
+            resistance = params.mechanism_data and params.mechanism_data.resistance or '',
+        })
+    end
+end)
+
+mod:hook(CLASS.GameModeManager, '_set_end_conditions_met', function(func, self, outcome, ...)
+    func(self, outcome, ...)
+
+    local mission_info = mod.tracker:get_mission()
+    if mission_info.name and mod:get('save_history') then
+        mission_info.outcome = outcome
+
+        local session = mod.tracker:get_session_stats()
+        local engagements = mod.tracker:get_engagement_stats()
+
+        local tracker_data = {
+            duration = session.duration,
+            stats = session.stats,
+            buffs = session.buffs,
+            engagements = engagements,
+        }
+
+        mod.history:save_history_entry(tracker_data, mission_info)
     end
 end)
 
