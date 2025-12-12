@@ -173,7 +173,7 @@ local legend_inputs = {
         display_name = 'loc_combat_stats_view_history',
         alignment = 'right_alignment',
         visibility_function = function(parent)
-            return not parent._viewing_history and not (mod.tracker and mod.tracker:is_loaded_history())
+            return not parent._viewing_history and parent._tracker == mod.tracker
         end,
     },
     {
@@ -182,7 +182,7 @@ local legend_inputs = {
         display_name = 'loc_combat_stats_back_to_current',
         alignment = 'right_alignment',
         visibility_function = function(parent)
-            return parent._viewing_history or (mod.tracker and mod.tracker:is_loaded_history())
+            return parent._viewing_history or parent._tracker ~= mod.tracker
         end,
     },
     {
@@ -191,7 +191,7 @@ local legend_inputs = {
         display_name = 'loc_combat_stats_reset_stats',
         alignment = 'right_alignment',
         visibility_function = function(parent)
-            return not parent._viewing_history and not (mod.tracker and mod.tracker:is_loaded_history())
+            return not parent._viewing_history and parent._tracker == mod.tracker
         end,
     },
 }

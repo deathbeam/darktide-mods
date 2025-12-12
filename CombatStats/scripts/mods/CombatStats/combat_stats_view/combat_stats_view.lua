@@ -7,6 +7,7 @@ local ViewElementInputLegend =
     mod:original_require('scripts/ui/view_elements/view_element_input_legend/view_element_input_legend')
 local Missions = mod:original_require('scripts/settings/mission/mission_templates')
 
+local CombatStatsTracker = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_tracker')
 local CombatStatsView = class('CombatStatsView', 'BaseView')
 
 function CombatStatsView:init(settings, context)
@@ -21,6 +22,7 @@ function CombatStatsView:init(settings, context)
     self._pass_draw = false
     self._using_cursor_navigation = Managers.ui:using_cursor_navigation()
     self._viewing_history = false
+    self._tracker = mod.tracker
 end
 
 function CombatStatsView:on_enter()
@@ -121,7 +123,7 @@ function CombatStatsView:_setup_entries()
             end
         end
     else
-        local tracker = mod.tracker
+        local tracker = self._tracker
         if not tracker then
             return
         end
@@ -745,11 +747,7 @@ end
 function CombatStatsView:cb_on_back_to_current_pressed()
     self._viewing_history = false
     self._selected_entry = nil
-
-    -- If tracker has loaded history, reset it to clear
-    if mod.tracker and mod.tracker:is_loaded_history() then
-        mod.tracker:reset()
-    end
+    self._tracker = mod.tracker
 
     self:_setup_entries()
 end
@@ -759,8 +757,9 @@ function CombatStatsView:_load_history_entry(entry)
         return
     end
 
-    -- Load history data into tracker
-    mod.tracker:load_from_history(entry.history_data)
+    -- Create a temporary tracker for history viewing
+    self._tracker = CombatStatsTracker:new()
+    self._tracker:load_from_history(entry.history_data)
 
     -- Switch back to normal view (not history list view) and clear selection
     self._viewing_history = false

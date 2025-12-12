@@ -52,7 +52,6 @@ function CombatStatsTracker:reset()
     self._engagements_by_unit = {}
     self._cached_session_stats = nil
     self._session_stats_dirty = true
-    self._is_loaded_history = false
 end
 
 function CombatStatsTracker:set_mission(mission_info)
@@ -68,7 +67,6 @@ function CombatStatsTracker:load_from_history(history_data)
 
     self._tracked_buffs = history_data.buffs or {}
     self._total_combat_time = history_data.duration or 0
-    self._is_loaded_history = true
     self._mission_info = history_data.mission or {}
 
     -- Reconstruct engagements from history
@@ -105,10 +103,6 @@ function CombatStatsTracker:load_from_history(history_data)
     end
 
     self._session_stats_dirty = true
-end
-
-function CombatStatsTracker:is_loaded_history()
-    return self._is_loaded_history
 end
 
 function CombatStatsTracker:stop()
