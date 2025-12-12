@@ -114,7 +114,11 @@ function CombatStatsView:_setup_entries()
         local name = engagement.name or (mod:localize('enemy') .. ' ' .. i)
 
         -- Filter by search text
-        if search_text == '' or name:lower():find(search_text, 1, true) then
+        if
+            search_text == ''
+            or name:lower():find(search_text, 1, true)
+            or engagement.breed_type:lower():find(search_text, 1, true)
+        then
             entries[#entries + 1] = {
                 widget_type = 'stats_entry',
                 name = name,
