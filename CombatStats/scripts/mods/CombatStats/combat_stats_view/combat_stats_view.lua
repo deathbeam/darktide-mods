@@ -9,6 +9,7 @@ local Missions = mod:original_require('scripts/settings/mission/mission_template
 local BuffTemplates = mod:original_require('scripts/settings/buff/buff_templates')
 
 local CombatStatsTracker = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_tracker')
+local CombatStatsUtils = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_utils')
 local CombatStatsView = class('CombatStatsView', 'BaseView')
 
 function CombatStatsView:init(settings, context)
@@ -154,16 +155,19 @@ function CombatStatsView:_setup_entries()
         for i = #engagements, 1, -1 do
             local engagement = engagements[i]
             local duration = (engagement.end_time or current_time) - engagement.start_time
-            local name = engagement.name or (mod:localize('enemy') .. ' ' .. i)
+            local breed_name = engagement.name or (mod:localize('enemy') .. ' ' .. i)
+            local display_name = CombatStatsUtils.get_breed_display_name(breed_name)
 
             if
                 search_text == ''
-                or name:lower():find(search_text, 1, true)
+                or display_name:lower():find(search_text, 1, true)
+                or breed_name:lower():find(search_text, 1, true)
                 or engagement.type:lower():find(search_text, 1, true)
             then
                 entries[#entries + 1] = {
                     widget_type = 'stats_entry',
-                    name = name,
+                    name = display_name,
+                    breed_name = breed_name,
                     type = engagement.type,
                     start_time = engagement.start_time,
                     end_time = engagement.end_time,
@@ -658,21 +662,8 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
         -- Convert raw buff data to sorted array for display
         local buff_array = {}
         for buff_template_name, uptime in pairs(buffs) do
-            local template = BuffTemplates[buff_template_name]
-            local display_name = buff_template_name
-            local icon = nil
-            local gradient_map = nil
-
-            if template then
-                -- display_name = template.title or buff_template_name
-                icon = template.hud_icon
-                gradient_map = template.hud_icon_gradient_map
-
-                -- Fallback icon for buffs without hud_icon (like weapon trait parents)
-                if not icon then
-                    icon = 'content/ui/textures/icons/talents/broker/stimm_tree/broker_stimm_combat_1'
-                end
-            end
+            local display_name = CombatStatsUtils.get_buff_display_name(buff_template_name)
+            local icon, gradient_map = CombatStatsUtils.get_buff_icon(buff_template_name)
 
             buff_array[#buff_array + 1] = {
                 name = display_name,

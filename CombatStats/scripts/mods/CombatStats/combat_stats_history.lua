@@ -95,6 +95,13 @@ function CombatStatsHistory:load_history_entry(path)
     file:close()
 
     local data = cjson.decode(json_str)
+
+    local file_name = path:match('([^/\\]+)%.json$')
+    local date_str = file_name and tonumber(file_name)
+    data.file = file_name
+    data.file_path = path
+    data.date = _os.date('%Y-%m-%d %H:%M:%S', tonumber(date_str))
+    data.timestamp = tonumber(date_str)
     return data
 end
 
@@ -123,13 +130,8 @@ function CombatStatsHistory:get_history_entries(scan_dir)
     for _, file in pairs(files) do
         local file_path = appdata .. file
         if file_exists(file_path) and file:match('%.json$') then
-            local date_str = string.sub(file, 1, string.len(file) - 5)
             local entry = self:load_history_entry(file_path)
             if entry then
-                entry.file = file
-                entry.file_path = file_path
-                entry.date = _os.date('%Y-%m-%d %H:%M:%S', tonumber(date_str))
-                entry.timestamp = tonumber(date_str)
                 entries[#entries + 1] = entry
             end
         end

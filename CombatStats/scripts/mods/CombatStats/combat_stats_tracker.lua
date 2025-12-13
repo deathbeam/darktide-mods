@@ -71,35 +71,37 @@ function CombatStatsTracker:load_from_history(history_data)
 
     -- Reconstruct engagements from history
     for _, eng_data in ipairs(history_data.engagements or {}) do
-        local engagement = {
-            unit = nil,
-            name = eng_data.name,
-            type = eng_data.type,
-            start_time = eng_data.start_time,
-            end_time = eng_data.end_time,
-            total_damage = eng_data.stats.total_damage or 0,
-            melee_damage = eng_data.stats.melee_damage or 0,
-            ranged_damage = eng_data.stats.ranged_damage or 0,
-            explosion_damage = eng_data.stats.explosion_damage or 0,
-            companion_damage = eng_data.stats.companion_damage or 0,
-            buff_damage = eng_data.stats.buff_damage or 0,
-            melee_crit_damage = eng_data.stats.melee_crit_damage or 0,
-            melee_weakspot_damage = eng_data.stats.melee_weakspot_damage or 0,
-            ranged_crit_damage = eng_data.stats.ranged_crit_damage or 0,
-            ranged_weakspot_damage = eng_data.stats.ranged_weakspot_damage or 0,
-            bleed_damage = eng_data.stats.bleed_damage or 0,
-            burn_damage = eng_data.stats.burn_damage or 0,
-            toxin_damage = eng_data.stats.toxin_damage or 0,
-            total_hits = eng_data.stats.total_hits or 0,
-            melee_hits = eng_data.stats.melee_hits or 0,
-            ranged_hits = eng_data.stats.ranged_hits or 0,
-            melee_crit_hits = eng_data.stats.melee_crit_hits or 0,
-            melee_weakspot_hits = eng_data.stats.melee_weakspot_hits or 0,
-            ranged_crit_hits = eng_data.stats.ranged_crit_hits or 0,
-            ranged_weakspot_hits = eng_data.stats.ranged_weakspot_hits or 0,
-            buffs = eng_data.buffs or {},
-        }
-        table.insert(self._engagements, engagement)
+        if eng_data.end_time then
+            local engagement = {
+                unit = nil,
+                name = eng_data.name,
+                type = eng_data.type,
+                start_time = eng_data.start_time,
+                end_time = eng_data.end_time,
+                total_damage = eng_data.stats.total_damage or 0,
+                melee_damage = eng_data.stats.melee_damage or 0,
+                ranged_damage = eng_data.stats.ranged_damage or 0,
+                explosion_damage = eng_data.stats.explosion_damage or 0,
+                companion_damage = eng_data.stats.companion_damage or 0,
+                buff_damage = eng_data.stats.buff_damage or 0,
+                melee_crit_damage = eng_data.stats.melee_crit_damage or 0,
+                melee_weakspot_damage = eng_data.stats.melee_weakspot_damage or 0,
+                ranged_crit_damage = eng_data.stats.ranged_crit_damage or 0,
+                ranged_weakspot_damage = eng_data.stats.ranged_weakspot_damage or 0,
+                bleed_damage = eng_data.stats.bleed_damage or 0,
+                burn_damage = eng_data.stats.burn_damage or 0,
+                toxin_damage = eng_data.stats.toxin_damage or 0,
+                total_hits = eng_data.stats.total_hits or 0,
+                melee_hits = eng_data.stats.melee_hits or 0,
+                ranged_hits = eng_data.stats.ranged_hits or 0,
+                melee_crit_hits = eng_data.stats.melee_crit_hits or 0,
+                melee_weakspot_hits = eng_data.stats.melee_weakspot_hits or 0,
+                ranged_crit_hits = eng_data.stats.ranged_crit_hits or 0,
+                ranged_weakspot_hits = eng_data.stats.ranged_weakspot_hits or 0,
+                buffs = eng_data.buffs or {},
+            }
+            table.insert(self._engagements, engagement)
+        end
     end
 
     self._session_stats_dirty = true

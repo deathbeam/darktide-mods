@@ -4,6 +4,8 @@ local UIFontSettings = mod:original_require('scripts/managers/ui/ui_font_setting
 local UISoundEvents = mod:original_require('scripts/settings/ui/ui_sound_events')
 local ButtonPassTemplates = mod:original_require('scripts/ui/pass_templates/button_pass_templates')
 
+local CombatStatsUtils = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_utils')
+
 local entry_width = 480
 local entry_height = 80
 
