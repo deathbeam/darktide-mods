@@ -24,6 +24,7 @@ function CombatStatsView:init(settings, context)
     self._pass_draw = false
     self._using_cursor_navigation = Managers.ui:using_cursor_navigation()
     self._viewing_history = false
+    self._viewing_history_entry = false
     self._tracker = mod.tracker
 end
 
@@ -198,9 +199,12 @@ function CombatStatsView:_setup_entries()
     self._entry_grid:assign_scrollbar(scrollbar_widget, 'combat_stats_list_pivot', grid_scenegraph_id)
     self._entry_grid:set_scrollbar_progress(0)
 
-    -- Select first entry by default
-    if #self._entry_widgets > 0 then
+    -- Select first entry by default, but not when viewing history list
+    if #self._entry_widgets > 0 and not self._viewing_history then
         self:_select_entry(self._entry_widgets[1], entries[1])
+    elseif self._viewing_history then
+        -- Clear detail view when showing history list
+        self:_rebuild_detail_widgets(nil)
     end
 end
 
@@ -744,17 +748,34 @@ function CombatStatsView:cb_on_reset_pressed()
 end
 
 function CombatStatsView:cb_on_history_pressed()
-    self._viewing_history = true
-    self._selected_entry = nil
-    self:_setup_entries()
+    if self._viewing_history then
+        -- Already in history list, toggle back to current
+        self:cb_on_back_to_current_pressed()
+    else
+        -- Go to history list
+        self._viewing_history = true
+        self._viewing_history_entry = false
+        self._selected_entry = nil
+        self:_setup_entries()
+    end
 end
 
 function CombatStatsView:cb_on_back_to_current_pressed()
-    self._viewing_history = false
-    self._selected_entry = nil
-    self._tracker = mod.tracker
-
-    self:_setup_entries()
+    if self._viewing_history_entry then
+        -- Go back to history list from loaded history entry
+        self._viewing_history = true
+        self._viewing_history_entry = false
+        self._selected_entry = nil
+        self._tracker = mod.tracker
+        self:_setup_entries()
+    else
+        -- Go back to current from history list
+        self._viewing_history = false
+        self._viewing_history_entry = false
+        self._selected_entry = nil
+        self._tracker = mod.tracker
+        self:_setup_entries()
+    end
 end
 
 function CombatStatsView:_load_history_entry(entry)
@@ -766,8 +787,9 @@ function CombatStatsView:_load_history_entry(entry)
     self._tracker = CombatStatsTracker:new()
     self._tracker:load_from_history(entry.history_data)
 
-    -- Switch back to normal view (not history list view) and clear selection
+    -- Switch to history entry view (not history list, not current)
     self._viewing_history = false
+    self._viewing_history_entry = true
     self._selected_entry = nil
 
     -- Refresh entries - will now show the loaded history data

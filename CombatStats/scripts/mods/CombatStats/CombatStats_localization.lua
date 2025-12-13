@@ -14,6 +14,10 @@ mod:add_global_localize_strings({
         en = 'Back to Current',
         ['zh-cn'] = '返回当前', -- FXIME: confirm translation, translated via google translate
     },
+    loc_combat_stats_back_to_history = {
+        en = 'Back to History',
+        ['zh-cn'] = '返回历史', -- FXIME: confirm translation, translated via google translate
+    },
 })
 
 return {
