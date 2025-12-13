@@ -14,12 +14,12 @@ return {
             {
                 setting_id = 'enable_in_hub',
                 type = 'checkbox',
-                default_value = false,
+                default_value = true,
             },
             {
                 setting_id = 'enable_in_missions',
                 type = 'checkbox',
-                default_value = false,
+                default_value = true,
             },
             {
                 setting_id = 'toggle_view_keybind',

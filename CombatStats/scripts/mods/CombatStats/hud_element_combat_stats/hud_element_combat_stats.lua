@@ -29,7 +29,7 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
     end
 
     local tracker = mod.tracker
-    if not tracker or not tracker:is_enabled(true) then
+    if not tracker:is_enabled(true) then
         return
     end
 
@@ -39,6 +39,10 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
     end
 
     local session_data = tracker:get_session_stats()
+    if session_data.stats.total_damage <= 0 then
+        return
+    end
+
     local stats = session_data.stats
     local duration = session_data.duration
 
@@ -166,7 +170,12 @@ function HudElementCombatStats:draw(dt, t, ui_renderer, render_settings, input_s
     end
 
     local tracker = mod.tracker
-    if not tracker or not tracker:is_enabled(true) then
+    if not tracker:is_enabled(true) then
+        return
+    end
+
+    local session_data = tracker:get_session_stats()
+    if session_data.stats.total_damage <= 0 then
         return
     end
 
