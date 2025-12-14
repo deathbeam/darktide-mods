@@ -163,6 +163,12 @@ mod:hook(
                             mod.tracker:_finish_enemy_engagement(attacked_unit)
                         end
                     end
+                elseif player_unit and attacked_unit == player_unit then
+                    local unit_data_extension = ScriptUnit.has_extension(attacking_unit, 'unit_data_system')
+                    local breed = unit_data_extension and unit_data_extension:breed()
+                    if breed then
+                        mod.tracker:_start_enemy_engagement(attacking_unit, breed)
+                    end
                 end
             end
         end

@@ -12,7 +12,7 @@ function CombatStatsTracker:init()
     self._total_combat_time = 0
     self._is_in_combat = false
     self._last_combat_start = nil
-    self._engagement_timeout = 10
+    self._engagement_timeout = 5
     self._mission_info = {}
 
     -- Performance caching and lookup tables
@@ -328,9 +328,19 @@ function CombatStatsTracker:_calculate_engagement_stats(engagement)
     return stats
 end
 
+function CombatStatsTracker:_track_engagement(unit, engagement)
+    local current_time = _get_gameplay_time()
+    self._active_engagements_by_unit[unit] = engagement
+    engagement.end_time = nil
+    engagement.last_damage_time = current_time
+    self:_start_combat()
+    self._session_stats_dirty = true
+end
+
 function CombatStatsTracker:_start_enemy_engagement(unit, breed)
     local engagement = self:_find_engagement(unit)
     if engagement then
+        self:_track_engagement(unit, engagement)
         return
     end
 
@@ -392,7 +402,7 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
 
     table.insert(self._engagements, engagement)
     self._engagements_by_unit[unit] = engagement
-    self._session_stats_dirty = true
+    self:_track_engagement(unit, engagement)
 end
 
 function CombatStatsTracker:_find_engagement(unit)
@@ -404,12 +414,6 @@ function CombatStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_cr
     if not engagement then
         return
     end
-
-    local current_time = _get_gameplay_time()
-    self._active_engagements_by_unit[unit] = engagement
-    engagement.end_time = nil
-    engagement.last_damage_time = current_time
-    self:_start_combat()
 
     local damage_type = nil
     if damage_profile then
