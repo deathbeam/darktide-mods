@@ -12,10 +12,11 @@ function CombatStatsTracker:init()
     self._total_combat_time = 0
     self._is_in_combat = false
     self._last_combat_start = nil
+    self._engagement_timeout = 10
     self._mission_info = {}
 
     -- Performance caching and lookup tables
-    self._active_engagements = {}
+    self._active_engagements_by_unit = {}
     self._engagements_by_unit = {}
     self._cached_session_stats = nil
     self._session_stats_dirty = true
@@ -48,7 +49,7 @@ function CombatStatsTracker:reset()
     self._last_combat_start = nil
     self._mission_info = {}
 
-    self._active_engagements = {}
+    self._active_engagements_by_unit = {}
     self._engagements_by_unit = {}
     self._cached_session_stats = nil
     self._session_stats_dirty = true
@@ -109,9 +110,16 @@ end
 
 function CombatStatsTracker:stop()
     self:_end_combat()
-    for _, engagement in ipairs(self._active_engagements) do
-        self:_finish_enemy_engagement(engagement.unit)
+
+    local current_time = _get_gameplay_time()
+    for _, engagement in pairs(self._active_engagements_by_unit) do
+        if not engagement.end_time then
+            engagement.end_time = current_time
+        end
     end
+
+    self._active_engagements_by_unit = {}
+    self._session_stats_dirty = true
 end
 
 -- Get session stats
@@ -157,7 +165,7 @@ function CombatStatsTracker:_get_session_duration()
 end
 
 function CombatStatsTracker:_has_active_engagements()
-    return #self._active_engagements > 0
+    return next(self._active_engagements_by_unit) ~= nil
 end
 
 function CombatStatsTracker:_start_combat()
@@ -354,6 +362,7 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
         type = breed_type,
         start_time = _get_gameplay_time(),
         end_time = nil,
+        last_damage_time = nil,
         total_damage = 0,
         melee_damage = 0,
         ranged_damage = 0,
@@ -382,19 +391,12 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
     end
 
     table.insert(self._engagements, engagement)
-    table.insert(self._active_engagements, engagement)
     self._engagements_by_unit[unit] = engagement
     self._session_stats_dirty = true
-
-    self:_start_combat()
 end
 
 function CombatStatsTracker:_find_engagement(unit)
-    local engagement = self._engagements_by_unit[unit]
-    if engagement and not engagement.end_time then
-        return engagement
-    end
-    return nil
+    return self._engagements_by_unit[unit]
 end
 
 function CombatStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_critical, is_weakspot, damage_profile)
@@ -402,6 +404,12 @@ function CombatStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_cr
     if not engagement then
         return
     end
+
+    local current_time = _get_gameplay_time()
+    self._active_engagements_by_unit[unit] = engagement
+    engagement.end_time = nil
+    engagement.last_damage_time = current_time
+    self:_start_combat()
 
     local damage_type = nil
     if damage_profile then
@@ -475,14 +483,7 @@ function CombatStatsTracker:_finish_enemy_engagement(unit)
 
     local current_time = _get_gameplay_time()
     engagement.end_time = current_time
-
-    -- Remove from active engagements
-    for i, active_engagement in ipairs(self._active_engagements) do
-        if active_engagement == engagement then
-            table.remove(self._active_engagements, i)
-            break
-        end
-    end
+    self._active_engagements_by_unit[unit] = nil
 
     self._session_stats_dirty = true
 end
@@ -493,20 +494,28 @@ function CombatStatsTracker:_update_active_engagements()
     end
 
     local current_time = _get_gameplay_time()
-    local to_remove = {}
+    local removed_any = false
 
-    for i, engagement in ipairs(self._active_engagements) do
-        if not ALIVE[engagement.unit] then
+    for unit, engagement in pairs(self._active_engagements_by_unit) do
+        local should_end = false
+
+        if not ALIVE[unit] or not HEALTH_ALIVE[unit] then
+            should_end = true
+        elseif engagement.last_damage_time then
+            local time_since_damage = current_time - engagement.last_damage_time
+            if time_since_damage >= self._engagement_timeout then
+                should_end = true
+            end
+        end
+
+        if should_end then
+            removed_any = true
             engagement.end_time = current_time
-            table.insert(to_remove, i)
+            self._active_engagements_by_unit[unit] = nil
         end
     end
 
-    for i = #to_remove, 1, -1 do
-        table.remove(self._active_engagements, to_remove[i])
-    end
-
-    if #to_remove > 0 then
+    if removed_any then
         self._session_stats_dirty = true
     end
 end
@@ -559,7 +568,7 @@ function CombatStatsTracker:_update_buffs(active_buffs_data, hidden_buff_data, d
         self._tracked_buffs[buff_template_name] = self._tracked_buffs[buff_template_name] + dt
 
         -- Update active engagements
-        for _, engagement in ipairs(self._active_engagements) do
+        for _, engagement in pairs(self._active_engagements_by_unit) do
             if not engagement.buffs[buff_template_name] then
                 engagement.buffs[buff_template_name] = 0
             end
