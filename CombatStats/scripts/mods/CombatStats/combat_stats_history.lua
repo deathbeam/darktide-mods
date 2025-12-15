@@ -58,7 +58,7 @@ end
 local CombatStatsHistory = class('CombatStatsHistory')
 
 function CombatStatsHistory:init()
-    self._history_entries_cache = {}
+    self._history_entries_cache = nil
 end
 
 function CombatStatsHistory:get_path()
@@ -133,7 +133,11 @@ function CombatStatsHistory:save_history_entry(tracker_data, mission_name, class
     file:write(json_str)
     file:close()
 
-    self._history_entries_cache[#self._history_entries_cache + 1] = file_name
+    -- Only add to cache if it was actually fully loaded before
+    if self._history_entries_cache ~= nil then
+        self._history_entries_cache[#self._history_entries_cache + 1] = file_name
+    end
+
     return file_name
 end
 
@@ -167,16 +171,12 @@ function CombatStatsHistory:load_history_entry(file_name)
 end
 
 function CombatStatsHistory:get_history_entries(scan_dir)
-    local cache = self._history_entries_cache
-    local files = cache
-
-    if scan_dir or not cache or #cache == 0 then
-        files = scandir(self:get_path())
-        self._history_entries_cache = files
+    if scan_dir or self._history_entries_cache == nil then
+        self._history_entries_cache = scandir(self:get_path())
     end
 
     local entries = {}
-    for _, file in ipairs(files) do
+    for _, file in ipairs(self._history_entries_cache) do
         if file:match('%.json$') then
             local file_info = self:parse_filename(file)
             if file_info then
@@ -196,14 +196,17 @@ function CombatStatsHistory:delete_history_entry(file_name)
     local path = self:get_path() .. file_name
 
     if _os.remove(path) then
-        local cache = self._history_entries_cache
-        local new_cache = {}
-        for _, c in ipairs(cache) do
-            if c ~= file_name then
-                new_cache[#new_cache + 1] = c
+        -- Only remove from cache if it was actually fully loaded before
+        if self._history_entries_cache ~= nil then
+            local new_cache = {}
+            for _, c in ipairs(self._history_entries_cache) do
+                if c ~= file_name then
+                    new_cache[#new_cache + 1] = c
+                end
             end
+            self._history_entries_cache = new_cache
         end
-        self._history_entries_cache = new_cache
+
         return true
     end
 
