@@ -766,7 +766,7 @@ function CombatStatsView:_load_history_entry(entry)
     end
 
     -- Load full history data from file
-    local full_data = mod.history:load_history_entry(entry.history_data.file_path)
+    local full_data = mod.history:load_history_entry(entry.history_data.file)
     if not full_data then
         return
     end

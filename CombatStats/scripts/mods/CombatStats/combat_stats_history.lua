@@ -13,52 +13,56 @@ if not _os.initialized then
     _os = DMF.deepcopy(Mods.lua.os)
 end
 
-local cjson = cjson
-
-local CombatStatsHistory = class('CombatStatsHistory')
-
-function CombatStatsHistory:init() end
-
+--- Check if file or directory exists
+---@param file string
+---@return boolean
 local function exists(file)
-    local ok, err, code = _os.rename(file, file)
+    local ok, _, code = _os.rename(file, file)
     if not ok then
         if code == 13 then
             return true
         end
     end
-    return ok, err
+    return ok
 end
 
+--- Check if path is a directory
+---@param path string
+---@return boolean
 local function isdir(path)
     return exists(path .. '/')
 end
 
-local function file_exists(name)
-    local f = _io.open(name, 'r')
-    if f ~= nil then
-        _io.close(f)
-        return true
-    else
-        return false
+--- Scan directory and return list of filenames
+---@param directory string
+---@return string[]
+local function scandir(directory)
+    local i, file_names, popen = 0, {}, _io.popen
+    local pfile = popen('dir "' .. directory .. '" /b')
+    for filename in pfile:lines() do
+        i = i + 1
+        file_names[i] = filename
     end
+    pfile:close()
+    return file_names
 end
 
-function CombatStatsHistory:appdata_path()
-    local appdata = _os.getenv('APPDATA')
-    return appdata .. '/Fatshark/Darktide/combat_stats_history/'
-end
-
-function CombatStatsHistory:create_history_directory()
-    local path = self:appdata_path()
+--- Create directory if it does not exist
+---@param path string
+local function mkdir(path)
     if not isdir(path) then
         _os.execute('mkdir "' .. path .. '"')
     end
 end
 
-function CombatStatsHistory:create_history_entry_path(mission_name, class_name)
-    local timestamp = tostring(_os.time(_os.date('*t')))
-    local file_name = timestamp .. '_' .. class_name .. '_' .. mission_name .. '.json'
-    return self:appdata_path() .. file_name, file_name
+local CombatStatsHistory = class('CombatStatsHistory')
+
+function CombatStatsHistory:init()
+    self._history_entries_cache = {}
+end
+
+function CombatStatsHistory:get_path()
+    return string.format('%s/Fatshark/Darktide/combat_stats_history/', _os.getenv('APPDATA'))
 end
 
 function CombatStatsHistory:parse_filename(file_name)
@@ -93,6 +97,7 @@ function CombatStatsHistory:parse_filename(file_name)
     end
 
     return {
+        file = file_name,
         timestamp = timestamp,
         date = date_str,
         mission_name = mission_name,
@@ -101,9 +106,11 @@ function CombatStatsHistory:parse_filename(file_name)
 end
 
 function CombatStatsHistory:save_history_entry(tracker_data, mission_name, class_name)
-    self:create_history_directory()
+    mkdir(self:get_path())
 
-    local path, file_name = self:create_history_entry_path(mission_name, class_name)
+    local timestamp = tostring(_os.time(_os.date('*t')))
+    local file_name = string.format('%s_%s_%s.json', timestamp, class_name, mission_name)
+    local path = self:get_path() .. file_name
 
     local data = {
         duration = tracker_data.duration or 0,
@@ -112,35 +119,44 @@ function CombatStatsHistory:save_history_entry(tracker_data, mission_name, class
         engagements = tracker_data.engagements,
     }
 
-    local json_str = cjson.encode(data)
-    local file = assert(_io.open(path, 'w'))
+    local ok, json_str = pcall(cjson.encode, data)
+    if not ok then
+        mod:echo('Failed to encode history entry: ' .. tostring(json_str))
+        return nil
+    end
+
+    local file, err = _io.open(path, 'w')
+    if not file then
+        mod:echo('Failed to open file for writing: ' .. tostring(err))
+        return nil
+    end
     file:write(json_str)
     file:close()
 
-    local cache = mod:get('history_entries') or {}
-    cache[#cache + 1] = file_name
-    mod:set('history_entries', cache)
-
+    self._history_entries_cache[#self._history_entries_cache + 1] = file_name
     return file_name
 end
 
-function CombatStatsHistory:load_history_entry(path)
-    local file = _io.open(path, 'r')
+function CombatStatsHistory:load_history_entry(file_name)
+    local path = self:get_path() .. file_name
+    local file, err = _io.open(path, 'r')
     if not file then
+        mod:echo('Failed to open file for reading: ' .. tostring(err))
         return nil
     end
 
     local json_str = file:read('*all')
     file:close()
 
-    local data = cjson.decode(json_str)
+    local ok, data = pcall(cjson.decode, json_str)
+    if not ok then
+        mod:echo('Failed to decode history entry: ' .. tostring(data))
+        return nil
+    end
 
-    local file_name = path:match('([^/\\]+)$')
     local file_info = self:parse_filename(file_name)
-
     if file_info then
         data.file = file_name
-        data.file_path = path
         data.date = file_info.date
         data.timestamp = file_info.timestamp
         data.mission_name = file_info.mission_name
@@ -151,34 +167,19 @@ function CombatStatsHistory:load_history_entry(path)
 end
 
 function CombatStatsHistory:get_history_entries(scan_dir)
-    local function scandir(directory)
-        local i, t, popen = 0, {}, _io.popen
-        local pfile = popen('dir "' .. directory .. '" /b')
-        for filename in pfile:lines() do
-            i = i + 1
-            t[i] = filename
-        end
-        pfile:close()
-        return t
-    end
-
-    local appdata = self:appdata_path()
-    local cache = mod:get('history_entries') or {}
+    local cache = self._history_entries_cache
     local files = cache
 
     if scan_dir or not cache or #cache == 0 then
-        files = scandir(appdata)
-        mod:set('history_entries', files)
+        files = scandir(self:get_path())
+        self._history_entries_cache = files
     end
 
     local entries = {}
-    for _, file in pairs(files) do
+    for _, file in ipairs(files) do
         if file:match('%.json$') then
             local file_info = self:parse_filename(file)
             if file_info then
-                -- Add basic info from filename without loading file
-                file_info.file = file
-                file_info.file_path = appdata .. file
                 entries[#entries + 1] = file_info
             end
         end
@@ -192,20 +193,20 @@ function CombatStatsHistory:get_history_entries(scan_dir)
 end
 
 function CombatStatsHistory:delete_history_entry(file_name)
-    local file_path = self:appdata_path() .. file_name
-    if file_exists(file_path) then
-        if _os.remove(file_path) then
-            local cache = mod:get('history_entries') or {}
-            local new_cache = {}
-            for _, c in pairs(cache) do
-                if c ~= file_name then
-                    new_cache[#new_cache + 1] = c
-                end
+    local path = self:get_path() .. file_name
+
+    if _os.remove(path) then
+        local cache = self._history_entries_cache
+        local new_cache = {}
+        for _, c in ipairs(cache) do
+            if c ~= file_name then
+                new_cache[#new_cache + 1] = c
             end
-            mod:set('history_entries', new_cache)
-            return true
         end
+        self._history_entries_cache = new_cache
+        return true
     end
+
     return false
 end
 
