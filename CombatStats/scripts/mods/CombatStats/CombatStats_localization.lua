@@ -187,17 +187,9 @@ return {
     },
 
     -- View
-    combat_stats_view_title = {
-        en = 'Combat Statistics',
-        ['zh-cn'] = '战斗统计',
-    },
     search_placeholder = {
         en = 'Search enemies...',
         ['zh-cn'] = '搜索敌人...',
-    },
-    overall_stats = {
-        en = 'Overall Stats',
-        ['zh-cn'] = '总体统计',
     },
     enemy_stats = {
         en = 'Enemy Stats',

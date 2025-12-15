@@ -114,7 +114,7 @@ local widget_definitions = {
             value_id = 'text',
             style_id = 'text',
             pass_type = 'text',
-            value = mod:localize('combat_stats_view_title'),
+            value = mod:localize('mod_name'),
             style = table.clone(UIFontSettings.header_1),
         },
     }, 'combat_stats_title_text'),
