@@ -53,6 +53,23 @@ return {
                 },
             },
             {
+                setting_id = 'combat_detection',
+                type = 'group',
+                sub_widgets = {
+                    {
+                        setting_id = 'track_incoming_attacks',
+                        type = 'checkbox',
+                        default_value = true,
+                    },
+                    {
+                        setting_id = 'engagement_timeout',
+                        type = 'numeric',
+                        default_value = 5,
+                        range = { 1, 30 },
+                    },
+                },
+            },
+            {
                 setting_id = 'enemy_types_to_track',
                 type = 'group',
                 sub_widgets = {

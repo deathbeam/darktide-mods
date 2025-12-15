@@ -55,18 +55,57 @@ function CombatStatsHistory:create_history_directory()
     end
 end
 
-function CombatStatsHistory:create_history_entry_path()
-    local file_name = tostring(_os.time(_os.date('*t'))) .. '.json'
+function CombatStatsHistory:create_history_entry_path(mission_name, class_name)
+    local timestamp = tostring(_os.time(_os.date('*t')))
+    local file_name = timestamp .. '_' .. class_name .. '_' .. mission_name .. '.json'
     return self:appdata_path() .. file_name, file_name
 end
 
-function CombatStatsHistory:save_history_entry(tracker_data, mission_info)
+function CombatStatsHistory:parse_filename(file_name)
+    -- Parse format: timestamp_class_missionname.json
+    -- Mission name can contain underscores, so we need to be careful
+    local name_without_ext = file_name:match('(.+)%.json$')
+    if not name_without_ext then
+        return nil
+    end
+
+    -- Extract timestamp (first segment)
+    local timestamp_str = name_without_ext:match('^(%d+)_')
+    if not timestamp_str then
+        return nil
+    end
+
+    -- Extract class (second segment after first underscore)
+    local after_timestamp = name_without_ext:match('^%d+_(.+)$')
+    if not after_timestamp then
+        return nil
+    end
+
+    local class_name, mission_name = after_timestamp:match('^([^_]+)_(.+)$')
+    if not class_name or not mission_name then
+        return nil
+    end
+
+    local timestamp = tonumber(timestamp_str)
+    local date_str = timestamp and _os.date('%Y-%m-%d %H:%M:%S', timestamp)
+    if not timestamp or not date_str then
+        return nil
+    end
+
+    return {
+        timestamp = timestamp,
+        date = date_str,
+        mission_name = mission_name,
+        class_name = class_name,
+    }
+end
+
+function CombatStatsHistory:save_history_entry(tracker_data, mission_name, class_name)
     self:create_history_directory()
 
-    local path, file_name = self:create_history_entry_path()
+    local path, file_name = self:create_history_entry_path(mission_name, class_name)
 
     local data = {
-        mission = mission_info,
         duration = tracker_data.duration or 0,
         stats = tracker_data.stats,
         buffs = tracker_data.buffs,
@@ -96,12 +135,18 @@ function CombatStatsHistory:load_history_entry(path)
 
     local data = cjson.decode(json_str)
 
-    local file_name = path:match('([^/\\]+)%.json$')
-    local date_str = file_name and tonumber(file_name)
-    data.file = file_name
-    data.file_path = path
-    data.date = _os.date('%Y-%m-%d %H:%M:%S', tonumber(date_str))
-    data.timestamp = tonumber(date_str)
+    local file_name = path:match('([^/\\]+)$')
+    local file_info = self:parse_filename(file_name)
+
+    if file_info then
+        data.file = file_name
+        data.file_path = path
+        data.date = file_info.date
+        data.timestamp = file_info.timestamp
+        data.mission_name = file_info.mission_name
+        data.class_name = file_info.class_name
+    end
+
     return data
 end
 
@@ -128,11 +173,13 @@ function CombatStatsHistory:get_history_entries(scan_dir)
 
     local entries = {}
     for _, file in pairs(files) do
-        local file_path = appdata .. file
-        if file_exists(file_path) and file:match('%.json$') then
-            local entry = self:load_history_entry(file_path)
-            if entry then
-                entries[#entries + 1] = entry
+        if file:match('%.json$') then
+            local file_info = self:parse_filename(file)
+            if file_info then
+                -- Add basic info from filename without loading file
+                file_info.file = file
+                file_info.file_path = appdata .. file
+                entries[#entries + 1] = file_info
             end
         end
     end

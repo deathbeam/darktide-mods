@@ -4,19 +4,23 @@ local mod = get_mod('CombatStats')
 mod:add_global_localize_strings({
     loc_combat_stats_reset_stats = {
         en = 'Reset Stats',
-        ['zh-cn'] = '重置统计', -- FXIME: confirm translation, translated via google translate
+        ['zh-cn'] = '重置统计', -- FIXME: confirm translation, translated via google translate
     },
     loc_combat_stats_view_history = {
         en = 'View History',
-        ['zh-cn'] = '查看历史', -- FXIME: confirm translation, translated via google translate
+        ['zh-cn'] = '查看历史', -- FIXME: confirm translation, translated via google translate
     },
     loc_combat_stats_back_to_current = {
         en = 'Back to Current',
-        ['zh-cn'] = '返回当前', -- FXIME: confirm translation, translated via google translate
+        ['zh-cn'] = '返回当前', -- FIXME: confirm translation, translated via google translate
     },
     loc_combat_stats_back_to_history = {
         en = 'Back to History',
-        ['zh-cn'] = '返回历史', -- FXIME: confirm translation, translated via google translate
+        ['zh-cn'] = '返回历史', -- FIXME: confirm translation, translated via google translate
+    },
+    loc_combat_stats_delete_entry = {
+        en = 'Delete Entry',
+        ['zh-cn'] = '删除条目', -- FIXME: confirm translation, translated via google translate
     },
 })
 
@@ -33,11 +37,11 @@ return {
     -- Config
     save_history = {
         en = 'Save History',
-        ['zh-cn'] = '保存历史', -- FXIME: confirm translation, translated via google translate
+        ['zh-cn'] = '保存历史', -- FIXME: confirm translation, translated via google translate
     },
     save_history_tooltip = {
         en = 'Save combat statistics from previous missions for later viewing.',
-        ['zh-cn'] = '保存先前任务的战斗统计数据以供以后查看。', -- FXIME: confirm translation, translated via google translate
+        ['zh-cn'] = '保存先前任务的战斗统计数据以供以后查看。', -- FIXME: confirm translation, translated via google translate
     },
     enable_in_missions = {
         en = 'Enable in Missions',
@@ -79,12 +83,36 @@ return {
         en = 'Y Position',
         ['zh-cn'] = 'Y位置',
     },
+    combat_detection = {
+        en = 'Combat Detection',
+        ['zh-cn'] = '战斗检测', -- FIXME: confirm translation, translated via google translate
+    },
+    track_incoming_attacks = {
+        en = 'Track Incoming Attacks',
+        ['zh-cn'] = '追踪传入攻击', -- FIXME: confirm translation, translated via google translate
+    },
+    track_incoming_attacks_tooltip = {
+        en = 'Start combat when enemies attack you (even if blocked/dodged).',
+        ['zh-cn'] = '当敌人攻击你时开始战斗（即使被格挡/闪避）。', -- FIXME: confirm translation, translated via google translate
+    },
+    engagement_timeout = {
+        en = 'Engagement Timeout (seconds)',
+        ['zh-cn'] = '交战超时（秒）', -- FIXME: confirm translation, translated via google translate
+    },
+    engagement_timeout_tooltip = {
+        en = 'Time in seconds before ending an enemy engagement due to inactivity.',
+        ['zh-cn'] = '由于不活动而结束敌人交战的时间（秒）。', -- FIXME: confirm translation, translated via google translate
+    },
     enemy_types_to_track = {
         en = 'Enemy Types to Track',
         ['zh-cn'] = '追踪的敌人类型',
     },
 
     -- Common Stats
+    unknown = {
+        en = 'unknown',
+        ['zh-cn'] = '未知',
+    },
     time = {
         en = 'Time',
         ['zh-cn'] = '时间',

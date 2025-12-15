@@ -83,30 +83,26 @@ mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, c
     local is_hub = mission_name == 'hub_ship'
 
     if not is_hub then
+        local player = Managers.player:local_player(1)
+        local class_name = player and player:archetype_name()
+
         mod.tracker:reset()
-        mod.tracker:set_mission({
-            name = mission_name,
-            challenge = params.mechanism_data and params.mechanism_data.challenge or '',
-            circumstance = params.mechanism_data and params.mechanism_data.circumstance_name or '',
-            resistance = params.mechanism_data and params.mechanism_data.resistance or '',
-        })
+        mod.tracker:set_mission(mission_name, class_name)
     end
 end)
 
 mod:hook(CLASS.GameModeManager, '_set_end_conditions_met', function(func, self, outcome, ...)
     func(self, outcome, ...)
 
-    local mission_info = mod.tracker:get_mission()
+    local mission_name = mod.tracker:get_mission_name()
 
     -- Skip saving history for hub and psykanium/training grounds
-    local mission_name = mission_info.name
     if mission_name == 'tg_shooting_range' or mission_name == 'tg_training_grounds' then
         return
     end
 
     if mission_name and mod:get('save_history') then
-        mission_info.outcome = outcome
-
+        local class_name = mod.tracker:get_class_name()
         local session = mod.tracker:get_session_stats()
         local engagements = mod.tracker:get_engagement_stats()
 
@@ -117,7 +113,7 @@ mod:hook(CLASS.GameModeManager, '_set_end_conditions_met', function(func, self, 
             engagements = engagements,
         }
 
-        mod.history:save_history_entry(tracker_data, mission_info)
+        mod.history:save_history_entry(tracker_data, mission_name, class_name)
     end
 end)
 
@@ -160,10 +156,10 @@ mod:hook(
                         )
 
                         if attack_result == 'died' then
-                            mod.tracker:_finish_enemy_engagement(attacked_unit)
+                            mod.tracker:_finish_enemy_engagement(attacked_unit, true)
                         end
                     end
-                elseif player_unit and attacked_unit == player_unit then
+                elseif player_unit and attacked_unit == player_unit and mod:get('track_incoming_attacks') then
                     local unit_data_extension = ScriptUnit.has_extension(attacking_unit, 'unit_data_system')
                     local breed = unit_data_extension and unit_data_extension:breed()
                     if breed then

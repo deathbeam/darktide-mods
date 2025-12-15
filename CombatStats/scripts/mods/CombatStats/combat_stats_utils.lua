@@ -3,8 +3,10 @@ local mod = get_mod('CombatStats')
 local Breeds = mod:original_require('scripts/settings/breed/breeds')
 local BuffTemplates = mod:original_require('scripts/settings/buff/buff_templates')
 local ArchetypeTalents = mod:original_require('scripts/settings/ability/archetype_talents/archetype_talents')
+local Archetypes = mod:original_require('scripts/settings/archetype/archetypes')
 local WeaponTraitTemplates = mod:original_require('scripts/settings/equipment/weapon_traits/weapon_trait_templates')
 local MasterItems = mod:original_require('scripts/backend/master_items')
+local Missions = mod:original_require('scripts/settings/mission/mission_templates')
 
 local CombatStatsUtils = {}
 
@@ -12,6 +14,7 @@ local CombatStatsUtils = {}
 local _breed_display_name_cache = {}
 local _buff_display_name_cache = {}
 local _buff_icon_cache = {}
+local _archetype_display_name_cache = {}
 
 local function safe_localize(text)
     if not text or text == '' or text == 'n/a' then
@@ -36,9 +39,47 @@ local function safe_localize(text)
     return nil
 end
 
+function CombatStatsUtils.get_archetype_display_name(archetype_name)
+    if not archetype_name or archetype_name == 'unknown' then
+        return mod:localize('unknown')
+    end
+
+    -- Check cache first
+    if _archetype_display_name_cache[archetype_name] then
+        return _archetype_display_name_cache[archetype_name]
+    end
+
+    local result = archetype_name -- Default fallback
+
+    -- Try to get archetype data
+    local archetype_data = Archetypes[archetype_name]
+    if archetype_data and archetype_data.archetype_name then
+        local localized = safe_localize(archetype_data.archetype_name)
+        if localized then
+            result = localized
+        end
+    end
+
+    _archetype_display_name_cache[archetype_name] = result
+    return result
+end
+
+function CombatStatsUtils.get_mission_display_name(mission_name)
+    if not mission_name or mission_name == 'unknown' then
+        return mod:localize('unknown')
+    end
+
+    local mission_settings = Missions[mission_name]
+    if mission_settings and mission_settings.mission_name then
+        return safe_localize(mission_settings.mission_name) or mission_name
+    end
+
+    return mission_name
+end
+
 function CombatStatsUtils.get_breed_display_name(breed_name)
-    if not breed_name then
-        return 'Unknown'
+    if not breed_name or breed_name == 'unknown' then
+        return mod:localize('unknown')
     end
 
     -- Check cache first
@@ -88,8 +129,8 @@ function CombatStatsUtils.get_breed_display_name(breed_name)
 end
 
 function CombatStatsUtils.get_buff_display_name(buff_name)
-    if not buff_name then
-        return 'Unknown'
+    if not buff_name or buff_name == 'unknown' then
+        return mod:localize('unknown')
     end
 
     -- Check cache first

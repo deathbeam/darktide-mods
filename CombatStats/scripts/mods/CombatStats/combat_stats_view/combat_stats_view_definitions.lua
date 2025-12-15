@@ -203,6 +203,15 @@ local legend_inputs = {
             return not parent._viewing_history and not parent._viewing_history_entry
         end,
     },
+    {
+        input_action = 'hotkey_menu_special_1',
+        on_pressed_callback = 'cb_on_delete_entry_pressed',
+        display_name = 'loc_combat_stats_delete_entry',
+        alignment = 'right_alignment',
+        visibility_function = function(parent)
+            return parent._viewing_history_entry
+        end,
+    },
 }
 
 return {

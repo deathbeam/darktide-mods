@@ -91,7 +91,11 @@ local blueprints = {
 
             content.text = entry.name
 
-            if not entry.is_session then
+            if entry.subtext_override then
+                -- History entries with custom subtext (timestamp)
+                content.subtext = entry.subtext_override
+                widget.style.subtext.text_color = Color.terminal_text_body_sub_header(255, true)
+            elseif not entry.is_session then
                 -- Enemy stats
                 local status_color = Color.terminal_text_body(255, true)
 
