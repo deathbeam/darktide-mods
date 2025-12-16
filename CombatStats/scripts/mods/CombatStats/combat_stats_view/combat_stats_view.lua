@@ -717,7 +717,6 @@ function CombatStatsView:cb_on_close_pressed()
 end
 
 function CombatStatsView:cb_on_reset_pressed()
-    -- Don't reset if typing in search
     local search_widget = self._widgets_by_name.combat_stats_search
     if search_widget and search_widget.content.is_writing then
         return
@@ -730,6 +729,11 @@ function CombatStatsView:cb_on_reset_pressed()
 end
 
 function CombatStatsView:cb_on_history_pressed()
+    local search_widget = self._widgets_by_name.combat_stats_search
+    if search_widget and search_widget.content.is_writing then
+        return
+    end
+
     if self._viewing_history then
         -- Already in history list, toggle back to current
         self:cb_on_back_to_current_pressed()
@@ -743,6 +747,11 @@ function CombatStatsView:cb_on_history_pressed()
 end
 
 function CombatStatsView:cb_on_back_to_current_pressed()
+    local search_widget = self._widgets_by_name.combat_stats_search
+    if search_widget and search_widget.content.is_writing then
+        return
+    end
+
     if self._viewing_history_entry then
         -- Go back to history list from loaded history entry
         self._viewing_history = true
@@ -757,6 +766,24 @@ function CombatStatsView:cb_on_back_to_current_pressed()
         self._selected_entry = nil
         self._tracker = mod.tracker
         self:_setup_entries()
+    end
+end
+
+function CombatStatsView:cb_on_delete_entry_pressed()
+    if not self._viewing_history_entry or not self._current_history_file then
+        return
+    end
+
+    local search_widget = self._widgets_by_name.combat_stats_search
+    if search_widget and search_widget.content.is_writing then
+        return
+    end
+
+    -- Delete the entry
+    if mod.history:delete_history_entry(self._current_history_file) then
+        self._current_history_file = nil
+        -- Go back to history list
+        self:cb_on_back_to_current_pressed()
     end
 end
 
@@ -785,19 +812,6 @@ function CombatStatsView:_load_history_entry(entry)
 
     -- Refresh entries - will now show the loaded history data
     self:_setup_entries()
-end
-
-function CombatStatsView:cb_on_delete_entry_pressed()
-    if not self._viewing_history_entry or not self._current_history_file then
-        return
-    end
-
-    -- Delete the entry
-    if mod.history:delete_history_entry(self._current_history_file) then
-        self._current_history_file = nil
-        -- Go back to history list
-        self:cb_on_back_to_current_pressed()
-    end
 end
 
 function CombatStatsView:update(dt, t, input_service)
