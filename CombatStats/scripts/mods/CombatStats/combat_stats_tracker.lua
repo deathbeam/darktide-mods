@@ -7,10 +7,9 @@ end
 local CombatStatsTracker = class('CombatStatsTracker')
 
 function CombatStatsTracker:init()
-    self._tracked_buffs = {}
+    self._buffs = {}
     self._engagements = {}
     self._total_combat_time = 0
-    self._is_in_combat = false
     self._last_combat_start = nil
     self._mission_name = nil
     self._class_name = nil
@@ -19,7 +18,6 @@ function CombatStatsTracker:init()
     self._active_engagements_by_unit = {}
     self._engagements_by_unit = {}
     self._cached_session_stats = nil
-    self._session_stats_dirty = true
 end
 
 function CombatStatsTracker:is_enabled(ui_only)
@@ -42,10 +40,9 @@ function CombatStatsTracker:is_enabled(ui_only)
 end
 
 function CombatStatsTracker:reset()
-    self._tracked_buffs = {}
+    self._buffs = {}
     self._engagements = {}
     self._total_combat_time = 0
-    self._is_in_combat = false
     self._last_combat_start = nil
     self._mission_name = nil
     self._class_name = nil
@@ -53,7 +50,6 @@ function CombatStatsTracker:reset()
     self._active_engagements_by_unit = {}
     self._engagements_by_unit = {}
     self._cached_session_stats = nil
-    self._session_stats_dirty = true
 end
 
 function CombatStatsTracker:set_mission(mission_name, class_name)
@@ -72,7 +68,7 @@ end
 function CombatStatsTracker:load_from_history(history_data)
     self:reset()
 
-    self._tracked_buffs = history_data.buffs or {}
+    self._buffs = history_data.buffs or {}
     self._total_combat_time = history_data.duration or 0
     self._mission_name = history_data.mission_name
     self._class_name = history_data.class_name
@@ -111,7 +107,7 @@ function CombatStatsTracker:load_from_history(history_data)
         table.insert(self._engagements, engagement)
     end
 
-    self._session_stats_dirty = true
+    self._cached_session_stats = nil
 end
 
 function CombatStatsTracker:stop()
@@ -125,7 +121,7 @@ function CombatStatsTracker:stop()
     end
 
     self._active_engagements_by_unit = {}
-    self._session_stats_dirty = true
+    self._cached_session_stats = nil
 end
 
 -- Get session stats
@@ -135,7 +131,7 @@ function CombatStatsTracker:get_session_stats()
     return {
         duration = self:_get_session_duration(),
         stats = stats,
-        buffs = self._tracked_buffs,
+        buffs = self._buffs,
     }
 end
 
@@ -167,12 +163,9 @@ end
 
 function CombatStatsTracker:_get_session_duration()
     local total = self._total_combat_time
-
-    if self._is_in_combat and self._last_combat_start then
-        local current_time = _get_gameplay_time()
-        total = total + (current_time - self._last_combat_start)
+    if self._last_combat_start then
+        total = total + (_get_gameplay_time() - self._last_combat_start)
     end
-
     return total
 end
 
@@ -181,25 +174,20 @@ function CombatStatsTracker:_has_active_engagements()
 end
 
 function CombatStatsTracker:_start_combat()
-    if not self._is_in_combat then
-        self._is_in_combat = true
+    if not self._last_combat_start then
         self._last_combat_start = _get_gameplay_time()
     end
 end
 
 function CombatStatsTracker:_end_combat()
-    if self._is_in_combat then
-        local current_time = _get_gameplay_time()
-        if self._last_combat_start then
-            self._total_combat_time = self._total_combat_time + (current_time - self._last_combat_start)
-        end
-        self._is_in_combat = false
+    if self._last_combat_start then
+        self._total_combat_time = self._total_combat_time + (_get_gameplay_time() - self._last_combat_start)
         self._last_combat_start = nil
     end
 end
 
 function CombatStatsTracker:_update_combat()
-    if self._is_in_combat then
+    if self._last_combat_start then
         local has_active = self:_has_active_engagements()
         if not has_active then
             self:_end_combat()
@@ -208,7 +196,7 @@ function CombatStatsTracker:_update_combat()
 end
 
 function CombatStatsTracker:_calculate_session_stats()
-    if not self._session_stats_dirty and self._cached_session_stats then
+    if self._cached_session_stats then
         return self._cached_session_stats
     end
 
@@ -302,8 +290,6 @@ function CombatStatsTracker:_calculate_session_stats()
 
     -- Cache the result
     self._cached_session_stats = stats
-    self._session_stats_dirty = false
-
     return stats
 end
 
@@ -346,7 +332,7 @@ function CombatStatsTracker:_track_engagement(unit, engagement)
     engagement.end_time = nil
     engagement.last_damage_time = current_time
     self:_start_combat()
-    self._session_stats_dirty = true
+    self._cached_session_stats = nil
 end
 
 function CombatStatsTracker:_start_enemy_engagement(unit, breed)
@@ -409,7 +395,7 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
         buffs = {},
     }
 
-    for buff_name, _ in pairs(self._tracked_buffs) do
+    for buff_name, _ in pairs(self._buffs) do
         engagement.buffs[buff_name] = 0
     end
 
@@ -489,7 +475,7 @@ function CombatStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_cr
         engagement.toxin_damage = engagement.toxin_damage + damage
     end
 
-    self._session_stats_dirty = true
+    self._cached_session_stats = nil
 end
 
 function CombatStatsTracker:_finish_enemy_engagement(unit, killed)
@@ -503,7 +489,7 @@ function CombatStatsTracker:_finish_enemy_engagement(unit, killed)
     engagement.killed = killed or false
     self._active_engagements_by_unit[unit] = nil
 
-    self._session_stats_dirty = true
+    self._cached_session_stats = nil
 end
 
 function CombatStatsTracker:_update_active_engagements()
@@ -534,7 +520,7 @@ function CombatStatsTracker:_update_active_engagements()
     end
 
     if removed_any then
-        self._session_stats_dirty = true
+        self._cached_session_stats = nil
     end
 end
 
@@ -580,10 +566,10 @@ function CombatStatsTracker:_update_buffs(active_buffs_data, hidden_buff_data, d
 
     for buff_template_name, _ in pairs(templates) do
         -- Update tracked buffs
-        if not self._tracked_buffs[buff_template_name] then
-            self._tracked_buffs[buff_template_name] = 0
+        if not self._buffs[buff_template_name] then
+            self._buffs[buff_template_name] = 0
         end
-        self._tracked_buffs[buff_template_name] = self._tracked_buffs[buff_template_name] + dt
+        self._buffs[buff_template_name] = self._buffs[buff_template_name] + dt
 
         -- Update active engagements
         for _, engagement in pairs(self._active_engagements_by_unit) do
