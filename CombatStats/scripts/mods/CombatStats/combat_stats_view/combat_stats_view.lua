@@ -5,7 +5,6 @@ local UIWidgetGrid = mod:original_require('scripts/ui/widget_logic/ui_widget_gri
 local UIRenderer = mod:original_require('scripts/managers/ui/ui_renderer')
 local ViewElementInputLegend =
     mod:original_require('scripts/ui/view_elements/view_element_input_legend/view_element_input_legend')
-local BuffTemplates = mod:original_require('scripts/settings/buff/buff_templates')
 
 local CombatStatsTracker = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_tracker')
 local CombatStatsUtils = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_utils')
@@ -119,7 +118,7 @@ function CombatStatsView:_setup_entries()
         end
     else
         local tracker = self._tracker
-        local current_time = Managers.time:time('gameplay')
+        local current_time = tracker:get_time()
         local engagements = tracker:get_engagement_stats()
         local session = tracker:get_session_stats()
 

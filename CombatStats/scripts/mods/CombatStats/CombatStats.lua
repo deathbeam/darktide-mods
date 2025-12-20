@@ -18,21 +18,33 @@ mod:add_require_path('CombatStats/scripts/mods/CombatStats/combat_stats_view/com
 mod:register_view({
     view_name = 'combat_stats_view',
     view_settings = {
-        init_view_function = function()
+        init_view_function = function(ingame_ui_context)
             return true
         end,
         class = 'CombatStatsView',
         disable_game_world = false,
+        game_world_blur = 0,
         load_always = true,
         load_in_hub = true,
         path = 'CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_view',
         package = 'packages/ui/views/options_view/options_view',
         state_bound = false,
+        enter_sound_events = {
+            'wwise/events/ui/play_ui_enter_short',
+        },
+        exit_sound_events = {
+            'wwise/events/ui/play_ui_back_short',
+        },
+        wwise_states = {
+            options = 'ingame_menu',
+        },
     },
     view_transitions = {},
     view_options = {
         close_all = false,
         close_previous = false,
+        close_transition_time = nil,
+        transition_time = nil,
     },
 })
 
@@ -40,82 +52,60 @@ mod:register_view({
 mod.tracker = CombatStatsTracker:new()
 mod.history = CombatStatsHistory:new()
 
-function mod.toggle_view()
-    local ui_manager = Managers.ui
-    if ui_manager:using_input() then
+function mod.update(dt)
+    if not mod.tracker:is_tracking() then
         return
     end
 
-    if ui_manager:view_active('combat_stats_view') then
-        ui_manager:close_view('combat_stats_view')
-    elseif mod.tracker:is_enabled(true) then
-        ui_manager:open_view('combat_stats_view')
-    end
-end
-
-function mod.update(dt)
     mod.tracker:update(dt)
 end
 
-function mod.on_game_state_changed(status, state_name)
-    if (status == 'enter' or status == 'exit') and state_name == 'StateGameplay' then
-        mod.tracker:stop()
+mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, ...)
+    -- Start tracking
+    local mission_name = params.mission_name
+    if mission_name ~= 'hub_ship' then
+        local player = Managers.player:local_player(1)
+        local class_name = player and player:archetype_name()
+        mod.tracker:reset()
+        mod.tracker:start(mission_name, class_name)
     end
 
     -- Preload icon packages
-    if status == 'enter' then
-        Managers.package:load('packages/ui/views/inventory_view/inventory_view', 'CombatStats', nil, true)
-        Managers.package:load(
-            'packages/ui/views/inventory_weapons_view/inventory_weapons_view',
-            'CombatStats',
-            nil,
-            true
-        )
-        Managers.package:load('packages/ui/hud/player_weapon/player_weapon', 'CombatStats', nil, true)
-    end
-end
+    Managers.package:load('packages/ui/views/inventory_view/inventory_view', 'CombatStats', nil, true)
+    Managers.package:load('packages/ui/views/inventory_weapons_view/inventory_weapons_view', 'CombatStats', nil, true)
+    Managers.package:load('packages/ui/hud/player_weapon/player_weapon', 'CombatStats', nil, true)
 
-mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, creation_context, ...)
-    func(self, parent, params, creation_context, ...)
-
-    -- Store mission info in tracker
-    local mission_name = params.mission_name
-    local is_hub = mission_name == 'hub_ship'
-
-    if not is_hub then
-        local player = Managers.player:local_player(1)
-        local class_name = player and player:archetype_name()
-
-        mod.tracker:reset()
-        mod.tracker:set_mission(mission_name, class_name)
-    end
+    -- Call original function
+    func(self, parent, params, ...)
 end)
 
-mod:hook(CLASS.GameModeManager, '_set_end_conditions_met', function(func, self, outcome, ...)
-    func(self, outcome, ...)
-
-    local mission_name = mod.tracker:get_mission_name()
-
-    -- Skip saving history for hub and psykanium/training grounds
-    if mission_name == 'tg_shooting_range' or mission_name == 'tg_training_grounds' then
-        return
-    end
-
-    if mission_name and mod:get('save_history') then
+mod:hook(CLASS.StateGameplay, 'on_exit', function(func, self, ...)
+    if mod.tracker:is_tracking() then
         mod.tracker:stop()
-        local class_name = mod.tracker:get_class_name()
-        local session = mod.tracker:get_session_stats()
-        local engagements = mod.tracker:get_engagement_stats()
 
-        local tracker_data = {
-            duration = session.duration,
-            stats = session.stats,
-            buffs = session.buffs,
-            engagements = engagements,
-        }
+        local mission_name = mod.tracker:get_mission_name()
+        if
+            mission_name ~= 'tg_shooting_range'
+            and mission_name ~= 'tg_training_grounds'
+            and mod:get('save_history')
+        then
+            local class_name = mod.tracker:get_class_name()
+            local session = mod.tracker:get_session_stats()
+            local engagements = mod.tracker:get_engagement_stats()
 
-        mod.history:save_history_entry(tracker_data, mission_name, class_name)
+            local tracker_data = {
+                duration = session.duration,
+                stats = session.stats,
+                buffs = session.buffs,
+                engagements = engagements,
+            }
+
+            mod.history:save_history_entry(tracker_data, mission_name, class_name)
+        end
     end
+
+    -- Call original function
+    func(self, ...)
 end)
 
 mod:hook(
@@ -137,7 +127,7 @@ mod:hook(
         is_critical_strike,
         ...
     )
-        if mod.tracker:is_enabled() then
+        if mod.tracker:is_tracking() then
             local player = Managers.player:local_player_safe(1)
             if player then
                 local player_unit = player.player_unit
@@ -189,7 +179,7 @@ mod:hook(
 )
 
 mod:hook_safe('HudElementPlayerBuffs', '_update_buffs', function(self)
-    if not mod.tracker:is_enabled() then
+    if not mod.tracker:is_tracking() then
         return
     end
 

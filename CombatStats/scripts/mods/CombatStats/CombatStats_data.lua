@@ -12,31 +12,26 @@ return {
                 default_value = false,
             },
             {
-                setting_id = 'enable_in_hub',
-                type = 'checkbox',
-                default_value = true,
-            },
-            {
-                setting_id = 'enable_in_missions',
-                type = 'checkbox',
-                default_value = true,
-            },
-            {
                 setting_id = 'toggle_view_keybind',
                 type = 'keybind',
                 default_value = {},
                 keybind_trigger = 'pressed',
-                keybind_type = 'function_call',
-                function_name = 'toggle_view',
+                keybind_type = 'view_toggle',
+                view_name = 'combat_stats_view',
             },
             {
                 setting_id = 'hud',
                 type = 'group',
                 sub_widgets = {
                     {
-                        setting_id = 'show_hud_overlay',
+                        setting_id = 'show_hud_in_missions',
                         type = 'checkbox',
                         default_value = true,
+                    },
+                    {
+                        setting_id = 'show_hud_in_hub',
+                        type = 'checkbox',
+                        default_value = false,
                     },
                     {
                         setting_id = 'hud_pos_x',

@@ -5,6 +5,21 @@ local Definitions =
 
 local HudElementCombatStats = class('HudElementCombatStats', 'HudElementBase')
 
+local function is_hud_enabled()
+    local game_mode_manager = Managers.state and Managers.state.game_mode
+    local gamemode_name = game_mode_manager and game_mode_manager:game_mode_name()
+
+    if not gamemode_name then
+        return false
+    end
+
+    if gamemode_name == 'hub' or gamemode_name == 'prologue_hub' then
+        return mod:get('show_hud_in_hub')
+    end
+
+    return mod:get('show_hud_in_missions')
+end
+
 function HudElementCombatStats:init(parent, draw_layer, start_scale)
     HudElementCombatStats.super.init(self, parent, draw_layer, start_scale, Definitions)
     self:_update_position()
@@ -22,23 +37,18 @@ function HudElementCombatStats:_update_position()
 end
 
 function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input_service)
+    if not is_hud_enabled() then
+        return
+    end
+
     HudElementCombatStats.super.update(self, dt, t, ui_renderer, render_settings, input_service)
-
-    if not mod:get('show_hud_overlay') then
-        return
-    end
-
-    local tracker = mod.tracker
-    if not tracker:is_enabled(true) then
-        return
-    end
 
     local widget = self._widgets_by_name.session_stats
     if not widget then
         return
     end
 
-    local session_data = tracker:get_session_stats()
+    local session_data = mod.tracker:get_session_stats()
     if session_data.stats.total_damage <= 0 then
         return
     end
@@ -165,16 +175,11 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
 end
 
 function HudElementCombatStats:draw(dt, t, ui_renderer, render_settings, input_service)
-    if not mod:get('show_hud_overlay') then
+    if not is_hud_enabled() then
         return
     end
 
-    local tracker = mod.tracker
-    if not tracker:is_enabled(true) then
-        return
-    end
-
-    local session_data = tracker:get_session_stats()
+    local session_data = mod.tracker:get_session_stats()
     if session_data.stats.total_damage <= 0 then
         return
     end

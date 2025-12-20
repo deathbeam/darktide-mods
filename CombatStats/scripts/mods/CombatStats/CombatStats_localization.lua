@@ -43,22 +43,6 @@ return {
         en = 'Save combat statistics from previous missions for later viewing.',
         ['zh-cn'] = '保存先前任务的战斗统计数据以供以后查看。', -- FIXME: confirm translation, translated via google translate
     },
-    enable_in_missions = {
-        en = 'Enable in Missions',
-        ['zh-cn'] = '在任务中启用',
-    },
-    enable_in_missions_tooltip = {
-        en = 'Enables stat tracking while in missions.',
-        ['zh-cn'] = '在任务中启用统计追踪。',
-    },
-    enable_in_hub = {
-        en = 'Enable in Hub',
-        ['zh-cn'] = '在枢纽中启用',
-    },
-    enable_in_hub_tooltip = {
-        en = 'Shows stats from last session while in the hub area.',
-        ['zh-cn'] = '在枢纽区域显示上一场任务的统计数据。',
-    },
     toggle_view_keybind = {
         en = 'Toggle Stats View',
         ['zh-cn'] = '切换统计视图',
@@ -67,13 +51,13 @@ return {
         en = 'HUD',
         ['zh-cn'] = 'HUD',
     },
-    show_hud_overlay = {
-        en = 'Show Overlay',
-        ['zh-cn'] = '显示覆盖层',
+    show_hud_in_missions = {
+        en = 'Show Overlay In Missions',
+        ['zh-cn'] = '在任务中显示覆盖层',
     },
-    show_hud_overlay_tooltip = {
-        en = 'Display the minimal stats overlay during combat.',
-        ['zh-cn'] = '在战斗期间显示简化的统计覆盖层。',
+    show_hud_in_hub = {
+        en = 'Show Overlay In Hub',
+        ['zh-cn'] = '在集结区显示覆盖层',
     },
     hud_pos_x = {
         en = 'X Position',
