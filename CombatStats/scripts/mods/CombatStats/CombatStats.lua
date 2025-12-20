@@ -102,6 +102,7 @@ mod:hook(CLASS.GameModeManager, '_set_end_conditions_met', function(func, self, 
     end
 
     if mission_name and mod:get('save_history') then
+        mod.tracker:stop()
         local class_name = mod.tracker:get_class_name()
         local session = mod.tracker:get_session_stats()
         local engagements = mod.tracker:get_engagement_stats()
