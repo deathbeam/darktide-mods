@@ -3,18 +3,19 @@ local mod = get_mod('CombatStats')
 local CombatStatsTracker = class('CombatStatsTracker')
 
 function CombatStatsTracker:init()
+    self._tracking = false
+    self._mission_name = nil
+    self._class_name = nil
+
     self:reset()
 end
 
 function CombatStatsTracker:reset()
-    self._tracking = false
+    -- Do not reset mission_name/class_name and tracking for in mission resets
     self._buffs = {}
     self._engagements = {}
     self._total_combat_time = 0
     self._last_combat_start = nil
-    self._mission_name = nil
-    self._class_name = nil
-
     self._active_engagements_by_unit = {}
     self._engagements_by_unit = {}
     self._cached_session_stats = nil
