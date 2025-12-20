@@ -12,6 +12,7 @@ return {
                 sub_widgets = {
                     {
                         setting_id = 'chemical_autostim_enabled',
+                        tooltip = 'chemical_autostim_enabled_tooltip',
                         type = 'checkbox',
                         default_value = false,
                     },

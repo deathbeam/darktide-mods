@@ -26,12 +26,15 @@ return {
         en = 'Automatically use abilities and consumables based on conditions or keybinds',
     },
 
-    -- Chemical AutoStim
+    -- Broker AutoStim (unified)
     chemical_autostim = {
-        en = 'Chemical AutoStim',
+        en = 'Broker AutoStim',
     },
     chemical_autostim_enabled = {
-        en = 'Enable Chemical AutoStim',
+        en = 'Enable Broker AutoStim',
+    },
+    chemical_autostim_enabled_tooltip = {
+        en = 'Automatically manages broker stimms:\n• Chemical Dependency: Uses syringe to maintain stacks\n• Stimm Field Crate: Uses syringe or crate for buff uptime (prioritizes syringe)',
     },
 
     -- Quick Deploy
