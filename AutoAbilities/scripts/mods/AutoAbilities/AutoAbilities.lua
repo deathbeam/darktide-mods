@@ -207,13 +207,15 @@ local function _has_stimm_field_crate()
         return false
     end
 
-    local talent_ext = ScriptUnit.has_extension(player_unit, 'talent_system')
-    if not talent_ext then
+    local ability_ext = ScriptUnit.has_extension(player_unit, 'ability_system')
+    if not ability_ext then
         return false
     end
 
-    local talents = talent_ext:talents()
-    return talents and talents[TALENT_STIMM_FIELD] ~= nil
+    local equipped_abilities = ability_ext:equipped_abilities()
+    local combat_ability = equipped_abilities and equipped_abilities.combat_ability
+
+    return combat_ability and combat_ability.name == 'broker_ability_stimm_field'
 end
 
 local function _start_broker_autostim()
