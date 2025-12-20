@@ -64,9 +64,14 @@ mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, .
     -- Start tracking
     local mission_name = params.mission_name
     if mission_name ~= 'hub_ship' then
-        local player = Managers.player:local_player(1)
-        local class_name = player and player:archetype_name()
-        mod.tracker:start(mission_name, class_name)
+        if
+            not mod:get('only_in_psykhanium')
+            or (mission_name == 'tg_shooting_range' or mission_name == 'tg_training_grounds')
+        then
+            local player = Managers.player:local_player(1)
+            local class_name = player and player:archetype_name()
+            mod.tracker:start(mission_name, class_name)
+        end
     end
 
     -- Preload icon packages

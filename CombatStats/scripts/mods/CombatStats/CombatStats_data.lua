@@ -20,6 +20,11 @@ return {
                 view_name = 'combat_stats_view',
             },
             {
+                setting_id = 'only_in_psykhanium',
+                type = 'checkbox',
+                default_value = false,
+            },
+            {
                 setting_id = 'hud',
                 type = 'group',
                 sub_widgets = {

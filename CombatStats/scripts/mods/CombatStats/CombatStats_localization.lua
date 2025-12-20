@@ -47,17 +47,25 @@ return {
         en = 'Toggle Stats View',
         ['zh-cn'] = '切换统计视图',
     },
+    only_in_psykhanium = {
+        en = 'Only In Psykhanium',
+        ['zh-cn'] = '仅在灵能室', -- FIXME: confirm translation, translated via google translate
+    },
+    only_in_psykhanium_tooltip = {
+        en = 'Only track and show combat stats when in the Psykhanium.',
+        ['zh-cn'] = '仅在灵能室中追踪和显示战斗统计数据。', -- FIXME: confirm translation, translated via google translate
+    },
     hud = {
         en = 'HUD',
         ['zh-cn'] = 'HUD',
     },
     show_hud_in_missions = {
         en = 'Show Overlay In Missions',
-        ['zh-cn'] = '在任务中显示覆盖层',
+        ['zh-cn'] = '在任务中显示覆盖层', -- FIXME: confirm translation, translated via google translate
     },
     show_hud_in_hub = {
         en = 'Show Overlay In Hub',
-        ['zh-cn'] = '在集结区显示覆盖层',
+        ['zh-cn'] = '在集结区显示覆盖层', -- FIXME: confirm translation, translated via google translate
     },
     hud_pos_x = {
         en = 'X Position',
