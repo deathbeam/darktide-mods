@@ -114,9 +114,8 @@ function CombatStatsHistory:save_history_entry(tracker_data, mission_name, class
 
     local data = {
         duration = tracker_data.duration or 0,
-        stats = tracker_data.stats,
-        buffs = tracker_data.buffs,
-        engagements = tracker_data.engagements,
+        buffs = tracker_data.buffs or {},
+        engagements = tracker_data.engagements or {},
     }
 
     local ok, json_str = pcall(cjson.encode, data)

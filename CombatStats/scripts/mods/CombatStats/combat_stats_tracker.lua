@@ -16,9 +16,9 @@ function CombatStatsTracker:reset()
     self._engagements = {}
     self._total_combat_time = 0
     self._last_combat_start = nil
+    self._session_stats = nil
     self._active_engagements_by_unit = {}
     self._engagements_by_unit = {}
-    self._cached_session_stats = nil
 end
 
 function CombatStatsTracker:get_time()
@@ -41,46 +41,26 @@ function CombatStatsTracker:load_from_history(history_data)
     self:stop()
     self:reset()
 
-    self._buffs = history_data.buffs or {}
     self._total_combat_time = history_data.duration or 0
     self._mission_name = history_data.mission_name
     self._class_name = history_data.class_name
+    self._buffs = history_data.buffs or {}
 
-    -- Reconstruct engagements from history
     for _, eng_data in ipairs(history_data.engagements or {}) do
         local engagement = {
-            unit = nil,
             name = eng_data.name,
             type = eng_data.type,
             start_time = eng_data.start_time,
             end_time = eng_data.end_time,
             killed = eng_data.killed ~= nil and eng_data.killed or true,
-            total_damage = eng_data.stats.total_damage or 0,
-            melee_damage = eng_data.stats.melee_damage or 0,
-            ranged_damage = eng_data.stats.ranged_damage or 0,
-            explosion_damage = eng_data.stats.explosion_damage or 0,
-            companion_damage = eng_data.stats.companion_damage or 0,
-            buff_damage = eng_data.stats.buff_damage or 0,
-            melee_crit_damage = eng_data.stats.melee_crit_damage or 0,
-            melee_weakspot_damage = eng_data.stats.melee_weakspot_damage or 0,
-            ranged_crit_damage = eng_data.stats.ranged_crit_damage or 0,
-            ranged_weakspot_damage = eng_data.stats.ranged_weakspot_damage or 0,
-            bleed_damage = eng_data.stats.bleed_damage or 0,
-            burn_damage = eng_data.stats.burn_damage or 0,
-            toxin_damage = eng_data.stats.toxin_damage or 0,
-            total_hits = eng_data.stats.total_hits or 0,
-            melee_hits = eng_data.stats.melee_hits or 0,
-            ranged_hits = eng_data.stats.ranged_hits or 0,
-            melee_crit_hits = eng_data.stats.melee_crit_hits or 0,
-            melee_weakspot_hits = eng_data.stats.melee_weakspot_hits or 0,
-            ranged_crit_hits = eng_data.stats.ranged_crit_hits or 0,
-            ranged_weakspot_hits = eng_data.stats.ranged_weakspot_hits or 0,
+
             buffs = eng_data.buffs or {},
+            stats = eng_data.stats or {},
         }
         table.insert(self._engagements, engagement)
     end
 
-    self._cached_session_stats = nil
+    self._session_stats = nil
 end
 
 function CombatStatsTracker:start(mission_name, class_name)
@@ -102,17 +82,102 @@ function CombatStatsTracker:stop()
     end
 
     self._active_engagements_by_unit = {}
-    self._cached_session_stats = nil
+    self._session_stats = nil
 end
 
 -- Get session stats
 function CombatStatsTracker:get_session_stats()
-    local stats = self:_calculate_session_stats()
+    local total = self._total_combat_time
+    if self._last_combat_start then
+        total = total + (self:get_time() - self._last_combat_start)
+    end
+
+    if not self._session_stats then
+        local stats = {
+            total_damage = 0,
+            overkill_damage = 0,
+
+            melee_damage = 0,
+            melee_crit_damage = 0,
+            melee_weakspot_damage = 0,
+            melee_overkill_damage = 0,
+
+            ranged_damage = 0,
+            ranged_crit_damage = 0,
+            ranged_weakspot_damage = 0,
+            ranged_overkill_damage = 0,
+
+            explosion_damage = 0,
+            companion_damage = 0,
+
+            buff_damage = 0,
+            bleed_damage = 0,
+            burn_damage = 0,
+            toxin_damage = 0,
+
+            total_hits = 0,
+
+            melee_hits = 0,
+            melee_crit_hits = 0,
+            melee_weakspot_hits = 0,
+
+            ranged_hits = 0,
+            ranged_crit_hits = 0,
+            ranged_weakspot_hits = 0,
+
+            total_kills = 0,
+            kills_by_type = {},
+            damage_by_type = {},
+        }
+
+        for _, engagement in ipairs(self._engagements) do
+            stats.total_damage = stats.total_damage + (engagement.stats.total_damage or 0)
+            stats.overkill_damage = stats.overkill_damage + (engagement.stats.overkill_damage or 0)
+
+            stats.melee_damage = stats.melee_damage + (engagement.stats.melee_damage or 0)
+            stats.melee_crit_damage = stats.melee_crit_damage + (engagement.stats.melee_crit_damage or 0)
+            stats.melee_weakspot_damage = stats.melee_weakspot_damage + (engagement.stats.melee_weakspot_damage or 0)
+            stats.melee_overkill_damage = stats.melee_overkill_damage + (engagement.stats.melee_overkill_damage or 0)
+
+            stats.ranged_damage = stats.ranged_damage + (engagement.stats.ranged_damage or 0)
+            stats.ranged_crit_damage = stats.ranged_crit_damage + (engagement.stats.ranged_crit_damage or 0)
+            stats.ranged_weakspot_damage = stats.ranged_weakspot_damage + (engagement.stats.ranged_weakspot_damage or 0)
+            stats.ranged_overkill_damage = stats.ranged_overkill_damage + (engagement.stats.ranged_overkill_damage or 0)
+
+            stats.explosion_damage = stats.explosion_damage + (engagement.stats.explosion_damage or 0)
+            stats.companion_damage = stats.companion_damage + (engagement.stats.companion_damage or 0)
+
+            stats.buff_damage = stats.buff_damage + (engagement.stats.buff_damage or 0)
+            stats.bleed_damage = stats.bleed_damage + (engagement.stats.bleed_damage or 0)
+            stats.burn_damage = stats.burn_damage + (engagement.stats.burn_damage or 0)
+            stats.toxin_damage = stats.toxin_damage + (engagement.stats.toxin_damage or 0)
+
+            stats.total_hits = stats.total_hits + (engagement.stats.total_hits or 0)
+
+            stats.melee_hits = stats.melee_hits + (engagement.stats.melee_hits or 0)
+            stats.melee_crit_hits = stats.melee_crit_hits + (engagement.stats.melee_crit_hits or 0)
+            stats.melee_weakspot_hits = stats.melee_weakspot_hits + (engagement.stats.melee_weakspot_hits or 0)
+
+            stats.ranged_hits = stats.ranged_hits + (engagement.stats.ranged_hits or 0)
+            stats.ranged_crit_hits = stats.ranged_crit_hits + (engagement.stats.ranged_crit_hits or 0)
+            stats.ranged_weakspot_hits = stats.ranged_weakspot_hits + (engagement.stats.ranged_weakspot_hits or 0)
+
+            if engagement.killed then
+                stats.total_kills = stats.total_kills + 1
+                stats.kills_by_type[engagement.type] = (stats.kills_by_type[engagement.type] or 0) + 1
+            end
+
+            stats.damage_by_type[engagement.type] = (stats.damage_by_type[engagement.type] or 0)
+                + (engagement.stats.total_damage or 0)
+        end
+
+        self._session_stats = stats
+    end
 
     return {
-        duration = self:_get_session_duration(),
-        stats = stats,
+        duration = total,
         buffs = self._buffs,
+        stats = self._session_stats,
     }
 end
 
@@ -120,29 +185,52 @@ end
 function CombatStatsTracker:get_engagement_stats()
     local engagements = {}
 
-    for i, engagement in ipairs(self._engagements or {}) do
-        local stats = self:_calculate_engagement_stats(engagement)
-
+    for _, engagement in ipairs(self._engagements or {}) do
         engagements[#engagements + 1] = {
             name = engagement.name,
             type = engagement.type,
             start_time = engagement.start_time,
             end_time = engagement.end_time,
             killed = engagement.killed,
-            stats = stats,
+
             buffs = engagement.buffs,
+
+            stats = {
+                total_damage = engagement.stats.total_damage or 0,
+                overkill_damage = engagement.stats.overkill_damage or 0,
+
+                melee_damage = engagement.stats.melee_damage or 0,
+                melee_crit_damage = engagement.stats.melee_crit_damage or 0,
+                melee_weakspot_damage = engagement.stats.melee_weakspot_damage or 0,
+                melee_overkill_damage = engagement.stats.melee_overkill_damage or 0,
+
+                ranged_damage = engagement.stats.ranged_damage or 0,
+                ranged_crit_damage = engagement.stats.ranged_crit_damage or 0,
+                ranged_weakspot_damage = engagement.stats.ranged_weakspot_damage or 0,
+                ranged_overkill_damage = engagement.stats.ranged_overkill_damage or 0,
+
+                explosion_damage = engagement.stats.explosion_damage or 0,
+                companion_damage = engagement.stats.companion_damage or 0,
+
+                buff_damage = engagement.stats.buff_damage or 0,
+                bleed_damage = engagement.stats.bleed_damage or 0,
+                burn_damage = engagement.stats.burn_damage or 0,
+                toxin_damage = engagement.stats.toxin_damage or 0,
+
+                total_hits = engagement.stats.total_hits or 0,
+
+                melee_hits = engagement.stats.melee_hits or 0,
+                melee_crit_hits = engagement.stats.melee_crit_hits or 0,
+                melee_weakspot_hits = engagement.stats.melee_weakspot_hits or 0,
+
+                ranged_hits = engagement.stats.ranged_hits or 0,
+                ranged_crit_hits = engagement.stats.ranged_crit_hits or 0,
+                ranged_weakspot_hits = engagement.stats.ranged_weakspot_hits or 0,
+            },
         }
     end
 
     return engagements
-end
-
-function CombatStatsTracker:_get_session_duration()
-    local total = self._total_combat_time
-    if self._last_combat_start then
-        total = total + (self:get_time() - self._last_combat_start)
-    end
-    return total
 end
 
 function CombatStatsTracker:_has_active_engagements()
@@ -171,141 +259,13 @@ function CombatStatsTracker:_update_combat()
     end
 end
 
-function CombatStatsTracker:_calculate_session_stats()
-    if self._cached_session_stats then
-        return self._cached_session_stats
-    end
-
-    local stats = {
-        total_damage = 0,
-        melee_damage = 0,
-        ranged_damage = 0,
-        explosion_damage = 0,
-        companion_damage = 0,
-        buff_damage = 0,
-        melee_crit_damage = 0,
-        melee_weakspot_damage = 0,
-        ranged_crit_damage = 0,
-        ranged_weakspot_damage = 0,
-        bleed_damage = 0,
-        burn_damage = 0,
-        toxin_damage = 0,
-        total_kills = 0,
-        kills = {},
-        damage_by_type = {},
-        total_hits = 0,
-        melee_hits = 0,
-        ranged_hits = 0,
-        melee_crit_hits = 0,
-        melee_weakspot_hits = 0,
-        ranged_crit_hits = 0,
-        ranged_weakspot_hits = 0,
-    }
-
-    for _, engagement in ipairs(self._engagements) do
-        stats.total_damage = stats.total_damage + engagement.total_damage
-        stats.total_hits = stats.total_hits + engagement.total_hits
-        stats.melee_hits = stats.melee_hits + (engagement.melee_hits or 0)
-        stats.ranged_hits = stats.ranged_hits + (engagement.ranged_hits or 0)
-        stats.melee_crit_hits = stats.melee_crit_hits + (engagement.melee_crit_hits or 0)
-        stats.melee_weakspot_hits = stats.melee_weakspot_hits + (engagement.melee_weakspot_hits or 0)
-        stats.ranged_crit_hits = stats.ranged_crit_hits + (engagement.ranged_crit_hits or 0)
-        stats.ranged_weakspot_hits = stats.ranged_weakspot_hits + (engagement.ranged_weakspot_hits or 0)
-
-        if engagement.melee_damage then
-            stats.melee_damage = stats.melee_damage + engagement.melee_damage
-        end
-        if engagement.ranged_damage then
-            stats.ranged_damage = stats.ranged_damage + engagement.ranged_damage
-        end
-        if engagement.explosion_damage then
-            stats.explosion_damage = stats.explosion_damage + engagement.explosion_damage
-        end
-        if engagement.companion_damage then
-            stats.companion_damage = stats.companion_damage + engagement.companion_damage
-        end
-        if engagement.buff_damage then
-            stats.buff_damage = stats.buff_damage + engagement.buff_damage
-        end
-        if engagement.melee_crit_damage then
-            stats.melee_crit_damage = stats.melee_crit_damage + engagement.melee_crit_damage
-        end
-        if engagement.melee_weakspot_damage then
-            stats.melee_weakspot_damage = stats.melee_weakspot_damage + engagement.melee_weakspot_damage
-        end
-        if engagement.ranged_crit_damage then
-            stats.ranged_crit_damage = stats.ranged_crit_damage + engagement.ranged_crit_damage
-        end
-        if engagement.ranged_weakspot_damage then
-            stats.ranged_weakspot_damage = stats.ranged_weakspot_damage + engagement.ranged_weakspot_damage
-        end
-        if engagement.bleed_damage then
-            stats.bleed_damage = stats.bleed_damage + engagement.bleed_damage
-        end
-        if engagement.burn_damage then
-            stats.burn_damage = stats.burn_damage + engagement.burn_damage
-        end
-        if engagement.toxin_damage then
-            stats.toxin_damage = stats.toxin_damage + engagement.toxin_damage
-        end
-
-        if engagement.killed then
-            stats.total_kills = stats.total_kills + 1
-            stats.kills[engagement.type] = (stats.kills[engagement.type] or 0) + 1
-        end
-
-        -- Track damage by breed type
-        if engagement.total_damage and engagement.total_damage > 0 then
-            stats.damage_by_type[engagement.type] = (stats.damage_by_type[engagement.type] or 0)
-                + engagement.total_damage
-        end
-    end
-
-    -- Cache the result
-    self._cached_session_stats = stats
-    return stats
-end
-
-function CombatStatsTracker:_calculate_engagement_stats(engagement)
-    local stats = {
-        total_damage = engagement.total_damage or 0,
-        melee_damage = engagement.melee_damage or 0,
-        ranged_damage = engagement.ranged_damage or 0,
-        explosion_damage = engagement.explosion_damage or 0,
-        companion_damage = engagement.companion_damage or 0,
-        buff_damage = engagement.buff_damage or 0,
-        melee_crit_damage = engagement.melee_crit_damage or 0,
-        melee_weakspot_damage = engagement.melee_weakspot_damage or 0,
-        ranged_crit_damage = engagement.ranged_crit_damage or 0,
-        ranged_weakspot_damage = engagement.ranged_weakspot_damage or 0,
-        bleed_damage = engagement.bleed_damage or 0,
-        burn_damage = engagement.burn_damage or 0,
-        toxin_damage = engagement.toxin_damage or 0,
-        total_kills = engagement.killed and 1 or 0,
-        kills = {},
-        total_hits = engagement.total_hits or 0,
-        melee_hits = engagement.melee_hits or 0,
-        ranged_hits = engagement.ranged_hits or 0,
-        melee_crit_hits = engagement.melee_crit_hits or 0,
-        melee_weakspot_hits = engagement.melee_weakspot_hits or 0,
-        ranged_crit_hits = engagement.ranged_crit_hits or 0,
-        ranged_weakspot_hits = engagement.ranged_weakspot_hits or 0,
-    }
-
-    if engagement.killed and engagement.type then
-        stats.kills[engagement.type] = 1
-    end
-
-    return stats
-end
-
 function CombatStatsTracker:_track_engagement(unit, engagement)
     local current_time = self:get_time()
     self._active_engagements_by_unit[unit] = engagement
     engagement.end_time = nil
     engagement.last_damage_time = current_time
     self:_start_combat()
-    self._cached_session_stats = nil
+    self._session_stats = nil
 end
 
 function CombatStatsTracker:_start_enemy_engagement(unit, breed)
@@ -339,33 +299,16 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
 
     engagement = {
         unit = unit,
+        last_damage_time = nil,
+
         name = breed_name,
         type = breed_type,
         start_time = self:get_time(),
         end_time = nil,
-        last_damage_time = nil,
-        total_damage = 0,
-        melee_damage = 0,
-        ranged_damage = 0,
-        explosion_damage = 0,
-        companion_damage = 0,
-        buff_damage = 0,
-        melee_crit_damage = 0,
-        melee_weakspot_damage = 0,
-        ranged_crit_damage = 0,
-        ranged_weakspot_damage = 0,
-        bleed_damage = 0,
-        burn_damage = 0,
-        toxin_damage = 0,
-        total_hits = 0,
-        melee_hits = 0,
-        ranged_hits = 0,
-        melee_crit_hits = 0,
-        melee_weakspot_hits = 0,
-        ranged_crit_hits = 0,
-        ranged_weakspot_hits = 0,
         killed = false,
+
         buffs = {},
+        stats = {},
     }
 
     for buff_name, _ in pairs(self._buffs) do
@@ -381,7 +324,15 @@ function CombatStatsTracker:_find_engagement(unit)
     return self._engagements_by_unit[unit]
 end
 
-function CombatStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_critical, is_weakspot, damage_profile)
+function CombatStatsTracker:_track_enemy_damage(
+    unit,
+    damage,
+    attack_type,
+    is_critical,
+    is_weakspot,
+    damage_profile,
+    attack_result
+)
     local engagement = self:_find_engagement(unit)
     if not engagement then
         return
@@ -402,53 +353,67 @@ function CombatStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_cr
         end
     end
 
-    engagement.total_damage = engagement.total_damage + damage
+    local actual_damage = damage
+    local overkill_damage = 0
+    if attack_result == 'died' then
+        local unit_health_extension = ScriptUnit.has_extension(unit, 'health_system')
+        if unit_health_extension then
+            overkill_damage = unit_health_extension:damage_taken() - unit_health_extension:max_health()
+            -- FIXME: for now just take the original damage as actual damage
+            -- actual_damage = damage - overkill_damage
+        end
+    end
+
+    engagement.stats.total_damage = (engagement.stats.total_damage or 0) + actual_damage
+    engagement.stats.overkill_damage = (engagement.stats.overkill_damage or 0) + overkill_damage
 
     if attack_type == 'melee' then
-        engagement.melee_damage = engagement.melee_damage + damage
-        engagement.melee_hits = engagement.melee_hits + 1
-        engagement.total_hits = engagement.total_hits + 1
+        engagement.stats.melee_damage = (engagement.stats.melee_damage or 0) + actual_damage
+        engagement.stats.melee_overkill_damage = (engagement.stats.melee_overkill_damage or 0) + overkill_damage
+        engagement.stats.melee_hits = (engagement.stats.melee_hits or 0) + 1
+        engagement.stats.total_hits = (engagement.stats.total_hits or 0) + 1
 
         if is_critical then
-            engagement.melee_crit_damage = engagement.melee_crit_damage + damage
-            engagement.melee_crit_hits = engagement.melee_crit_hits + 1
+            engagement.stats.melee_crit_damage = (engagement.stats.melee_crit_damage or 0) + actual_damage
+            engagement.stats.melee_crit_hits = (engagement.stats.melee_crit_hits or 0) + 1
         end
 
         if is_weakspot then
-            engagement.melee_weakspot_damage = engagement.melee_weakspot_damage + damage
-            engagement.melee_weakspot_hits = engagement.melee_weakspot_hits + 1
+            engagement.stats.melee_weakspot_damage = (engagement.stats.melee_weakspot_damage or 0) + actual_damage
+            engagement.stats.melee_weakspot_hits = (engagement.stats.melee_weakspot_hits or 0) + 1
         end
     elseif attack_type == 'ranged' then
-        engagement.ranged_damage = engagement.ranged_damage + damage
-        engagement.ranged_hits = engagement.ranged_hits + 1
-        engagement.total_hits = engagement.total_hits + 1
+        engagement.stats.ranged_damage = (engagement.stats.ranged_damage or 0) + actual_damage
+        engagement.stats.ranged_overkill_damage = (engagement.stats.ranged_overkill_damage or 0) + overkill_damage
+        engagement.stats.ranged_hits = (engagement.stats.ranged_hits or 0) + 1
+        engagement.stats.total_hits = (engagement.stats.total_hits or 0) + 1
 
         if is_critical then
-            engagement.ranged_crit_damage = engagement.ranged_crit_damage + damage
-            engagement.ranged_crit_hits = engagement.ranged_crit_hits + 1
+            engagement.stats.ranged_crit_damage = (engagement.stats.ranged_crit_damage or 0) + actual_damage
+            engagement.stats.ranged_crit_hits = (engagement.stats.ranged_crit_hits or 0) + 1
         end
 
         if is_weakspot then
-            engagement.ranged_weakspot_damage = engagement.ranged_weakspot_damage + damage
-            engagement.ranged_weakspot_hits = engagement.ranged_weakspot_hits + 1
+            engagement.stats.ranged_weakspot_damage = (engagement.stats.ranged_weakspot_damage or 0) + actual_damage
+            engagement.stats.ranged_weakspot_hits = (engagement.stats.ranged_weakspot_hits or 0) + 1
         end
     elseif attack_type == 'explosion' then
-        engagement.explosion_damage = engagement.explosion_damage + damage
+        engagement.stats.explosion_damage = (engagement.stats.explosion_damage or 0) + actual_damage
     elseif attack_type == 'companion_dog' then
-        engagement.companion_damage = engagement.companion_damage + damage
+        engagement.stats.companion_damage = (engagement.stats.companion_damage or 0) + actual_damage
     elseif attack_type == 'buff' then
-        engagement.buff_damage = engagement.buff_damage + damage
+        engagement.stats.buff_damage = (engagement.stats.buff_damage or 0) + actual_damage
     end
 
     if damage_type == 'bleed' then
-        engagement.bleed_damage = engagement.bleed_damage + damage
+        engagement.stats.bleed_damage = (engagement.stats.bleed_damage or 0) + actual_damage
     elseif damage_type == 'burn' then
-        engagement.burn_damage = engagement.burn_damage + damage
+        engagement.stats.burn_damage = (engagement.stats.burn_damage or 0) + actual_damage
     elseif damage_type == 'toxin' then
-        engagement.toxin_damage = engagement.toxin_damage + damage
+        engagement.stats.toxin_damage = (engagement.stats.toxin_damage or 0) + actual_damage
     end
 
-    self._cached_session_stats = nil
+    self._session_stats = nil
 end
 
 function CombatStatsTracker:_finish_enemy_engagement(unit, killed)
@@ -461,8 +426,7 @@ function CombatStatsTracker:_finish_enemy_engagement(unit, killed)
     engagement.end_time = current_time
     engagement.killed = killed or false
     self._active_engagements_by_unit[unit] = nil
-
-    self._cached_session_stats = nil
+    self._session_stats = nil
 end
 
 function CombatStatsTracker:_update_active_engagements()
@@ -493,7 +457,7 @@ function CombatStatsTracker:_update_active_engagements()
     end
 
     if removed_any then
-        self._cached_session_stats = nil
+        self._session_stats = nil
     end
 end
 

@@ -471,7 +471,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
         -- Sort by damage (highest first)
         local sorted_types = {}
         for breed_type, damage in pairs(stats.damage_by_type) do
-            local kills = stats.kills[breed_type] or 0
+            local kills = stats.kills_by_type[breed_type] or 0
             table.insert(sorted_types, { type = breed_type, damage = damage, kills = kills })
         end
         table.sort(sorted_types, function(a, b)
@@ -513,7 +513,14 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     if stats.total_damage > 0 then
         create_spacer(10)
         create_text(mod:localize('damage_stats'), Color.terminal_text_header(255, true), 20)
-        create_text(string.format('%s: %d', mod:localize('total'), stats.total_damage))
+
+        if stats.total_damage > 0 then
+            create_text(string.format('%s: %d', mod:localize('total'), stats.total_damage))
+        end
+
+        if stats.overkill_damage > 0 then
+            create_text(string.format('%s: %d', mod:localize('overkill'), stats.overkill_damage))
+        end
 
         -- Melee damage
         if stats.melee_damage and stats.melee_damage > 0 then
@@ -532,6 +539,12 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
                 local pct = (stats.melee_weakspot_damage / stats.melee_damage * 100)
                 create_text(
                     string.format('  %s: %d (%.1f%%)', mod:localize('weakspot'), stats.melee_weakspot_damage, pct)
+                )
+            end
+            if stats.melee_overkill_damage and stats.melee_overkill_damage > 0 then
+                local pct = (stats.melee_overkill_damage / stats.melee_damage * 100)
+                create_text(
+                    string.format('  %s: %d (%.1f%%)', mod:localize('overkill'), stats.melee_overkill_damage, pct)
                 )
             end
         end
@@ -553,6 +566,12 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
                 local pct = (stats.ranged_weakspot_damage / stats.ranged_damage * 100)
                 create_text(
                     string.format('  %s: %d (%.1f%%)', mod:localize('weakspot'), stats.ranged_weakspot_damage, pct)
+                )
+            end
+            if stats.ranged_overkill_damage and stats.ranged_overkill_damage > 0 then
+                local pct = (stats.ranged_overkill_damage / stats.ranged_damage * 100)
+                create_text(
+                    string.format('  %s: %d (%.1f%%)', mod:localize('overkill'), stats.ranged_overkill_damage, pct)
                 )
             end
         end

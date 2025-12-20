@@ -59,14 +59,12 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
     widget.content.duration_text = string.format('%s: %.1fs', mod:localize('time'), duration)
 
     local kill_text = string.format('%s: %d', mod:localize('kills'), stats.total_kills)
-    if next(stats.kills) then
-        local kill_details = {}
-        for breed_type, count in pairs(stats.kills) do
-            table.insert(kill_details, string.format('%s:%d', breed_type:sub(1, 1):upper(), count))
-        end
-        if #kill_details > 0 then
-            kill_text = kill_text .. ' (' .. table.concat(kill_details, ' ') .. ')'
-        end
+    local kill_details = {}
+    for breed_type, count in pairs(stats.kills_by_type) do
+        table.insert(kill_details, string.format('%s:%d', breed_type:sub(1, 1):upper(), count))
+    end
+    if #kill_details > 0 then
+        kill_text = kill_text .. ' (' .. table.concat(kill_details, ' ') .. ')'
     end
     widget.content.kills_text = kill_text
 

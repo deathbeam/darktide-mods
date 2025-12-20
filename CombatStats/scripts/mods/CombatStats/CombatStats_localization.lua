@@ -129,6 +129,10 @@ return {
         en = 'Total',
         ['zh-cn'] = '总计',
     },
+    overkill = {
+        en = 'Overkill',
+        ['zh-cn'] = '过量伤害', -- FIXME: confirm translation, translated via google translate
+    },
     melee = {
         en = 'Melee',
         ['zh-cn'] = '近战',

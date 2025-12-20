@@ -99,7 +99,6 @@ mod:hook(CLASS.StateGameplay, 'on_exit', function(func, self, ...)
 
             local tracker_data = {
                 duration = session.duration,
-                stats = session.stats,
                 buffs = session.buffs,
                 engagements = engagements,
             }
@@ -147,7 +146,8 @@ mod:hook(
                             attack_type,
                             is_critical_strike,
                             hit_weakspot,
-                            damage_profile and damage_profile.name
+                            damage_profile and damage_profile.name,
+                            attack_result
                         )
 
                         if attack_result == 'died' then
