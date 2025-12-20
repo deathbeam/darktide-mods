@@ -54,7 +54,7 @@ function CombatStatsTracker:load_from_history(history_data)
             type = eng_data.type,
             start_time = eng_data.start_time,
             end_time = eng_data.end_time,
-            killed = true,
+            killed = eng_data.killed ~= nil and eng_data.killed or true,
             total_damage = eng_data.stats.total_damage or 0,
             melee_damage = eng_data.stats.melee_damage or 0,
             ranged_damage = eng_data.stats.ranged_damage or 0,
@@ -121,22 +121,17 @@ function CombatStatsTracker:get_engagement_stats()
     local engagements = {}
 
     for i, engagement in ipairs(self._engagements or {}) do
-        -- Only return killed enemies or currently active engagements
-        local is_active = not engagement.end_time
-        local is_killed = engagement.killed
+        local stats = self:_calculate_engagement_stats(engagement)
 
-        if is_active or is_killed then
-            local stats = self:_calculate_engagement_stats(engagement)
-
-            engagements[#engagements + 1] = {
-                name = engagement.name,
-                type = engagement.type,
-                start_time = engagement.start_time,
-                end_time = engagement.end_time,
-                stats = stats,
-                buffs = engagement.buffs,
-            }
-        end
+        engagements[#engagements + 1] = {
+            name = engagement.name,
+            type = engagement.type,
+            start_time = engagement.start_time,
+            end_time = engagement.end_time,
+            killed = engagement.killed,
+            stats = stats,
+            buffs = engagement.buffs,
+        }
     end
 
     return engagements
@@ -217,10 +212,6 @@ function CombatStatsTracker:_calculate_session_stats()
         stats.ranged_crit_hits = stats.ranged_crit_hits + (engagement.ranged_crit_hits or 0)
         stats.ranged_weakspot_hits = stats.ranged_weakspot_hits + (engagement.ranged_weakspot_hits or 0)
 
-        if engagement.killed then
-            stats.total_kills = stats.total_kills + 1
-        end
-
         if engagement.melee_damage then
             stats.melee_damage = stats.melee_damage + engagement.melee_damage
         end
@@ -259,6 +250,7 @@ function CombatStatsTracker:_calculate_session_stats()
         end
 
         if engagement.killed then
+            stats.total_kills = stats.total_kills + 1
             stats.kills[engagement.type] = (stats.kills[engagement.type] or 0) + 1
         end
 
