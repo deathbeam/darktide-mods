@@ -38,6 +38,7 @@ function CombatStatsTracker:get_class_name()
 end
 
 function CombatStatsTracker:load_from_history(history_data)
+    self:stop()
     self:reset()
 
     self._buffs = history_data.buffs or {}

@@ -66,7 +66,6 @@ mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, .
     if mission_name ~= 'hub_ship' then
         local player = Managers.player:local_player(1)
         local class_name = player and player:archetype_name()
-        mod.tracker:reset()
         mod.tracker:start(mission_name, class_name)
     end
 
