@@ -28,7 +28,6 @@ local ABILITY_POCKETABLE = 'pocketable_ability'
 local ABILITY_COMBAT = 'combat_ability'
 
 local KEYWORD_BROKER_SYRINGE = 'pocketable_broker_syringe'
-local TALENT_STIMM_FIELD = 'broker_ability_stimm_field'
 local BUFF_CHEMICAL_DEPENDENCY = 'broker_keystone_chemical_dependency'
 local BUFF_CHEMICAL_DEPENDENCY_STACK = 'broker_keystone_chemical_dependency_stack'
 
@@ -140,25 +139,6 @@ local function _has_chemical_dependency()
     return buff_ext:has_buff_using_buff_template(BUFF_CHEMICAL_DEPENDENCY)
 end
 
-local function _get_chem_dep_stacks()
-    local player_unit = _get_player_unit()
-    if not player_unit then
-        return 0, 3
-    end
-
-    local buff_ext = ScriptUnit.has_extension(player_unit, 'buff_system')
-    if not buff_ext or not buff_ext._stacking_buffs then
-        return 0, 3
-    end
-
-    local buff_instance = buff_ext._stacking_buffs[BUFF_CHEMICAL_DEPENDENCY_STACK]
-    if not buff_instance then
-        return 0, 3
-    end
-
-    return buff_instance:stack_count(), buff_instance:max_stacks() or 3
-end
-
 local function _has_broker_stim()
     local player_unit = _get_player_unit()
     if not player_unit then
@@ -235,8 +215,8 @@ local function _start_broker_autostim()
         return false
     end
 
-    local has_syringe = _has_broker_stim()
     local has_crate = _has_stimm_field_crate()
+    local has_syringe = _has_broker_stim()
 
     if not has_syringe and not has_crate then
         return false
@@ -351,11 +331,11 @@ local _input_action_hook = function(func, self, action_name)
 
     -- Auto use when wielded
     if current_stage == ACTION_STAGES.WAITING_FOR_USE then
-        if target_slot == SLOT_POCKETABLE_SMALL and action_name == 'action_one_pressed' then
-            _reset_state()
-            return true
-        elseif target_slot == SLOT_COMBAT_ABILITY and action_name == 'combat_ability_pressed' then
+        if target_slot == SLOT_COMBAT_ABILITY and action_name == 'combat_ability_pressed' then
             current_stage = ACTION_STAGES.WAITING_FOR_RELEASE
+            return true
+        elseif action_name == 'action_one_pressed' then
+            _reset_state()
             return true
         end
     end
