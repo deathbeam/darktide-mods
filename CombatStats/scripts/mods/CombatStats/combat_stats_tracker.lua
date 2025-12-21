@@ -359,8 +359,16 @@ function CombatStatsTracker:_track_enemy_damage(
         local unit_health_extension = ScriptUnit.has_extension(unit, 'health_system')
         if unit_health_extension then
             overkill_damage = unit_health_extension:damage_taken() - unit_health_extension:max_health()
-            -- FIXME: for now just take the original damage as actual damage
-            -- actual_damage = damage - overkill_damage
+
+            -- On clients, add_attack_result is called via RPC before the health extension is synchronized
+            -- So we need to add the current damage to get the correct overkill value
+            -- On server (including Psykhanium), damage is already applied before add_attack_result is called
+            local is_server = Managers.state and Managers.state.game_session and Managers.state.game_session:is_server()
+            if not is_server then
+                overkill_damage = overkill_damage + damage
+            end
+
+            overkill_damage = math.max(0, overkill_damage)
         end
     end
 
