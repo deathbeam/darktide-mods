@@ -55,6 +55,24 @@ local function mkdir(path)
     end
 end
 
+--- Recursively filter a table to remove nil, 0, and empty string values
+---@param tbl table
+---@return table
+local function filter_table(tbl)
+    local result = {}
+    for k, v in pairs(tbl) do
+        if type(v) == 'table' then
+            local filtered = filter_table(v)
+            if next(filtered) ~= nil then
+                result[k] = filtered
+            end
+        elseif v ~= nil and v ~= 0 and v ~= '' then
+            result[k] = v
+        end
+    end
+    return result
+end
+
 local CombatStatsHistory = class('CombatStatsHistory')
 
 function CombatStatsHistory:init()
@@ -113,12 +131,12 @@ function CombatStatsHistory:save_history_entry(tracker_data, mission_name, class
     local path = self:get_path() .. file_name
 
     local data = {
-        duration = tracker_data.duration or 0,
-        buffs = tracker_data.buffs or {},
-        engagements = tracker_data.engagements or {},
+        duration = tracker_data.duration,
+        buffs = tracker_data.buffs,
+        engagements = tracker_data.engagements,
     }
 
-    local ok, json_str = pcall(cjson.encode, data)
+    local ok, json_str = pcall(cjson.encode, filter_table(data))
     if not ok then
         mod:echo('Failed to encode history entry: ' .. tostring(json_str))
         return nil
