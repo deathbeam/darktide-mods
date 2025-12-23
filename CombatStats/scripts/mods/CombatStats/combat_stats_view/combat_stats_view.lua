@@ -541,12 +541,6 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
                     string.format('  %s: %d (%.1f%%)', mod:localize('weakspot'), stats.melee_weakspot_damage, pct)
                 )
             end
-            if stats.melee_overkill_damage and stats.melee_overkill_damage > 0 then
-                local pct = (stats.melee_overkill_damage / stats.melee_damage * 100)
-                create_text(
-                    string.format('  %s: %d (%.1f%%)', mod:localize('overkill'), stats.melee_overkill_damage, pct)
-                )
-            end
         end
 
         -- Ranged damage
@@ -566,12 +560,6 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
                 local pct = (stats.ranged_weakspot_damage / stats.ranged_damage * 100)
                 create_text(
                     string.format('  %s: %d (%.1f%%)', mod:localize('weakspot'), stats.ranged_weakspot_damage, pct)
-                )
-            end
-            if stats.ranged_overkill_damage and stats.ranged_overkill_damage > 0 then
-                local pct = (stats.ranged_overkill_damage / stats.ranged_damage * 100)
-                create_text(
-                    string.format('  %s: %d (%.1f%%)', mod:localize('overkill'), stats.ranged_overkill_damage, pct)
                 )
             end
         end

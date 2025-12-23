@@ -101,12 +101,10 @@ function CombatStatsTracker:get_session_stats()
             melee_damage = 0,
             melee_crit_damage = 0,
             melee_weakspot_damage = 0,
-            melee_overkill_damage = 0,
 
             ranged_damage = 0,
             ranged_crit_damage = 0,
             ranged_weakspot_damage = 0,
-            ranged_overkill_damage = 0,
 
             explosion_damage = 0,
             companion_damage = 0,
@@ -138,12 +136,10 @@ function CombatStatsTracker:get_session_stats()
             stats.melee_damage = stats.melee_damage + (engagement.stats.melee_damage or 0)
             stats.melee_crit_damage = stats.melee_crit_damage + (engagement.stats.melee_crit_damage or 0)
             stats.melee_weakspot_damage = stats.melee_weakspot_damage + (engagement.stats.melee_weakspot_damage or 0)
-            stats.melee_overkill_damage = stats.melee_overkill_damage + (engagement.stats.melee_overkill_damage or 0)
 
             stats.ranged_damage = stats.ranged_damage + (engagement.stats.ranged_damage or 0)
             stats.ranged_crit_damage = stats.ranged_crit_damage + (engagement.stats.ranged_crit_damage or 0)
             stats.ranged_weakspot_damage = stats.ranged_weakspot_damage + (engagement.stats.ranged_weakspot_damage or 0)
-            stats.ranged_overkill_damage = stats.ranged_overkill_damage + (engagement.stats.ranged_overkill_damage or 0)
 
             stats.explosion_damage = stats.explosion_damage + (engagement.stats.explosion_damage or 0)
             stats.companion_damage = stats.companion_damage + (engagement.stats.companion_damage or 0)
@@ -203,12 +199,10 @@ function CombatStatsTracker:get_engagement_stats()
                 melee_damage = engagement.stats.melee_damage or 0,
                 melee_crit_damage = engagement.stats.melee_crit_damage or 0,
                 melee_weakspot_damage = engagement.stats.melee_weakspot_damage or 0,
-                melee_overkill_damage = engagement.stats.melee_overkill_damage or 0,
 
                 ranged_damage = engagement.stats.ranged_damage or 0,
                 ranged_crit_damage = engagement.stats.ranged_crit_damage or 0,
                 ranged_weakspot_damage = engagement.stats.ranged_weakspot_damage or 0,
-                ranged_overkill_damage = engagement.stats.ranged_overkill_damage or 0,
 
                 explosion_damage = engagement.stats.explosion_damage or 0,
                 companion_damage = engagement.stats.companion_damage or 0,
@@ -372,10 +366,10 @@ function CombatStatsTracker:_track_enemy_damage(
     engagement.stats.overkill_damage = (engagement.stats.overkill_damage or 0) + overkill_damage
 
     if attack_type == 'melee' then
-        engagement.stats.melee_damage = (engagement.stats.melee_damage or 0) + actual_damage
-        engagement.stats.melee_overkill_damage = (engagement.stats.melee_overkill_damage or 0) + overkill_damage
-        engagement.stats.melee_hits = (engagement.stats.melee_hits or 0) + 1
         engagement.stats.total_hits = (engagement.stats.total_hits or 0) + 1
+
+        engagement.stats.melee_damage = (engagement.stats.melee_damage or 0) + actual_damage
+        engagement.stats.melee_hits = (engagement.stats.melee_hits or 0) + 1
 
         if is_critical then
             engagement.stats.melee_crit_damage = (engagement.stats.melee_crit_damage or 0) + actual_damage
@@ -387,10 +381,10 @@ function CombatStatsTracker:_track_enemy_damage(
             engagement.stats.melee_weakspot_hits = (engagement.stats.melee_weakspot_hits or 0) + 1
         end
     elseif attack_type == 'ranged' then
-        engagement.stats.ranged_damage = (engagement.stats.ranged_damage or 0) + actual_damage
-        engagement.stats.ranged_overkill_damage = (engagement.stats.ranged_overkill_damage or 0) + overkill_damage
-        engagement.stats.ranged_hits = (engagement.stats.ranged_hits or 0) + 1
         engagement.stats.total_hits = (engagement.stats.total_hits or 0) + 1
+
+        engagement.stats.ranged_damage = (engagement.stats.ranged_damage or 0) + actual_damage
+        engagement.stats.ranged_hits = (engagement.stats.ranged_hits or 0) + 1
 
         if is_critical then
             engagement.stats.ranged_crit_damage = (engagement.stats.ranged_crit_damage or 0) + actual_damage
