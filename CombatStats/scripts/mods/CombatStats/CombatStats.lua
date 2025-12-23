@@ -53,11 +53,14 @@ mod.tracker = CombatStatsTracker:new()
 mod.history = CombatStatsHistory:new()
 
 function mod.update(dt)
-    if mod.tracker:is_tracking() then
-        mod.tracker:update(dt)
+    -- Process async save queue
+    mod.history:process_queue()
+
+    if not mod.tracker:is_tracking() then
+        return
     end
 
-    mod.history:update()
+    mod.tracker:update(dt)
 end
 
 mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, ...)
@@ -88,11 +91,7 @@ mod:hook(CLASS.StateGameplay, 'on_exit', function(func, self, ...)
         mod.tracker:stop()
 
         local mission_name = mod.tracker:get_mission_name()
-        if
-            mission_name ~= 'tg_shooting_range'
-            and mission_name ~= 'tg_training_grounds'
-            and mod:get('save_history')
-        then
+        if mod:get('save_history') then
             local class_name = mod.tracker:get_class_name()
             local session = mod.tracker:get_session_stats()
             local engagements = mod.tracker:get_engagement_stats()
