@@ -53,11 +53,11 @@ mod.tracker = CombatStatsTracker:new()
 mod.history = CombatStatsHistory:new()
 
 function mod.update(dt)
-    if not mod.tracker:is_tracking() then
-        return
+    if mod.tracker:is_tracking() then
+        mod.tracker:update(dt)
     end
 
-    mod.tracker:update(dt)
+    mod.history:update()
 end
 
 mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, ...)

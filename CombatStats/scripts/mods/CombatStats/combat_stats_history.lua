@@ -77,6 +77,7 @@ local CombatStatsHistory = class('CombatStatsHistory')
 
 function CombatStatsHistory:init()
     self._history_entries_cache = nil
+    self._save_queue = {}
 end
 
 function CombatStatsHistory:get_path()
@@ -124,6 +125,14 @@ function CombatStatsHistory:parse_filename(file_name)
 end
 
 function CombatStatsHistory:save_history_entry(tracker_data, mission_name, class_name)
+    self._save_queue[#self._save_queue + 1] = {
+        tracker_data = tracker_data,
+        mission_name = mission_name,
+        class_name = class_name,
+    }
+end
+
+function CombatStatsHistory:_save_history_entry_sync(tracker_data, mission_name, class_name)
     mkdir(self:get_path())
 
     local timestamp = tostring(_os.time(_os.date('*t')))
@@ -150,7 +159,6 @@ function CombatStatsHistory:save_history_entry(tracker_data, mission_name, class
     file:write(json_str)
     file:close()
 
-    -- Only add to cache if it was actually fully loaded before
     if self._history_entries_cache ~= nil then
         self._history_entries_cache[#self._history_entries_cache + 1] = file_name
     end
@@ -228,6 +236,15 @@ function CombatStatsHistory:delete_history_entry(file_name)
     end
 
     return false
+end
+
+function CombatStatsHistory:update()
+    if #self._save_queue == 0 then
+        return
+    end
+
+    local save_data = table.remove(self._save_queue, 1)
+    self:_save_history_entry_sync(save_data.tracker_data, save_data.mission_name, save_data.class_name)
 end
 
 return CombatStatsHistory
