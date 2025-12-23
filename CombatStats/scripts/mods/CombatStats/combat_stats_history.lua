@@ -1,59 +1,7 @@
 local mod = get_mod('CombatStats')
-local DMF = get_mod('DMF')
+local _os = Mods.lua.os
 
-local _io = DMF:persistent_table('_io')
-_io.initialized = _io.initialized or false
-if not _io.initialized then
-    _io = DMF.deepcopy(Mods.lua.io)
-end
-
-local _os = DMF:persistent_table('_os')
-_os.initialized = _os.initialized or false
-if not _os.initialized then
-    _os = DMF.deepcopy(Mods.lua.os)
-end
-
---- Check if file or directory exists
----@param file string
----@return boolean
-local function exists(file)
-    local ok, _, code = _os.rename(file, file)
-    if not ok then
-        if code == 13 then
-            return true
-        end
-    end
-    return ok
-end
-
---- Check if path is a directory
----@param path string
----@return boolean
-local function isdir(path)
-    return exists(path .. '/')
-end
-
---- Scan directory and return list of filenames
----@param directory string
----@return string[]
-local function scandir(directory)
-    local i, file_names, popen = 0, {}, _io.popen
-    local pfile = popen('dir "' .. directory .. '" /b')
-    for filename in pfile:lines() do
-        i = i + 1
-        file_names[i] = filename
-    end
-    pfile:close()
-    return file_names
-end
-
---- Create directory if it does not exist
----@param path string
-local function mkdir(path)
-    if not isdir(path) then
-        _os.execute('mkdir "' .. path .. '"')
-    end
-end
+local MAX_HISTORY_ENTRIES = 100
 
 --- Recursively filter a table to remove nil, 0, and empty string values
 ---@param tbl table
@@ -73,33 +21,77 @@ local function filter_table(tbl)
     return result
 end
 
+--- Clean a filename by converting to lowercase and replacing punctuation, control, and whitespace with underscores
+---@param filename string
+---@return string, integer
+local function clean_filename(filename)
+    return filename:lower():gsub('[%p%c%s]', '_')
+end
+
 local CombatStatsHistory = class('CombatStatsHistory')
 
 function CombatStatsHistory:init()
-    self._history_entries_cache = nil
     self._save_queue = {}
 end
 
-function CombatStatsHistory:get_path()
-    return string.format('%s/Fatshark/Darktide/combat_stats_history/', _os.getenv('APPDATA'))
-end
+--- Wait for a load operation to complete, either from queue or by starting new load
+---@param file_name string The file name to load
+---@return table|nil The loaded data or nil on error
+function CombatStatsHistory:_wait_for_load(file_name)
+    -- Wait for completion
+    local token = SaveSystem.auto_load(clean_filename(file_name))
+    local max_wait = 1000
+    local progress
+    for i = 1, max_wait do
+        progress = SaveSystem.progress(token)
+        mod:echo('Got progress for ' .. file_name .. ': ' .. cjson.encode(progress))
+        if progress and progress.done then
+            mod:echo('Loaded history entry: ' .. file_name)
+            break
+        elseif progress and progress.error then
+            mod:echo('Error loading history entry: ' .. tostring(progress.error))
+            break
+        end
+    end
 
-function CombatStatsHistory:parse_filename(file_name)
-    -- Parse format: timestamp_class_missionname.json
-    -- Mission name can contain underscores, so we need to be careful
-    local name_without_ext = file_name:match('(.+)%.json$')
-    if not name_without_ext then
+    if not progress or not progress.done then
+        mod:echo('Timeout loading: ' .. file_name)
         return nil
     end
 
+    if progress.error then
+        return nil
+    end
+
+    return progress.data
+end
+
+--- Process save queue to check for completed async saves
+function CombatStatsHistory:process_queue()
+    for i = #self._save_queue, 1, -1 do
+        local save_item = self._save_queue[i]
+        local progress = SaveSystem.progress(save_item.token)
+        if progress and progress.done then
+            if progress.error then
+                mod:echo('Failed to save: ' .. tostring(progress.error))
+            end
+
+            SaveSystem.close(save_item.token)
+            table.remove(self._save_queue, i)
+            mod:echo('Saved history entry: ' .. save_item.file_name)
+        end
+    end
+end
+
+function CombatStatsHistory:parse_filename(file_name)
     -- Extract timestamp (first segment)
-    local timestamp_str = name_without_ext:match('^(%d+)_')
+    local timestamp_str = file_name:match('^(%d+)_')
     if not timestamp_str then
         return nil
     end
 
     -- Extract class (second segment after first underscore)
-    local after_timestamp = name_without_ext:match('^%d+_(.+)$')
+    local after_timestamp = file_name:match('^%d+_(.+)$')
     if not after_timestamp then
         return nil
     end
@@ -125,19 +117,8 @@ function CombatStatsHistory:parse_filename(file_name)
 end
 
 function CombatStatsHistory:save_history_entry(tracker_data, mission_name, class_name)
-    self._save_queue[#self._save_queue + 1] = {
-        tracker_data = tracker_data,
-        mission_name = mission_name,
-        class_name = class_name,
-    }
-end
-
-function CombatStatsHistory:_save_history_entry_sync(tracker_data, mission_name, class_name)
-    mkdir(self:get_path())
-
     local timestamp = tostring(_os.time(_os.date('*t')))
-    local file_name = string.format('%s_%s_%s.json', timestamp, class_name, mission_name)
-    local path = self:get_path() .. file_name
+    local file_name = string.format('%s_%s_%s', timestamp, class_name, mission_name)
 
     local data = {
         duration = tracker_data.duration,
@@ -145,41 +126,25 @@ function CombatStatsHistory:_save_history_entry_sync(tracker_data, mission_name,
         engagements = tracker_data.engagements,
     }
 
-    local ok, json_str = pcall(cjson.encode, filter_table(data))
-    if not ok then
-        mod:echo('Failed to encode history entry: ' .. tostring(json_str))
-        return nil
-    end
+    local filtered_data = filter_table(data)
 
-    local file, err = _io.open(path, 'w')
-    if not file then
-        mod:echo('Failed to open file for writing: ' .. tostring(err))
-        return nil
-    end
-    file:write(json_str)
-    file:close()
+    table.insert(self._save_queue, {
+        token = SaveSystem.auto_save(clean_filename(file_name), filtered_data),
+        file_name = file_name,
+    })
 
-    if self._history_entries_cache ~= nil then
-        self._history_entries_cache[#self._history_entries_cache + 1] = file_name
+    local index = mod:get('history_index') or {}
+    table.insert(index, 1, file_name)
+    while #index > MAX_HISTORY_ENTRIES do
+        table.remove(index)
     end
-
+    mod:set('history_index', index)
     return file_name
 end
 
 function CombatStatsHistory:load_history_entry(file_name)
-    local path = self:get_path() .. file_name
-    local file, err = _io.open(path, 'r')
-    if not file then
-        mod:echo('Failed to open file for reading: ' .. tostring(err))
-        return nil
-    end
-
-    local json_str = file:read('*all')
-    file:close()
-
-    local ok, data = pcall(cjson.decode, json_str)
-    if not ok then
-        mod:echo('Failed to decode history entry: ' .. tostring(data))
+    local data = self:_wait_for_load(file_name)
+    if not data then
         return nil
     end
 
@@ -195,56 +160,32 @@ function CombatStatsHistory:load_history_entry(file_name)
     return data
 end
 
-function CombatStatsHistory:get_history_entries(scan_dir)
-    if scan_dir or self._history_entries_cache == nil then
-        self._history_entries_cache = scandir(self:get_path())
-    end
-
+function CombatStatsHistory:get_history_entries()
+    local index = mod:get('history_index') or {}
     local entries = {}
-    for _, file in ipairs(self._history_entries_cache) do
-        if file:match('%.json$') then
-            local file_info = self:parse_filename(file)
-            if file_info then
-                entries[#entries + 1] = file_info
-            end
+
+    for _, file_name in ipairs(index) do
+        local file_info = self:parse_filename(file_name)
+        if file_info then
+            entries[#entries + 1] = file_info
         end
     end
-
-    table.sort(entries, function(a, b)
-        return a.timestamp > b.timestamp
-    end)
 
     return entries
 end
 
 function CombatStatsHistory:delete_history_entry(file_name)
-    local path = self:get_path() .. file_name
+    local index = mod:get('history_index') or {}
+    local new_index = {}
 
-    if _os.remove(path) then
-        -- Only remove from cache if it was actually fully loaded before
-        if self._history_entries_cache ~= nil then
-            local new_cache = {}
-            for _, c in ipairs(self._history_entries_cache) do
-                if c ~= file_name then
-                    new_cache[#new_cache + 1] = c
-                end
-            end
-            self._history_entries_cache = new_cache
+    for _, name in ipairs(index) do
+        if name ~= file_name then
+            new_index[#new_index + 1] = name
         end
-
-        return true
     end
 
-    return false
-end
-
-function CombatStatsHistory:update()
-    if #self._save_queue == 0 then
-        return
-    end
-
-    local save_data = table.remove(self._save_queue, 1)
-    self:_save_history_entry_sync(save_data.tracker_data, save_data.mission_name, save_data.class_name)
+    mod:set('history_index', new_index)
+    return true
 end
 
 return CombatStatsHistory
