@@ -30,7 +30,7 @@ local function build_stats_text(item)
     end
 
     local text = ''
-    local item_lerp = 0.8 -- default max range
+    local item_lerp = 0.9 -- default max range
 
     -- Helper to resolve lerp values using item's actual lerp
     local function resolve_lerp(value)
@@ -49,34 +49,99 @@ local function build_stats_text(item)
     }
 
     -- Helper to check if attack already exists with same stats
-    local function is_duplicate(list, profile)
+    local function is_duplicate(list, profile, action_name)
         for _, existing in ipairs(list) do
             local e = existing.profile
-            if
-                e.damage_type == profile.damage_type
-                and e.finesse_ability_damage_multiplier == profile.finesse_ability_damage_multiplier
-                and (e.backstab_bonus or 0) == (profile.backstab_bonus or 0)
-                and e.stagger_category == profile.stagger_category
-            then
-                -- Check cleave match
-                local cleave_match = true
-                if profile.cleave_distribution and e.cleave_distribution then
-                    for k, v in pairs(profile.cleave_distribution) do
-                        if type(v) == 'table' then
-                            if
-                                not e.cleave_distribution[k]
-                                or e.cleave_distribution[k][1] ~= v[1]
-                                or e.cleave_distribution[k][2] ~= v[2]
-                            then
-                                cleave_match = false
-                                break
-                            end
+            local is_same = true
+
+            -- Compare damage type
+            if e.damage_type ~= profile.damage_type then
+                is_same = false
+            end
+
+            -- Compare damage values (targets)
+            if is_same then
+                local e_target = e.targets and e.targets[1] or e
+                local p_target = profile.targets and profile.targets[1] or profile
+
+                if e_target.power_distribution and p_target.power_distribution then
+                    local e_dmg = e_target.power_distribution.attack
+                    local p_dmg = p_target.power_distribution.attack
+                    if e_dmg and p_dmg then
+                        local e_min = resolve_lerp(e_dmg[1] or 0)
+                        local e_max = resolve_lerp(e_dmg[2] or 0)
+                        local p_min = resolve_lerp(p_dmg[1] or 0)
+                        local p_max = resolve_lerp(p_dmg[2] or 0)
+                        if e_min ~= p_min or e_max ~= p_max then
+                            is_same = false
                         end
                     end
                 end
-                if cleave_match then
-                    return true
+            end
+
+            -- Compare armor damage modifiers
+            if is_same then
+                local e_target = e.targets and e.targets[1] or e
+                local p_target = profile.targets and profile.targets[1] or profile
+                local e_armor = e_target.armor_damage_modifier or e.armor_damage_modifier
+                local p_armor = p_target.armor_damage_modifier or profile.armor_damage_modifier
+
+                if e_armor and p_armor and e_armor.attack and p_armor.attack then
+                    local armor_types_obj = ArmorSettings.types
+                    for armor_key, armor_type_id in pairs(armor_types_obj) do
+                        local e_mod = e_armor.attack[armor_type_id] or e_armor.attack[armor_key]
+                        local p_mod = p_armor.attack[armor_type_id] or p_armor.attack[armor_key]
+                        local e_val = e_mod and resolve_lerp(e_mod) or 0
+                        local p_val = p_mod and resolve_lerp(p_mod) or 0
+                        if math.abs(e_val - p_val) > 0.01 then
+                            is_same = false
+                            break
+                        end
+                    end
+                elseif (e_armor ~= nil) ~= (p_armor ~= nil) then
+                    is_same = false
                 end
+            end
+
+            -- Compare other properties
+            if
+                is_same
+                and (e.finesse_ability_damage_multiplier or 1) ~= (profile.finesse_ability_damage_multiplier or 1)
+            then
+                is_same = false
+            end
+            if is_same and (e.backstab_bonus or 0) ~= (profile.backstab_bonus or 0) then
+                is_same = false
+            end
+            if is_same and e.stagger_category ~= profile.stagger_category then
+                is_same = false
+            end
+
+            -- Compare cleave
+            if is_same and profile.cleave_distribution and e.cleave_distribution then
+                for k, v in pairs(profile.cleave_distribution) do
+                    if type(v) == 'table' then
+                        if
+                            not e.cleave_distribution[k]
+                            or e.cleave_distribution[k][1] ~= v[1]
+                            or e.cleave_distribution[k][2] ~= v[2]
+                        then
+                            is_same = false
+                            break
+                        end
+                    elseif type(v) == 'number' then
+                        if e.cleave_distribution[k] ~= v then
+                            is_same = false
+                            break
+                        end
+                    end
+                end
+            end
+
+            if is_same then
+                -- Add this action name to the existing entry
+                table.insert(existing.names, action_name)
+                return true
             end
         end
         return false
@@ -96,8 +161,8 @@ local function build_stats_text(item)
                 category = 'light'
             end
 
-            if category and not is_duplicate(attacks[category], profile) then
-                table.insert(attacks[category], { name = action_name, action = action, profile = profile })
+            if category and not is_duplicate(attacks[category], profile, action_name) then
+                table.insert(attacks[category], { names = { action_name }, action = action, profile = profile })
             end
         end
     end
@@ -112,6 +177,13 @@ local function build_stats_text(item)
                 local profile = attack_data.profile
 
                 text = text .. string.format('{#color(100,200,255)}Attack %d{#reset()}\n', i)
+
+                -- Sort and list all action names for this attack
+                table.sort(attack_data.names)
+                for _, name in ipairs(attack_data.names) do
+                    text = text .. string.format('  {#color(150,150,150)}%s{#reset()}\n', name)
+                end
+                text = text .. '\n'
 
                 local target = profile.targets and profile.targets[1]
                 if not target then
@@ -128,13 +200,11 @@ local function build_stats_text(item)
                 if target.power_distribution and type(target.power_distribution) == 'table' then
                     if target.power_distribution.attack then
                         local atk = target.power_distribution.attack
-                        local dmg_min = resolve_lerp(atk[1] or 0)
-                        local dmg_max = resolve_lerp(atk[2] or 0)
+                        local dmg = resolve_lerp(atk)
                         text = text
                             .. string.format(
-                                '  {#color(180,180,180)}Damage:{#reset()} {#color(255,200,100)}%.0f-%.0f{#reset()}\n',
-                                dmg_min,
-                                dmg_max
+                                '  {#color(180,180,180)}Damage:{#reset()} {#color(255,200,100)}%.0f{#reset()}\n',
+                                dmg
                             )
                     end
                 end
@@ -150,6 +220,9 @@ local function build_stats_text(item)
                     for armor_key, armor_type_id in pairs(armor_types_obj) do
                         local attack_mod = armor_mod.attack
                             and (armor_mod.attack[armor_type_id] or armor_mod.attack[armor_key])
+                        if not attack_mod then
+                            attack_mod = 1
+                        end
                         local crit_mod = profile.crit_mod
                             and profile.crit_mod.attack
                             and (profile.crit_mod.attack[armor_type_id] or profile.crit_mod.attack[armor_key])
@@ -158,26 +231,20 @@ local function build_stats_text(item)
                             local armor_val = resolve_lerp(attack_mod)
                             local crit_bonus = crit_mod and resolve_lerp(crit_mod) or 0
                             local crit_val = armor_val + crit_bonus
+                            local armor_display = armor_names[armor_key] or tostring(armor_key)
+                            local line = string.format(
+                                '    %s: {#color(255,150,150)}%.0f%%{#reset()}',
+                                armor_display,
+                                armor_val * 100
+                            )
 
-                            if armor_val > 0 or crit_val > 0 then
-                                local armor_display = armor_names[armor_key] or tostring(armor_key)
-                                local line = string.format(
-                                    '    %s: {#color(255,150,150)}%.0f%%{#reset()}',
-                                    armor_display,
-                                    armor_val * 100
-                                )
-
-                                -- Show crit value if different from normal
-                                if math.abs(crit_bonus) > 0.01 then
-                                    line = line
-                                        .. string.format(
-                                            ' {#color(255,255,100)}(crit: %.0f%%){#reset()}',
-                                            crit_val * 100
-                                        )
-                                end
-
-                                text = text .. line .. '\n'
+                            -- Show crit value if different from normal
+                            if math.abs(crit_bonus) > 0.01 then
+                                line = line
+                                    .. string.format(' {#color(255,255,100)}(crit: %.0f%%){#reset()}', crit_val * 100)
                             end
+
+                            text = text .. line .. '\n'
                         end
                     end
                 end
@@ -254,7 +321,7 @@ mod:hook_require('scripts/ui/views/inventory_weapons_view/inventory_weapons_view
         vertical_alignment = 'bottom',
         horizontal_alignment = 'left',
         size = { 370, 650 },
-        position = { 1350, -100, 50 }, -- High z-index to be above buttons
+        position = { 1350, -100, 50 },
     }
 
     -- Background + scrollable text with hotspot for input
@@ -282,7 +349,7 @@ mod:hook_require('scripts/ui/views/inventory_weapons_view/inventory_weapons_view
                 text_horizontal_alignment = 'left',
                 text_color = Color.terminal_text_body(255, true),
                 offset = { 15, 15, 1 },
-                size = { 470, 620 },
+                size = { 340, 590 },
             },
         },
         {
@@ -294,7 +361,7 @@ mod:hook_require('scripts/ui/views/inventory_weapons_view/inventory_weapons_view
                 text_vertical_alignment = 'bottom',
                 text_horizontal_alignment = 'center',
                 text_color = Color.terminal_text_header_selected(150, true),
-                offset = { 0, -5, 1 },
+                offset = { 0, -5, 2 },
             },
         },
     }, 'weapon_damage_stats')
