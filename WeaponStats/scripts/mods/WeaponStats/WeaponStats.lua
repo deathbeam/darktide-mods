@@ -2,6 +2,9 @@ local mod = get_mod('WeaponStats')
 local UIWidget = require('scripts/managers/ui/ui_widget')
 local WeaponTemplate = require('scripts/utilities/weapon/weapon_template')
 local ArmorSettings = require('scripts/settings/damage/armor_settings')
+local HitScanTemplates = require('scripts/settings/projectile/hit_scan_templates')
+local WeaponHandlingTemplates =
+    require('scripts/settings/equipment/weapon_handling_templates/weapon_handling_templates')
 
 -- Scroll state
 local scroll_offset = 0
@@ -18,6 +21,7 @@ local COLORS = {
     IMPACT = '200,200,255', -- Light blue for impact
     IMPACT_CRIT = '150,200,255', -- Lighter blue for impact crit
     WEAKSPOT = '255,200,100', -- Orange for weakspot/backstab
+    TIMING = '150,255,150', -- Green for timing info
 }
 
 -- Color utility functions
@@ -57,7 +61,7 @@ local function build_stats_text(item)
     end
 
     local text = ''
-    local item_lerp = 0.9 -- default max range
+    local item_lerp = 0.8 -- default max range
 
     -- Helper to resolve lerp values using item's actual lerp
     local function resolve_lerp(value)
@@ -70,6 +74,7 @@ local function build_stats_text(item)
 
     -- Organize attacks by type and deduplicate
     local attacks = {
+        ranged = {},
         light = {},
         heavy = {},
         special = {},
@@ -175,13 +180,34 @@ local function build_stats_text(item)
     end
 
     for action_name, action in pairs(weapon_template.actions) do
-        if action.damage_profile and type(action.damage_profile) == 'table' then
-            local profile = action.damage_profile
+        local profile = nil
 
+        -- Handle melee weapons (damage_profile directly in action)
+        if action.damage_profile and type(action.damage_profile) == 'table' then
+            profile = action.damage_profile
+        -- Handle ranged weapons (damage_profile in hit_scan_template)
+        elseif action.fire_configuration and action.fire_configuration.hit_scan_template then
+            local hit_scan_template = action.fire_configuration.hit_scan_template
+            -- hit_scan_template can be a table or a reference to HitScanTemplates
+            if type(hit_scan_template) == 'table' then
+                if hit_scan_template.damage and hit_scan_template.damage.impact then
+                    profile = hit_scan_template.damage.impact.damage_profile
+                end
+            elseif type(hit_scan_template) == 'string' then
+                local template = HitScanTemplates[hit_scan_template]
+                if template and template.damage and template.damage.impact then
+                    profile = template.damage.impact.damage_profile
+                end
+            end
+        end
+
+        if profile then
             -- Categorize attack
             local category = nil
             if string.match(action_name, 'special') then
                 category = 'special'
+            elseif string.match(action_name, 'shoot') or string.match(action_name, 'zoom') then
+                category = 'ranged'
             elseif profile.melee_attack_strength == 'heavy' or string.match(action_name, 'heavy') then
                 category = 'heavy'
             elseif profile.melee_attack_strength == 'light' or string.match(action_name, 'light') then
@@ -195,13 +221,14 @@ local function build_stats_text(item)
     end
 
     -- Display attacks by category
-    for _, category in ipairs({ 'light', 'heavy', 'special' }) do
+    for _, category in ipairs({ 'ranged', 'light', 'heavy', 'special' }) do
         local category_attacks = attacks[category]
         if #category_attacks > 0 then
             text = text .. colored(COLORS.HEADER, string.upper(category) .. ' ATTACKS') .. '\n\n'
 
             for i, attack_data in ipairs(category_attacks) do
                 local profile = attack_data.profile
+                local action = attack_data.action
 
                 text = text .. colored(COLORS.ATTACK, 'Attack ' .. i) .. '\n'
 
@@ -220,6 +247,68 @@ local function build_stats_text(item)
                 -- Damage type
                 if profile.damage_type then
                     text = text .. '  ' .. label('Type:') .. ' ' .. tostring(profile.damage_type) .. '\n'
+                end
+
+                -- Timing information - calculate effective attack speed
+                local attack_speed = nil
+                local time_scale = 1
+
+                -- Get time_scale from weapon_handling_template
+                if action.weapon_handling_template then
+                    local handling_template = WeaponHandlingTemplates[action.weapon_handling_template]
+                    if handling_template and handling_template.time_scale then
+                        local ts = handling_template.time_scale
+                        -- Handle lerp values
+                        if type(ts) == 'table' then
+                            time_scale = resolve_lerp(ts)
+                        else
+                            time_scale = ts
+                        end
+                    end
+                end
+
+                -- For ranged weapons, check auto_fire_time
+                if action.weapon_handling_template then
+                    local handling_template = WeaponHandlingTemplates[action.weapon_handling_template]
+                    if
+                        handling_template
+                        and handling_template.fire_rate
+                        and handling_template.fire_rate.auto_fire_time
+                    then
+                        local auto_fire = handling_template.fire_rate.auto_fire_time
+                        attack_speed = type(auto_fire) == 'table' and resolve_lerp(auto_fire) or auto_fire
+                    end
+                end
+
+                -- For melee weapons or if no auto_fire_time, check chain_time to self
+                if not attack_speed and action.allowed_chain_actions then
+                    for chain_action_name, chain_data in pairs(action.allowed_chain_actions) do
+                        -- Check if this chains back to the same action
+                        if chain_data.action_name == attack_data.names[1] and chain_data.chain_time then
+                            local chain_time = chain_data.chain_time
+                            if chain_time > 0 and chain_time < 1000 then
+                                attack_speed = chain_time / time_scale
+                            end
+                            break
+                        end
+                    end
+                end
+
+                -- Fallback to total_time
+                if not attack_speed and action.total_time and action.total_time < 1000 then
+                    attack_speed = action.total_time / time_scale
+                end
+
+                -- Display attack speed
+                if attack_speed then
+                    text = text
+                        .. '  '
+                        .. label('Attack Speed:')
+                        .. ' '
+                        .. value(COLORS.TIMING, string.format('%.2fs', attack_speed))
+                        .. ' '
+                        .. colored(COLORS.ACTION, string.format('(%.1f/s)', 1 / attack_speed))
+                        .. '\n'
                 end
 
                 -- Power distribution (actual damage values)
