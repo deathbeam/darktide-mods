@@ -29,7 +29,7 @@ local function build_stats_text(item)
         return 'No weapon template found'
     end
 
-    local text = '{#color(255,200,100)}=== WEAPON DAMAGE ==={#reset()}\n'
+    local text = ''
     local item_lerp = 0.8 -- default max range
 
     -- Helper to resolve lerp values using item's actual lerp
@@ -106,97 +106,99 @@ local function build_stats_text(item)
     for _, category in ipairs({ 'light', 'heavy', 'special' }) do
         local category_attacks = attacks[category]
         if #category_attacks > 0 then
-            text = text
-                .. string.format('{#color(255,200,100)}=== %s ATTACKS ==={#reset()}\n\n', string.upper(category))
+            text = text .. string.format('{#color(255,200,100)}%s ATTACKS{#reset()}\n\n', string.upper(category))
 
             for i, attack_data in ipairs(category_attacks) do
                 local profile = attack_data.profile
 
                 text = text .. string.format('{#color(100,200,255)}Attack %d{#reset()}\n', i)
 
-                -- Show target data (damage, crit boost, armor pen PER TARGET)
-                if profile.targets and type(profile.targets) == 'table' then
-                    for target_idx, target in ipairs(profile.targets) do
-                        if target_idx == 1 then
-                            -- Only show first target in detail for clarity
+                local target = profile.targets and profile.targets[1]
+                if not target then
+                    target = profile
+                end
 
-                            -- Power distribution (actual damage values)
-                            if target.power_distribution and type(target.power_distribution) == 'table' then
-                                if target.power_distribution.attack then
-                                    local atk = target.power_distribution.attack
-                                    local dmg_min = resolve_lerp(atk[1] or 0)
-                                    local dmg_max = resolve_lerp(atk[2] or 0)
-                                    text = text
-                                        .. string.format(
-                                            '  {#color(255,200,100)}Damage: %.0f-%.0f{#reset()}\n',
-                                            dmg_min,
-                                            dmg_max
-                                        )
-                                end
-                            end
+                -- Damage type
+                if profile.damage_type then
+                    text = text
+                        .. string.format('  {#color(180,180,180)}Type:{#reset()} %s\n', tostring(profile.damage_type))
+                end
 
-                            -- Crit boost
-                            if target.crit_boost then
-                                local crit_val = resolve_lerp(target.crit_boost)
-                                if crit_val > 0 then
-                                    text = text
+                -- Power distribution (actual damage values)
+                if target.power_distribution and type(target.power_distribution) == 'table' then
+                    if target.power_distribution.attack then
+                        local atk = target.power_distribution.attack
+                        local dmg_min = resolve_lerp(atk[1] or 0)
+                        local dmg_max = resolve_lerp(atk[2] or 0)
+                        text = text
+                            .. string.format(
+                                '  {#color(180,180,180)}Damage:{#reset()} {#color(255,200,100)}%.0f-%.0f{#reset()}\n',
+                                dmg_min,
+                                dmg_max
+                            )
+                    end
+                end
+
+                -- Armor damage
+                local armor_mod = target.armor_damage_modifier or profile.armor_damage_modifier
+                if armor_mod and type(armor_mod) == 'table' then
+                    text = text .. '  {#color(180,180,180)}Armor Damage:{#reset()}\n'
+
+                    local armor_types_obj = ArmorSettings.types
+
+                    -- Iterate through armor types
+                    for armor_key, armor_type_id in pairs(armor_types_obj) do
+                        local attack_mod = armor_mod.attack
+                            and (armor_mod.attack[armor_type_id] or armor_mod.attack[armor_key])
+                        local crit_mod = profile.crit_mod
+                            and profile.crit_mod.attack
+                            and (profile.crit_mod.attack[armor_type_id] or profile.crit_mod.attack[armor_key])
+
+                        if attack_mod then
+                            local armor_val = resolve_lerp(attack_mod)
+                            local crit_bonus = crit_mod and resolve_lerp(crit_mod) or 0
+                            local crit_val = armor_val + crit_bonus
+
+                            if armor_val > 0 or crit_val > 0 then
+                                local armor_display = armor_names[armor_key] or tostring(armor_key)
+                                local line = string.format(
+                                    '    %s: {#color(255,150,150)}%.0f%%{#reset()}',
+                                    armor_display,
+                                    armor_val * 100
+                                )
+
+                                -- Show crit value if different from normal
+                                if math.abs(crit_bonus) > 0.01 then
+                                    line = line
                                         .. string.format(
-                                            '  Crit Damage: {#color(255,255,100)}+%.0f%%{#reset()}\n',
+                                            ' {#color(255,255,100)}(crit: %.0f%%){#reset()}',
                                             crit_val * 100
                                         )
                                 end
-                            end
 
-                            if target.armor_damage_modifier and type(target.armor_damage_modifier) == 'table' then
-                                text = text .. '  {#color(255,150,150)}Armor Penetration:{#reset()}\n'
-
-                                local armor_types_obj = ArmorSettings.types
-
-                                -- Iterate through armor types
-                                for armor_key, armor_type_id in pairs(armor_types_obj) do
-                                    local attack_mod = target.armor_damage_modifier.attack
-                                        and target.armor_damage_modifier.attack[armor_type_id]
-                                    local crit_mod = profile.crit_mod
-                                        and profile.crit_mod.attack
-                                        and profile.crit_mod.attack[armor_type_id]
-
-                                    if attack_mod then
-                                        local armor_val = resolve_lerp(attack_mod)
-                                        local crit_bonus = crit_mod and resolve_lerp(crit_mod) or 0
-                                        local crit_val = armor_val + crit_bonus
-
-                                        if armor_val > 0 or crit_val > 0 then
-                                            local armor_display = armor_names[armor_key] or tostring(armor_key)
-                                            local line = string.format('    %s: %.0f%%', armor_display, armor_val * 100)
-
-                                            -- Show crit value if different from normal
-                                            if math.abs(crit_bonus) > 0.01 then
-                                                line = line
-                                                    .. string.format(
-                                                        ' {#color(255,255,100)}(crit: %.0f%%){#reset()}',
-                                                        crit_val * 100
-                                                    )
-                                            end
-
-                                            text = text .. line .. '\n'
-                                        end
-                                    end
-                                end
+                                text = text .. line .. '\n'
                             end
                         end
                     end
                 end
 
-                -- Damage type
-                if profile.damage_type then
-                    text = text .. string.format('  Type: %s\n', tostring(profile.damage_type))
+                -- Crit boost
+                if target.crit_boost then
+                    local crit_val = resolve_lerp(target.crit_boost)
+                    if crit_val > 0 then
+                        text = text
+                            .. string.format(
+                                '  {#color(180,180,180)}Crit Damage:{#reset()} {#color(255,255,100)}+%.0f%%{#reset()}\n',
+                                crit_val * 100
+                            )
+                    end
                 end
 
                 -- Weakspot multiplier
                 if profile.finesse_ability_damage_multiplier and profile.finesse_ability_damage_multiplier ~= 1 then
                     text = text
                         .. string.format(
-                            '  Weakspot: {#color(255,200,100)}%.1fx{#reset()}\n',
+                            '  {#color(180,180,180)}Weakspot:{#reset()} {#color(255,200,100)}%.1fx{#reset()}\n',
                             profile.finesse_ability_damage_multiplier
                         )
                 end
@@ -205,7 +207,7 @@ local function build_stats_text(item)
                 if profile.backstab_bonus and profile.backstab_bonus > 0 then
                     text = text
                         .. string.format(
-                            '  Backstab: {#color(255,200,100)}+%.0f%%{#reset()}\n',
+                            '  {#color(180,180,180)}Backstab:{#reset()} {#color(255,200,100)}+%.0f%%{#reset()}\n',
                             profile.backstab_bonus * 100
                         )
                 end
@@ -214,51 +216,27 @@ local function build_stats_text(item)
                 if profile.cleave_distribution and type(profile.cleave_distribution) == 'table' then
                     for key, value in pairs(profile.cleave_distribution) do
                         if type(value) == 'table' and (value[1] ~= 0 or value[2] ~= 0) then
-                            text = text .. string.format('  Cleave %s: %.1f-%.1f\n', key, value[1], value[2])
+                            text = text
+                                .. string.format(
+                                    '  {#color(180,180,180)}Cleave %s:{#reset()} %.1f-%.1f\n',
+                                    key,
+                                    value[1],
+                                    value[2]
+                                )
                         elseif type(value) == 'number' and value ~= 0 then
-                            text = text .. string.format('  Cleave %s: %.1f\n', key, value)
+                            text = text
+                                .. string.format('  {#color(180,180,180)}Cleave %s:{#reset()} %.1f\n', key, value)
                         end
                     end
                 end
-
-                -- Profile-level armor damage (fallback if no per-target modifier)
-                -- This is rarely used but shown if targets don't have their own
-                if not (profile.targets and profile.targets[1] and profile.targets[1].armor_damage_modifier) then
-                    if profile.armor_damage_modifier and type(profile.armor_damage_modifier) == 'table' then
-                        text = text .. '  {#color(255,150,150)}Armor Penetration (% of damage):{#reset()}\n'
-                        for damage_category, modifiers in pairs(profile.armor_damage_modifier) do
-                            if type(modifiers) == 'table' then
-                                text = text .. string.format('    %s:\n', damage_category)
-                                for armor_type, multiplier in pairs(modifiers) do
-                                    if type(multiplier) == 'number' and multiplier ~= 0 then
-                                        text = text
-                                            .. string.format(
-                                                '      %s: %.0f%%\n',
-                                                tostring(armor_type),
-                                                multiplier * 100
-                                            )
-                                    elseif
-                                        type(multiplier) == 'table' and (multiplier[1] ~= 0 or multiplier[2] ~= 0)
-                                    then
-                                        text = text
-                                            .. string.format(
-                                                '      %s: %.0f-%.0f%%\n',
-                                                tostring(armor_type),
-                                                multiplier[1] * 100,
-                                                multiplier[2] * 100
-                                            )
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-
-                -- Critical strike armor modifiers (only show if no target-level armor mod shown above)
 
                 -- Stagger
                 if profile.stagger_category then
-                    text = text .. string.format('  Stagger: %s\n', tostring(profile.stagger_category))
+                    text = text
+                        .. string.format(
+                            '  {#color(180,180,180)}Stagger:{#reset()} %s\n',
+                            tostring(profile.stagger_category)
+                        )
                 end
 
                 text = text .. '\n'
@@ -275,7 +253,7 @@ mod:hook_require('scripts/ui/views/inventory_weapons_view/inventory_weapons_view
         parent = 'canvas',
         vertical_alignment = 'bottom',
         horizontal_alignment = 'left',
-        size = { 500, 650 },
+        size = { 370, 650 },
         position = { 1350, -100, 50 }, -- High z-index to be above buttons
     }
 
