@@ -3,6 +3,7 @@ local UIWidget = require('scripts/managers/ui/ui_widget')
 local WeaponTemplate = require('scripts/utilities/weapon/weapon_template')
 local ArmorSettings = require('scripts/settings/damage/armor_settings')
 local HitScanTemplates = require('scripts/settings/projectile/hit_scan_templates')
+local ShotshellTemplates = require('scripts/settings/projectile/shotshell_templates')
 local WeaponHandlingTemplates =
     require('scripts/settings/equipment/weapon_handling_templates/weapon_handling_templates')
 
@@ -195,6 +196,35 @@ local function build_stats_text(item)
                 end
             elseif type(hit_scan_template) == 'string' then
                 local template = HitScanTemplates[hit_scan_template]
+                if template and template.damage and template.damage.impact then
+                    profile = template.damage.impact.damage_profile
+                end
+            end
+        -- Handle dual weapons with multiple fire configurations
+        elseif action.fire_configurations and type(action.fire_configurations) == 'table' then
+            local first_config = action.fire_configurations[1]
+            if first_config and first_config.hit_scan_template then
+                local hit_scan_template = first_config.hit_scan_template
+                if type(hit_scan_template) == 'table' then
+                    if hit_scan_template.damage and hit_scan_template.damage.impact then
+                        profile = hit_scan_template.damage.impact.damage_profile
+                    end
+                elseif type(hit_scan_template) == 'string' then
+                    local template = HitScanTemplates[hit_scan_template]
+                    if template and template.damage and template.damage.impact then
+                        profile = template.damage.impact.damage_profile
+                    end
+                end
+            end
+        -- Handle shotguns/shotshells (shotshell template)
+        elseif action.fire_configuration and action.fire_configuration.shotshell then
+            local shotshell_template = action.fire_configuration.shotshell
+            if type(shotshell_template) == 'table' then
+                if shotshell_template.damage and shotshell_template.damage.impact then
+                    profile = shotshell_template.damage.impact.damage_profile
+                end
+            elseif type(shotshell_template) == 'string' then
+                local template = ShotshellTemplates[shotshell_template]
                 if template and template.damage and template.damage.impact then
                     profile = template.damage.impact.damage_profile
                 end
