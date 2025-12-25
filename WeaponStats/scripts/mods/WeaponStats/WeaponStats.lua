@@ -6,6 +6,33 @@ local ArmorSettings = require('scripts/settings/damage/armor_settings')
 -- Scroll state
 local scroll_offset = 0
 
+-- Color constants
+local COLORS = {
+    HEADER = '255,200,100', -- Orange/gold for headers
+    ATTACK = '100,200,255', -- Blue for attack numbers
+    LABEL = '180,180,180', -- Gray for labels
+    ACTION = '150,150,150', -- Lighter gray for action names
+    DAMAGE = '255,200,100', -- Orange for damage values
+    ARMOR = '255,150,150', -- Red for armor damage
+    CRIT = '255,255,100', -- Yellow for crit
+    IMPACT = '200,200,255', -- Light blue for impact
+    IMPACT_CRIT = '150,200,255', -- Lighter blue for impact crit
+    WEAKSPOT = '255,200,100', -- Orange for weakspot/backstab
+}
+
+-- Color utility functions
+local function colored(color, text)
+    return string.format('{#color(%s)}%s{#reset()}', color, text)
+end
+
+local function label(text)
+    return colored(COLORS.LABEL, text)
+end
+
+local function value(color, text)
+    return colored(color, text)
+end
+
 -- Armor type display names
 local armor_names = {
     unarmored = 'Unarmored',
@@ -171,17 +198,17 @@ local function build_stats_text(item)
     for _, category in ipairs({ 'light', 'heavy', 'special' }) do
         local category_attacks = attacks[category]
         if #category_attacks > 0 then
-            text = text .. string.format('{#color(255,200,100)}%s ATTACKS{#reset()}\n\n', string.upper(category))
+            text = text .. colored(COLORS.HEADER, string.upper(category) .. ' ATTACKS') .. '\n\n'
 
             for i, attack_data in ipairs(category_attacks) do
                 local profile = attack_data.profile
 
-                text = text .. string.format('{#color(100,200,255)}Attack %d{#reset()}\n', i)
+                text = text .. colored(COLORS.ATTACK, 'Attack ' .. i) .. '\n'
 
                 -- Sort and list all action names for this attack
                 table.sort(attack_data.names)
                 for _, name in ipairs(attack_data.names) do
-                    text = text .. string.format('  {#color(150,150,150)}%s{#reset()}\n', name)
+                    text = text .. '  ' .. colored(COLORS.ACTION, name) .. '\n'
                 end
                 text = text .. '\n'
 
@@ -192,8 +219,7 @@ local function build_stats_text(item)
 
                 -- Damage type
                 if profile.damage_type then
-                    text = text
-                        .. string.format('  {#color(180,180,180)}Type:{#reset()} %s\n', tostring(profile.damage_type))
+                    text = text .. '  ' .. label('Type:') .. ' ' .. tostring(profile.damage_type) .. '\n'
                 end
 
                 -- Power distribution (actual damage values)
@@ -202,17 +228,30 @@ local function build_stats_text(item)
                         local atk = target.power_distribution.attack
                         local dmg = resolve_lerp(atk)
                         text = text
-                            .. string.format(
-                                '  {#color(180,180,180)}Damage:{#reset()} {#color(255,200,100)}%.0f{#reset()}\n',
-                                dmg
-                            )
+                            .. '  '
+                            .. label('Damage:')
+                            .. ' '
+                            .. value(COLORS.DAMAGE, string.format('%.0f', dmg))
+                            .. '\n'
+                    end
+
+                    -- Impact damage (stagger)
+                    if target.power_distribution.impact then
+                        local imp = target.power_distribution.impact
+                        local impact_dmg = resolve_lerp(imp)
+                        text = text
+                            .. '  '
+                            .. label('Impact:')
+                            .. ' '
+                            .. value(COLORS.IMPACT, string.format('%.0f', impact_dmg))
+                            .. '\n'
                     end
                 end
 
                 -- Armor damage
                 local armor_mod = target.armor_damage_modifier or profile.armor_damage_modifier
                 if armor_mod and type(armor_mod) == 'table' then
-                    text = text .. '  {#color(180,180,180)}Armor Damage:{#reset()}\n'
+                    text = text .. '  ' .. label('Armor Damage:') .. '\n'
 
                     local armor_types_obj = ArmorSettings.types
 
@@ -226,22 +265,45 @@ local function build_stats_text(item)
                         local crit_mod = profile.crit_mod
                             and profile.crit_mod.attack
                             and (profile.crit_mod.attack[armor_type_id] or profile.crit_mod.attack[armor_key])
+                        local impact_mod = armor_mod.impact
+                            and (armor_mod.impact[armor_type_id] or armor_mod.impact[armor_key])
+                        local impact_crit_mod = profile.crit_mod
+                            and profile.crit_mod.impact
+                            and (profile.crit_mod.impact[armor_type_id] or profile.crit_mod.impact[armor_key])
 
                         if attack_mod then
                             local armor_val = resolve_lerp(attack_mod)
                             local crit_bonus = crit_mod and resolve_lerp(crit_mod) or 0
                             local crit_val = armor_val + crit_bonus
                             local armor_display = armor_names[armor_key] or tostring(armor_key)
-                            local line = string.format(
-                                '    %s: {#color(255,150,150)}%.0f%%{#reset()}',
-                                armor_display,
-                                armor_val * 100
-                            )
+                            local line = string.format('    %s: ', armor_display)
+                                .. value(COLORS.ARMOR, string.format('%.0f%%', armor_val * 100))
 
                             -- Show crit value if different from normal
                             if math.abs(crit_bonus) > 0.01 then
-                                line = line
-                                    .. string.format(' {#color(255,255,100)}(crit: %.0f%%){#reset()}', crit_val * 100)
+                                line = line .. ' ' .. value(COLORS.CRIT, string.format('C: %.0f%%', crit_val * 100))
+                            end
+
+                            -- Show impact value if exists and different
+                            if impact_mod then
+                                local impact_val = resolve_lerp(impact_mod)
+                                local impact_crit_bonus = impact_crit_mod and resolve_lerp(impact_crit_mod) or 0
+                                local impact_crit_val = impact_val + impact_crit_bonus
+
+                                if math.abs(impact_val - armor_val) > 0.01 then
+                                    line = line
+                                        .. ' '
+                                        .. value(COLORS.IMPACT, string.format('I: %.0f%%', impact_val * 100))
+
+                                    if math.abs(impact_crit_bonus) > 0.01 then
+                                        line = line
+                                            .. ' '
+                                            .. value(
+                                                COLORS.IMPACT_CRIT,
+                                                string.format('IC: %.0f%%', impact_crit_val * 100)
+                                            )
+                                    end
+                                end
                             end
 
                             text = text .. line .. '\n'
@@ -254,56 +316,54 @@ local function build_stats_text(item)
                     local crit_val = resolve_lerp(target.crit_boost)
                     if crit_val > 0 then
                         text = text
-                            .. string.format(
-                                '  {#color(180,180,180)}Crit Damage:{#reset()} {#color(255,255,100)}+%.0f%%{#reset()}\n',
-                                crit_val * 100
-                            )
+                            .. '  '
+                            .. label('Crit Damage:')
+                            .. ' '
+                            .. value(COLORS.CRIT, string.format('+%.0f%%', crit_val * 100))
+                            .. '\n'
                     end
                 end
 
                 -- Weakspot multiplier
                 if profile.finesse_ability_damage_multiplier and profile.finesse_ability_damage_multiplier ~= 1 then
                     text = text
-                        .. string.format(
-                            '  {#color(180,180,180)}Weakspot:{#reset()} {#color(255,200,100)}%.1fx{#reset()}\n',
-                            profile.finesse_ability_damage_multiplier
-                        )
+                        .. '  '
+                        .. label('Weakspot:')
+                        .. ' '
+                        .. value(COLORS.WEAKSPOT, string.format('%.1fx', profile.finesse_ability_damage_multiplier))
+                        .. '\n'
                 end
 
                 -- Backstab bonus
                 if profile.backstab_bonus and profile.backstab_bonus > 0 then
                     text = text
-                        .. string.format(
-                            '  {#color(180,180,180)}Backstab:{#reset()} {#color(255,200,100)}+%.0f%%{#reset()}\n',
-                            profile.backstab_bonus * 100
-                        )
+                        .. '  '
+                        .. label('Backstab:')
+                        .. ' '
+                        .. value(COLORS.WEAKSPOT, string.format('+%.0f%%', profile.backstab_bonus * 100))
+                        .. '\n'
                 end
 
                 -- Cleave
                 if profile.cleave_distribution and type(profile.cleave_distribution) == 'table' then
-                    for key, value in pairs(profile.cleave_distribution) do
-                        if type(value) == 'table' and (value[1] ~= 0 or value[2] ~= 0) then
+                    for key, value_data in pairs(profile.cleave_distribution) do
+                        if type(value_data) == 'table' and (value_data[1] ~= 0 or value_data[2] ~= 0) then
                             text = text
                                 .. string.format(
-                                    '  {#color(180,180,180)}Cleave %s:{#reset()} %.1f-%.1f\n',
-                                    key,
-                                    value[1],
-                                    value[2]
+                                    '  %s %.1f-%.1f\n',
+                                    label('Cleave ' .. key .. ':'),
+                                    value_data[1],
+                                    value_data[2]
                                 )
-                        elseif type(value) == 'number' and value ~= 0 then
-                            text = text
-                                .. string.format('  {#color(180,180,180)}Cleave %s:{#reset()} %.1f\n', key, value)
+                        elseif type(value_data) == 'number' and value_data ~= 0 then
+                            text = text .. string.format('  %s %.1f\n', label('Cleave ' .. key .. ':'), value_data)
                         end
                     end
                 end
 
                 -- Stagger
                 if profile.stagger_category then
-                    text = text
-                        .. string.format(
-                            '  {#color(180,180,180)}Stagger:{#reset()} %s\n',
-                            tostring(profile.stagger_category)
-                        )
+                    text = text .. '  ' .. label('Stagger:') .. ' ' .. tostring(profile.stagger_category) .. '\n'
                 end
 
                 text = text .. '\n'
