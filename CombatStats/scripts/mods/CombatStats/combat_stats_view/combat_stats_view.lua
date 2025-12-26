@@ -8,6 +8,20 @@ local ViewElementInputLegend =
 
 local CombatStatsTracker = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_tracker')
 local CombatStatsUtils = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_utils')
+
+local COLOR_MELEE = Color.gray(255, true)
+local COLOR_RANGED = { 255, 139, 101, 69 }
+local COLOR_EXPLOSION = { 255, 255, 100, 0 }
+local COLOR_COMPANION = { 255, 100, 149, 237 }
+
+local GRID_SPACING = { 10, 10 }
+local DETAIL_GRID_SPACING = { 0, 0 }
+local DETAIL_BAR_HEIGHT = 20
+local DETAIL_ICON_SIZE = 24
+local DETAIL_ICON_SPACING = 5
+local DETAIL_TEXT_FONT_SIZE = 18
+local DETAIL_TEXT_PADDING = 10
+
 local CombatStatsView = class('CombatStatsView', 'BaseView')
 
 function CombatStatsView:init(settings, context)
@@ -15,7 +29,6 @@ function CombatStatsView:init(settings, context)
         mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_view_definitions')
     self._blueprints =
         mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_view_blueprints')
-    self._settings = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_view_settings')
 
     CombatStatsView.super.init(self, self._definitions, settings)
 
@@ -48,6 +61,36 @@ function CombatStatsView:_setup_search()
             -- Make baseline more subtle
             style.baseline.color = Color.terminal_text_body(100, true)
         end
+    end
+end
+
+function CombatStatsView:_format_entry_subtext(entry)
+    if entry.is_history then
+        -- History entries show timestamp
+        return entry.history_data.date, Color.terminal_text_body_sub_header(255, true)
+    end
+
+    local dps = 0
+    if entry.duration > 0 and entry.stats and entry.stats.total_damage then
+        dps = entry.stats.total_damage / entry.duration
+    end
+
+    if entry.is_session then
+        -- Session stats: duration | dps
+        return string.format('%.1fs | %.0f %s', entry.duration, dps, mod:localize('dps')),
+            Color.terminal_text_body_sub_header(255, true)
+    else
+        -- Enemy stats: type | duration | dps
+        local status_color = Color.terminal_text_body(255, true)
+        if entry.end_time then
+            status_color = Color.ui_green_light(255, true)
+        elseif entry.start_time then
+            status_color = Color.ui_hud_yellow_light(255, true)
+        end
+
+        local enemy_type_label = mod:localize('breed_' .. entry.type)
+        return string.format('%s | %.1fs | %.0f %s', enemy_type_label, entry.duration, dps, mod:localize('dps')),
+            status_color
     end
 end
 
@@ -100,10 +143,9 @@ function CombatStatsView:_setup_entries()
                 or display_name:lower():find(search_text, 1, true)
                 or history_entry.date:lower():find(search_text, 1, true)
             then
-                entries[#entries + 1] = {
+                local entry = {
                     widget_type = 'stats_entry',
                     name = display_name,
-                    subtext_override = history_entry.date,
                     duration = 0,
                     stats = {},
                     buffs = {},
@@ -114,6 +156,8 @@ function CombatStatsView:_setup_entries()
                         parent:_load_history_entry(entry)
                     end,
                 }
+                entry.subtext, entry.subtext_color = self:_format_entry_subtext(entry)
+                entries[#entries + 1] = entry
             end
         end
     else
@@ -127,7 +171,7 @@ function CombatStatsView:_setup_entries()
         local class_display = CombatStatsUtils.get_archetype_display_name(tracker:get_class_name())
         local session_name = class_display .. ' | ' .. mission_display
 
-        entries[#entries + 1] = {
+        local session_entry = {
             widget_type = 'stats_entry',
             name = session_name,
             start_time = nil,
@@ -140,6 +184,8 @@ function CombatStatsView:_setup_entries()
                 parent:_select_entry(widget, entry)
             end,
         }
+        session_entry.subtext, session_entry.subtext_color = self:_format_entry_subtext(session_entry)
+        entries[#entries + 1] = session_entry
 
         -- Add all engagements in reverse order (newest first) if they match search
         for i = #engagements, 1, -1 do
@@ -154,7 +200,7 @@ function CombatStatsView:_setup_entries()
                 or breed_name:lower():find(search_text, 1, true)
                 or engagement.type:lower():find(search_text, 1, true)
             then
-                entries[#entries + 1] = {
+                local enemy_entry = {
                     widget_type = 'stats_entry',
                     name = display_name,
                     breed_name = breed_name,
@@ -169,6 +215,8 @@ function CombatStatsView:_setup_entries()
                         parent:_select_entry(widget, entry)
                     end,
                 }
+                enemy_entry.subtext, enemy_entry.subtext_color = self:_format_entry_subtext(enemy_entry)
+                entries[#entries + 1] = enemy_entry
             end
         end
     end
@@ -180,10 +228,9 @@ function CombatStatsView:_setup_entries()
 
     -- Setup entry grid for scrolling
     local grid_scenegraph_id = 'combat_stats_list_background'
-    local grid_spacing = self._settings.grid_spacing
 
     self._entry_grid =
-        self:_setup_grid(self._entry_widgets, self._entry_alignment_list, grid_scenegraph_id, grid_spacing)
+        self:_setup_grid(self._entry_widgets, self._entry_alignment_list, grid_scenegraph_id, GRID_SPACING)
 
     local scrollbar_widget = self._widgets_by_name.combat_stats_list_scrollbar
     self._entry_grid:assign_scrollbar(scrollbar_widget, 'combat_stats_list_pivot', grid_scenegraph_id)
@@ -282,15 +329,13 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
 
     local detail_scenegraph = self._ui_scenegraph.combat_stats_detail_content
     local detail_content_width = detail_scenegraph.size[1]
-
-    local bar_height = 20
     local text_width = detail_content_width
 
     -- Helper to create text widget
     local function create_text(text, color, font_size)
-        font_size = font_size or 18
+        font_size = font_size or DETAIL_TEXT_FONT_SIZE
         -- Calculate height based on font size with some padding
-        local height = font_size + 10
+        local height = font_size + DETAIL_TEXT_PADDING
 
         local widget_def = UIWidget.create_definition({
             {
@@ -320,11 +365,11 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
         pct = math.min(pct, 1.0)
 
         -- Layout: [icon] label | bar
-        local icon_size = icon and 24 or 0
-        local icon_spacing = icon and 5 or 0
+        local icon_size = icon and DETAIL_ICON_SIZE or 0
+        local icon_spacing = icon and DETAIL_ICON_SPACING or 0
         local label_width = text_width * 0.5 - icon_size - icon_spacing
         local bar_width = text_width * 0.5 - 20
-        local widget_height = bar_height + 10 -- Increased padding to prevent overlap
+        local widget_height = DETAIL_BAR_HEIGHT + 10 -- Increased padding to prevent overlap
 
         local passes = {}
 
@@ -360,7 +405,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
                 text_vertical_alignment = 'center',
                 text_color = Color.terminal_text_body(255, true),
                 offset = { icon_size + icon_spacing, 0, 2 },
-                size = { label_width, bar_height },
+                size = { label_width, DETAIL_BAR_HEIGHT },
                 text_overflow_mode = 'truncate',
             },
         }
@@ -370,7 +415,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
             pass_type = 'rect',
             style = {
                 offset = { text_width * 0.5 + 10, 0, 1 },
-                size = { bar_width, bar_height },
+                size = { bar_width, DETAIL_BAR_HEIGHT },
                 color = { 100, 50, 50, 50 },
             },
         }
@@ -381,7 +426,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
             style_id = 'bar',
             style = {
                 offset = { text_width * 0.5 + 10, 0, 2 },
-                size = { bar_width * pct, bar_height },
+                size = { bar_width * pct, DETAIL_BAR_HEIGHT },
                 color = color or Color.ui_terminal(255, true),
             },
         }
@@ -398,7 +443,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
                 text_vertical_alignment = 'center',
                 text_color = Color.white(255, true),
                 offset = { text_width * 0.5 + 10, 0, 3 },
-                size = { bar_width, bar_height },
+                size = { bar_width, DETAIL_BAR_HEIGHT },
             },
         }
 
@@ -426,42 +471,20 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
         return widget
     end
 
+    -- Helper to display sub-stats (crit, weakspot, etc.)
+    local function create_substats(total, substats)
+        for _, substat in ipairs(substats) do
+            if substat.value and substat.value > 0 then
+                local pct = (substat.value / total * 100)
+                create_text(string.format('  %s: %d (%.1f%%)', mod:localize(substat.key), substat.value, pct))
+            end
+        end
+    end
+
     -- Title
     create_spacer(10)
     create_text(entry.name, Color.terminal_text_header(255, true), 26)
-
-    if not entry.is_session then
-        -- Enemy stats
-        local dps = 0
-        if duration > 0 and stats.total_damage > 0 then
-            dps = stats.total_damage / duration
-        end
-
-        local status_color = Color.terminal_text_body(255, true)
-        if entry.end_time then
-            status_color = Color.ui_green_light(255, true)
-        elseif entry.start_time then
-            status_color = Color.ui_hud_yellow_light(255, true)
-        end
-
-        local enemy_type_label = mod:localize('breed_' .. entry.type)
-        create_text(
-            string.format('%s | %.1fs | %.0f %s', enemy_type_label, duration, dps, mod:localize('dps')),
-            status_color,
-            18
-        )
-    else
-        -- Session stats
-        local dps = 0
-        if duration > 0 and stats.total_damage > 0 then
-            dps = stats.total_damage / duration
-        end
-        create_text(
-            string.format('%.1fs | %.0f %s', duration, dps, mod:localize('dps')),
-            Color.terminal_text_body(255, true),
-            18
-        )
-    end
+    create_text(entry.subtext, entry.subtext_color, 18)
 
     -- Enemy Stats (only for session stats)
     if entry.is_session and stats.damage_by_type and next(stats.damage_by_type) then
@@ -528,19 +551,12 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
                 string.format('%s: %d', mod:localize('melee'), stats.melee_damage),
                 stats.melee_damage,
                 stats.total_damage,
-                Color.gray(255, true)
+                COLOR_MELEE
             )
-
-            if stats.melee_crit_damage and stats.melee_crit_damage > 0 then
-                local pct = (stats.melee_crit_damage / stats.melee_damage * 100)
-                create_text(string.format('  %s: %d (%.1f%%)', mod:localize('crit'), stats.melee_crit_damage, pct))
-            end
-            if stats.melee_weakspot_damage and stats.melee_weakspot_damage > 0 then
-                local pct = (stats.melee_weakspot_damage / stats.melee_damage * 100)
-                create_text(
-                    string.format('  %s: %d (%.1f%%)', mod:localize('weakspot'), stats.melee_weakspot_damage, pct)
-                )
-            end
+            create_substats(stats.melee_damage, {
+                { key = 'crit', value = stats.melee_crit_damage },
+                { key = 'weakspot', value = stats.melee_weakspot_damage },
+            })
         end
 
         -- Ranged damage
@@ -549,39 +565,12 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
                 string.format('%s: %d', mod:localize('ranged'), stats.ranged_damage),
                 stats.ranged_damage,
                 stats.total_damage,
-                { 255, 139, 101, 69 }
+                COLOR_RANGED
             )
-
-            if stats.ranged_crit_damage and stats.ranged_crit_damage > 0 then
-                local pct = (stats.ranged_crit_damage / stats.ranged_damage * 100)
-                create_text(string.format('  %s: %d (%.1f%%)', mod:localize('crit'), stats.ranged_crit_damage, pct))
-            end
-            if stats.ranged_weakspot_damage and stats.ranged_weakspot_damage > 0 then
-                local pct = (stats.ranged_weakspot_damage / stats.ranged_damage * 100)
-                create_text(
-                    string.format('  %s: %d (%.1f%%)', mod:localize('weakspot'), stats.ranged_weakspot_damage, pct)
-                )
-            end
-        end
-
-        -- Explosion damage
-        if stats.explosion_damage and stats.explosion_damage > 0 then
-            create_progress_bar(
-                string.format('%s: %d', mod:localize('explosion'), stats.explosion_damage),
-                stats.explosion_damage,
-                stats.total_damage,
-                { 255, 255, 100, 0 }
-            )
-        end
-
-        -- Companion damage
-        if stats.companion_damage and stats.companion_damage > 0 then
-            create_progress_bar(
-                string.format('%s: %d', mod:localize('companion'), stats.companion_damage),
-                stats.companion_damage,
-                stats.total_damage,
-                { 255, 100, 149, 237 }
-            )
+            create_substats(stats.ranged_damage, {
+                { key = 'crit', value = stats.ranged_crit_damage },
+                { key = 'weakspot', value = stats.ranged_weakspot_damage },
+            })
         end
 
         -- Buff damage
@@ -592,19 +581,31 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
                 stats.total_damage,
                 Color.ui_hud_green_light(255, true)
             )
+            create_substats(stats.buff_damage, {
+                { key = 'bleed', value = stats.bleed_damage },
+                { key = 'burn', value = stats.burn_damage },
+                { key = 'toxin', value = stats.toxin_damage },
+            })
+        end
 
-            if stats.bleed_damage and stats.bleed_damage > 0 then
-                local pct = (stats.bleed_damage / stats.buff_damage * 100)
-                create_text(string.format('  %s: %d (%.1f%%)', mod:localize('bleed'), stats.bleed_damage, pct))
-            end
-            if stats.burn_damage and stats.burn_damage > 0 then
-                local pct = (stats.burn_damage / stats.buff_damage * 100)
-                create_text(string.format('  %s: %d (%.1f%%)', mod:localize('burn'), stats.burn_damage, pct))
-            end
-            if stats.toxin_damage and stats.toxin_damage > 0 then
-                local pct = (stats.toxin_damage / stats.buff_damage * 100)
-                create_text(string.format('  %s: %d (%.1f%%)', mod:localize('toxin'), stats.toxin_damage, pct))
-            end
+        -- Explosion damage
+        if stats.explosion_damage and stats.explosion_damage > 0 then
+            create_progress_bar(
+                string.format('%s: %d', mod:localize('explosion'), stats.explosion_damage),
+                stats.explosion_damage,
+                stats.total_damage,
+                COLOR_EXPLOSION
+            )
+        end
+
+        -- Companion damage
+        if stats.companion_damage and stats.companion_damage > 0 then
+            create_progress_bar(
+                string.format('%s: %d', mod:localize('companion'), stats.companion_damage),
+                stats.companion_damage,
+                stats.total_damage,
+                COLOR_COMPANION
+            )
         end
     end
 
@@ -620,19 +621,12 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
                 string.format('%s: %d', mod:localize('melee'), stats.melee_hits),
                 stats.melee_hits,
                 stats.total_hits,
-                Color.gray(255, true)
+                COLOR_MELEE
             )
-
-            if stats.melee_crit_hits and stats.melee_crit_hits > 0 then
-                local pct = (stats.melee_crit_hits / stats.melee_hits * 100)
-                create_text(string.format('  %s: %d (%.1f%%)', mod:localize('crit'), stats.melee_crit_hits, pct))
-            end
-            if stats.melee_weakspot_hits and stats.melee_weakspot_hits > 0 then
-                local pct = (stats.melee_weakspot_hits / stats.melee_hits * 100)
-                create_text(
-                    string.format('  %s: %d (%.1f%%)', mod:localize('weakspot'), stats.melee_weakspot_hits, pct)
-                )
-            end
+            create_substats(stats.melee_hits, {
+                { key = 'crit', value = stats.melee_crit_hits },
+                { key = 'weakspot', value = stats.melee_weakspot_hits },
+            })
         end
 
         -- Ranged hits
@@ -641,19 +635,12 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
                 string.format('%s: %d', mod:localize('ranged'), stats.ranged_hits),
                 stats.ranged_hits,
                 stats.total_hits,
-                { 255, 139, 101, 69 }
+                COLOR_RANGED
             )
-
-            if stats.ranged_crit_hits and stats.ranged_crit_hits > 0 then
-                local pct = (stats.ranged_crit_hits / stats.ranged_hits * 100)
-                create_text(string.format('  %s: %d (%.1f%%)', mod:localize('crit'), stats.ranged_crit_hits, pct))
-            end
-            if stats.ranged_weakspot_hits and stats.ranged_weakspot_hits > 0 then
-                local pct = (stats.ranged_weakspot_hits / stats.ranged_hits * 100)
-                create_text(
-                    string.format('  %s: %d (%.1f%%)', mod:localize('weakspot'), stats.ranged_weakspot_hits, pct)
-                )
-            end
+            create_substats(stats.ranged_hits, {
+                { key = 'crit', value = stats.ranged_crit_hits },
+                { key = 'weakspot', value = stats.ranged_weakspot_hits },
+            })
         end
     end
 
@@ -701,10 +688,9 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
 
     -- Setup detail grid for scrolling
     local detail_grid_scenegraph_id = 'combat_stats_detail_content'
-    local detail_grid_spacing = { 0, 0 }
 
     self._detail_grid =
-        self:_setup_grid(self._detail_widgets, self._detail_widgets, detail_grid_scenegraph_id, detail_grid_spacing)
+        self:_setup_grid(self._detail_widgets, self._detail_widgets, detail_grid_scenegraph_id, DETAIL_GRID_SPACING)
 
     local detail_scrollbar_widget = self._widgets_by_name.combat_stats_detail_scrollbar
     self._detail_grid:assign_scrollbar(detail_scrollbar_widget, 'combat_stats_detail_pivot', detail_grid_scenegraph_id)

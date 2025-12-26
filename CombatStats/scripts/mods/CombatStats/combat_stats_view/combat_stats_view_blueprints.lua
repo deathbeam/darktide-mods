@@ -83,48 +83,19 @@ local blueprints = {
         },
         init = function(parent, widget, entry, callback_name)
             local content = widget.content
-            local hotspot = content.hotspot
+            local style = widget.style
 
-            hotspot.pressed_callback = function()
+            content.hotspot.pressed_callback = function()
                 callback(parent, callback_name, widget, entry)()
             end
 
             content.text = entry.name
-
-            if entry.subtext_override then
-                -- History entries with custom subtext (timestamp)
-                content.subtext = entry.subtext_override
-                widget.style.subtext.text_color = Color.terminal_text_body_sub_header(255, true)
-            elseif not entry.is_session then
-                -- Enemy stats
-                local status_color = Color.terminal_text_body(255, true)
-
-                if entry.end_time then
-                    status_color = Color.ui_green_light(255, true)
-                elseif entry.start_time then
-                    status_color = Color.ui_hud_yellow_light(255, true)
-                end
-
-                local dps = 0
-                if entry.duration > 0 and entry.stats and entry.stats.total_damage then
-                    dps = entry.stats.total_damage / entry.duration
-                end
-
-                local enemy_type_label = mod:localize('breed_' .. entry.type)
-                content.subtext =
-                    string.format('%s | %.1fs | %.0f %s', enemy_type_label, entry.duration, dps, mod:localize('dps'))
-                widget.style.subtext.text_color = status_color
-            else
-                -- Session stats
-                local dps = 0
-                if entry.duration > 0 and entry.stats and entry.stats.total_damage > 0 then
-                    dps = entry.stats.total_damage / entry.duration
-                end
-                content.subtext = string.format('%.1fs | %.0f %s', entry.duration, dps, mod:localize('dps'))
-                widget.style.subtext.text_color = Color.terminal_text_body_sub_header(255, true)
-            end
-
+            content.subtext = entry.subtext
             content.entry = entry
+
+            if entry.subtext_color then
+                style.subtext.text_color = entry.subtext_color
+            end
         end,
     },
 }
