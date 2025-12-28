@@ -293,14 +293,12 @@ local function build_stats_text(item)
                 local action_name_for_template = attack_data.names[1]
 
                 -- Get the finalized values from weapon_tweak_templates
-                if weapon_tweak_templates then
-                    local handling_templates = weapon_tweak_templates[2] -- template_types.weapon_handling = 2
-                    if handling_templates and action_name_for_template then
-                        local action_template = handling_templates[action_name_for_template]
-                        if action_template then
-                            if action_template.time_scale then
-                                time_scale = action_template.time_scale
-                            end
+                if weapon_tweak_templates and weapon_tweak_templates.weapon_handling then
+                    local handling_templates = weapon_tweak_templates.weapon_handling
+                    if handling_templates and action.weapon_handling_template then
+                        local action_template = handling_templates[action.weapon_handling_template]
+                        if action_template and action_template.time_scale then
+                            time_scale = action_template.time_scale
                         end
                     end
                 end
@@ -357,11 +355,13 @@ local function build_stats_text(item)
 
                 -- Critical strike chance (from weapon_tweak_templates)
                 local crit_chance = nil
-                if weapon_tweak_templates then
-                    local handling_templates = weapon_tweak_templates[2]
-                    local action_name_for_template = attack_data.names[1]
-                    if handling_templates and action_name_for_template then
-                        local action_template = handling_templates[action_name_for_template]
+
+                if weapon_tweak_templates and weapon_tweak_templates.weapon_handling then
+                    local handling_templates = weapon_tweak_templates.weapon_handling
+
+                    if handling_templates and action.weapon_handling_template then
+                        local action_template = handling_templates[action.weapon_handling_template]
+
                         if
                             action_template
                             and action_template.critical_strike
