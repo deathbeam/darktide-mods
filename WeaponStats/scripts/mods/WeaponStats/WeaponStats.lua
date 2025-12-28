@@ -6,6 +6,7 @@ local HitScanTemplates = require('scripts/settings/projectile/hit_scan_templates
 local ShotshellTemplates = require('scripts/settings/projectile/shotshell_templates')
 local WeaponHandlingTemplates =
     require('scripts/settings/equipment/weapon_handling_templates/weapon_handling_templates')
+local Weapon = require('scripts/extension_systems/weapon/weapon')
 
 -- Scroll state
 local scroll_offset = 0
@@ -62,15 +63,22 @@ local function build_stats_text(item)
     end
 
     local text = ''
-    local item_lerp = 0.8 -- default max range
 
-    -- Helper to resolve lerp values using item's actual lerp
-    local function resolve_lerp(value)
+    -- Use fixed lerp value of 0.8 (80%) for consistency
+    local item_lerp = 0.8
+
+    -- Get weapon traits (includes finesse and other stat bonuses from base_stats)
+    local weapon_tweak_templates, damage_profile_lerp_values, explosion_template_lerp_values, buffs =
+        Weapon._init_traits(nil, weapon_template, item, nil, nil, {})
+
+    -- Helper to resolve lerp values
+    local function resolve_lerp(value, lerp_value)
+        lerp_value = lerp_value or item_lerp
         if type(value) ~= 'table' then
             return value
         end
         -- Interpolate: min + (max - min) * lerp
-        return value[1] + (value[2] - value[1]) * item_lerp
+        return value[1] + (value[2] - value[1]) * lerp_value
     end
 
     -- Organize attacks by type and deduplicate
@@ -101,11 +109,9 @@ local function build_stats_text(item)
                     local e_dmg = e_target.power_distribution.attack
                     local p_dmg = p_target.power_distribution.attack
                     if e_dmg and p_dmg then
-                        local e_min = resolve_lerp(e_dmg[1] or 0)
-                        local e_max = resolve_lerp(e_dmg[2] or 0)
-                        local p_min = resolve_lerp(p_dmg[1] or 0)
-                        local p_max = resolve_lerp(p_dmg[2] or 0)
-                        if e_min ~= p_min or e_max ~= p_max then
+                        local e_val = resolve_lerp(e_dmg)
+                        local p_val = resolve_lerp(p_dmg)
+                        if math.abs(e_val - p_val) > 0.01 then
                             is_same = false
                         end
                     end
@@ -279,69 +285,49 @@ local function build_stats_text(item)
                     text = text .. '  ' .. label('Type:') .. ' ' .. tostring(profile.damage_type) .. '\n'
                 end
 
-                -- Timing information - calculate effective attack speed
-                local attack_speed = nil
+                -- === TIMING STATS ===
+
+                -- Get time_scale and total_time from weapon_tweak_templates (already has all bonuses applied)
                 local time_scale = 1
+                local total_time = action.total_time or 0
+                local action_name_for_template = attack_data.names[1]
 
-                -- Get time_scale from weapon_handling_template
-                if action.weapon_handling_template then
-                    local handling_template = WeaponHandlingTemplates[action.weapon_handling_template]
-                    if handling_template and handling_template.time_scale then
-                        local ts = handling_template.time_scale
-                        -- Handle lerp values
-                        if type(ts) == 'table' then
-                            time_scale = resolve_lerp(ts)
-                        else
-                            time_scale = ts
-                        end
-                    end
-                end
-
-                -- For ranged weapons, check auto_fire_time
-                if action.weapon_handling_template then
-                    local handling_template = WeaponHandlingTemplates[action.weapon_handling_template]
-                    if
-                        handling_template
-                        and handling_template.fire_rate
-                        and handling_template.fire_rate.auto_fire_time
-                    then
-                        local auto_fire = handling_template.fire_rate.auto_fire_time
-                        attack_speed = type(auto_fire) == 'table' and resolve_lerp(auto_fire) or auto_fire
-                    end
-                end
-
-                -- For melee weapons or if no auto_fire_time, check chain_time to self
-                if not attack_speed and action.allowed_chain_actions then
-                    for chain_action_name, chain_data in pairs(action.allowed_chain_actions) do
-                        -- Check if this chains back to the same action
-                        if chain_data.action_name == attack_data.names[1] and chain_data.chain_time then
-                            local chain_time = chain_data.chain_time
-                            if chain_time > 0 and chain_time < 1000 then
-                                attack_speed = chain_time / time_scale
+                -- Get the finalized values from weapon_tweak_templates
+                if weapon_tweak_templates then
+                    local handling_templates = weapon_tweak_templates[2] -- template_types.weapon_handling = 2
+                    if handling_templates and action_name_for_template then
+                        local action_template = handling_templates[action_name_for_template]
+                        if action_template then
+                            if action_template.time_scale then
+                                time_scale = action_template.time_scale
                             end
-                            break
                         end
                     end
                 end
 
-                -- Fallback to total_time
-                if not attack_speed and action.total_time and action.total_time < 1000 then
-                    attack_speed = action.total_time / time_scale
+                -- Calculate actual attack time
+                local attack_time = nil
+
+                -- Check for explicit timing in total_time (divided by time_scale for melee)
+                if total_time > 0 and total_time < 1000 then
+                    attack_time = total_time / time_scale
                 end
 
                 -- Display attack speed
-                if attack_speed then
+                if attack_time and attack_time > 0 then
+                    local attacks_per_sec = 1 / attack_time
+
                     text = text
                         .. '  '
                         .. label('Attack Speed:')
                         .. ' '
-                        .. value(COLORS.TIMING, string.format('%.2fs', attack_speed))
-                        .. ' '
-                        .. colored(COLORS.ACTION, string.format('(%.1f/s)', 1 / attack_speed))
+                        .. value(COLORS.TIMING, string.format('%.2f/s', attacks_per_sec))
                         .. '\n'
                 end
 
-                -- Power distribution (actual damage values)
+                -- === DAMAGE STATS ===
+
+                -- Power distribution (damage values at 80% power)
                 if target.power_distribution and type(target.power_distribution) == 'table' then
                     if target.power_distribution.attack then
                         local atk = target.power_distribution.attack
@@ -354,7 +340,7 @@ local function build_stats_text(item)
                             .. '\n'
                     end
 
-                    -- Impact damage (stagger)
+                    -- Impact damage (stagger) - separate stat from damage
                     if target.power_distribution.impact then
                         local imp = target.power_distribution.impact
                         local impact_dmg = resolve_lerp(imp)
@@ -367,7 +353,102 @@ local function build_stats_text(item)
                     end
                 end
 
-                -- Armor damage
+                -- === CRIT & MODIFIERS ===
+
+                -- Critical strike chance (from weapon_tweak_templates)
+                local crit_chance = nil
+                if weapon_tweak_templates then
+                    local handling_templates = weapon_tweak_templates[2]
+                    local action_name_for_template = attack_data.names[1]
+                    if handling_templates and action_name_for_template then
+                        local action_template = handling_templates[action_name_for_template]
+                        if
+                            action_template
+                            and action_template.critical_strike
+                            and action_template.critical_strike.chance_modifier
+                        then
+                            crit_chance = action_template.critical_strike.chance_modifier
+                        end
+                    end
+                end
+
+                if crit_chance and crit_chance > 0 then
+                    text = text
+                        .. '  '
+                        .. label('Crit Chance:')
+                        .. ' '
+                        .. value(COLORS.CRIT, string.format('+%.1f%%', crit_chance * 100))
+                        .. '\n'
+                end
+
+                -- Crit boost (damage bonus)
+                if target.crit_boost then
+                    local crit_val = resolve_lerp(target.crit_boost)
+                    if crit_val > 0 then
+                        text = text
+                            .. '  '
+                            .. label('Crit Damage:')
+                            .. ' '
+                            .. value(COLORS.CRIT, string.format('+%.0f%%', crit_val * 100))
+                            .. '\n'
+                    end
+                end
+
+                -- Weakspot multiplier
+                local weakspot_mult = profile.finesse_ability_damage_multiplier
+                if weakspot_mult and weakspot_mult ~= 1 then
+                    weakspot_mult = resolve_lerp(weakspot_mult)
+                    text = text
+                        .. '  '
+                        .. label('Weakspot:')
+                        .. ' '
+                        .. value(COLORS.WEAKSPOT, string.format('%.1fx', weakspot_mult))
+                        .. '\n'
+                end
+
+                -- Backstab bonus
+                local backstab_bonus = profile.backstab_bonus
+                if backstab_bonus and backstab_bonus > 0 then
+                    backstab_bonus = resolve_lerp(backstab_bonus)
+                    text = text
+                        .. '  '
+                        .. label('Backstab:')
+                        .. ' '
+                        .. value(COLORS.WEAKSPOT, string.format('+%.0f%%', backstab_bonus * 100))
+                        .. '\n'
+                end
+
+                -- === CLEAVE ===
+
+                -- Cleave stats - only show attack cleave if it's > 0
+                if profile.cleave_distribution and type(profile.cleave_distribution) == 'table' then
+                    local attack_cleave = profile.cleave_distribution.attack
+                    if attack_cleave then
+                        local cleave_value = nil
+
+                        if type(attack_cleave) == 'table' then
+                            -- Only show if at least one value is non-zero
+                            if attack_cleave[1] > 0 or attack_cleave[2] > 0 then
+                                cleave_value = string.format('%.1f-%.1f', attack_cleave[1], attack_cleave[2])
+                            end
+                        elseif type(attack_cleave) == 'number' and attack_cleave > 0 then
+                            cleave_value = string.format('%.1f', attack_cleave)
+                        end
+
+                        if cleave_value then
+                            text = text .. '  ' .. label('Cleave:') .. ' ' .. cleave_value .. '\n'
+                        end
+                    end
+                end
+
+                -- Stagger
+                if profile.stagger_category then
+                    text = text .. '  ' .. label('Stagger:') .. ' ' .. tostring(profile.stagger_category) .. '\n'
+                end
+
+                -- === ARMOR DAMAGE ===
+
+                -- Armor damage modifiers
                 local armor_mod = target.armor_damage_modifier or profile.armor_damage_modifier
                 if armor_mod and type(armor_mod) == 'table' then
                     text = text .. '  ' .. label('Armor Damage:') .. '\n'
@@ -381,11 +462,14 @@ local function build_stats_text(item)
                         if not attack_mod then
                             attack_mod = 1
                         end
+
+                        local impact_mod = armor_mod.impact
+                            and (armor_mod.impact[armor_type_id] or armor_mod.impact[armor_key])
+
                         local crit_mod = profile.crit_mod
                             and profile.crit_mod.attack
                             and (profile.crit_mod.attack[armor_type_id] or profile.crit_mod.attack[armor_key])
-                        local impact_mod = armor_mod.impact
-                            and (armor_mod.impact[armor_type_id] or armor_mod.impact[armor_key])
+
                         local impact_crit_mod = profile.crit_mod
                             and profile.crit_mod.impact
                             and (profile.crit_mod.impact[armor_type_id] or profile.crit_mod.impact[armor_key])
@@ -400,27 +484,29 @@ local function build_stats_text(item)
 
                             -- Show crit value if different from normal
                             if math.abs(crit_bonus) > 0.01 then
-                                line = line .. ' ' .. value(COLORS.CRIT, string.format('C: %.0f%%', crit_val * 100))
+                                line = line .. ' ' .. value(COLORS.CRIT, string.format('(C: %.0f%%)', crit_val * 100))
                             end
 
-                            -- Show impact value if exists and different
+                            -- Show impact modifier if it exists and differs from attack
                             if impact_mod then
                                 local impact_val = resolve_lerp(impact_mod)
-                                local impact_crit_bonus = impact_crit_mod and resolve_lerp(impact_crit_mod) or 0
-                                local impact_crit_val = impact_val + impact_crit_bonus
-
                                 if math.abs(impact_val - armor_val) > 0.01 then
                                     line = line
                                         .. ' '
                                         .. value(COLORS.IMPACT, string.format('I: %.0f%%', impact_val * 100))
 
-                                    if math.abs(impact_crit_bonus) > 0.01 then
-                                        line = line
-                                            .. ' '
-                                            .. value(
-                                                COLORS.IMPACT_CRIT,
-                                                string.format('IC: %.0f%%', impact_crit_val * 100)
-                                            )
+                                    -- Show impact crit if it differs
+                                    if impact_crit_mod then
+                                        local impact_crit_bonus = resolve_lerp(impact_crit_mod)
+                                        if math.abs(impact_crit_bonus) > 0.01 then
+                                            local impact_crit_val = impact_val + impact_crit_bonus
+                                            line = line
+                                                .. ' '
+                                                .. value(
+                                                    COLORS.CRIT,
+                                                    string.format('(IC: %.0f%%)', impact_crit_val * 100)
+                                                )
+                                        end
                                     end
                                 end
                             end
@@ -428,61 +514,6 @@ local function build_stats_text(item)
                             text = text .. line .. '\n'
                         end
                     end
-                end
-
-                -- Crit boost
-                if target.crit_boost then
-                    local crit_val = resolve_lerp(target.crit_boost)
-                    if crit_val > 0 then
-                        text = text
-                            .. '  '
-                            .. label('Crit Damage:')
-                            .. ' '
-                            .. value(COLORS.CRIT, string.format('+%.0f%%', crit_val * 100))
-                            .. '\n'
-                    end
-                end
-
-                -- Weakspot multiplier
-                if profile.finesse_ability_damage_multiplier and profile.finesse_ability_damage_multiplier ~= 1 then
-                    text = text
-                        .. '  '
-                        .. label('Weakspot:')
-                        .. ' '
-                        .. value(COLORS.WEAKSPOT, string.format('%.1fx', profile.finesse_ability_damage_multiplier))
-                        .. '\n'
-                end
-
-                -- Backstab bonus
-                if profile.backstab_bonus and profile.backstab_bonus > 0 then
-                    text = text
-                        .. '  '
-                        .. label('Backstab:')
-                        .. ' '
-                        .. value(COLORS.WEAKSPOT, string.format('+%.0f%%', profile.backstab_bonus * 100))
-                        .. '\n'
-                end
-
-                -- Cleave
-                if profile.cleave_distribution and type(profile.cleave_distribution) == 'table' then
-                    for key, value_data in pairs(profile.cleave_distribution) do
-                        if type(value_data) == 'table' and (value_data[1] ~= 0 or value_data[2] ~= 0) then
-                            text = text
-                                .. string.format(
-                                    '  %s %.1f-%.1f\n',
-                                    label('Cleave ' .. key .. ':'),
-                                    value_data[1],
-                                    value_data[2]
-                                )
-                        elseif type(value_data) == 'number' and value_data ~= 0 then
-                            text = text .. string.format('  %s %.1f\n', label('Cleave ' .. key .. ':'), value_data)
-                        end
-                    end
-                end
-
-                -- Stagger
-                if profile.stagger_category then
-                    text = text .. '  ' .. label('Stagger:') .. ' ' .. tostring(profile.stagger_category) .. '\n'
                 end
 
                 text = text .. '\n'
