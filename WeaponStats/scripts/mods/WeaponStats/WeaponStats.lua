@@ -421,16 +421,16 @@ local function build_stats_text(item)
                     end
                 end
 
-                if crit_chance and crit_chance > 0 then
+                if crit_chance and crit_chance ~= 0 then
                     text = text
                         .. '  '
                         .. label('Crit Chance:')
                         .. ' '
-                        .. value(COLORS.CRIT, string.format('+%.1f%%', crit_chance * 100))
+                        .. value(COLORS.CRIT, string.format('%.1f%%', crit_chance * 100))
                         .. '\n'
                 end
 
-                if max_crit_shots and max_crit_shots > 0 then
+                if max_crit_shots and max_crit_shots ~= 0 then
                     text = text
                         .. '  '
                         .. label('Crit Strings:')
@@ -442,12 +442,12 @@ local function build_stats_text(item)
                 -- Crit boost (damage bonus)
                 if target.crit_boost then
                     local crit_val = resolve_lerp(target.crit_boost)
-                    if crit_val > 0 then
+                    if crit_val ~= 0 then
                         text = text
                             .. '  '
                             .. label('Crit Damage:')
                             .. ' '
-                            .. value(COLORS.CRIT, string.format('+%.0f%%', crit_val * 100))
+                            .. value(COLORS.CRIT, string.format('%.0f%%', crit_val * 100))
                             .. '\n'
                     end
                 end
@@ -466,13 +466,13 @@ local function build_stats_text(item)
 
                 -- Backstab bonus
                 local backstab_bonus = profile.backstab_bonus
-                if backstab_bonus and backstab_bonus > 0 then
+                if backstab_bonus and backstab_bonus ~= 0 then
                     backstab_bonus = resolve_lerp(backstab_bonus)
                     text = text
                         .. '  '
                         .. label('Backstab:')
                         .. ' '
-                        .. value(COLORS.WEAKSPOT, string.format('+%.0f%%', backstab_bonus * 100))
+                        .. value(COLORS.WEAKSPOT, string.format('%.0f%%', backstab_bonus * 100))
                         .. '\n'
                 end
 
@@ -486,7 +486,7 @@ local function build_stats_text(item)
 
                         if type(attack_cleave) == 'table' then
                             -- Only show if at least one value is non-zero
-                            if attack_cleave[1] > 0 or attack_cleave[2] > 0 then
+                            if attack_cleave[1] > 0.01 or attack_cleave[2] > 0.01 then
                                 cleave_value = string.format('%.1f-%.1f', attack_cleave[1], attack_cleave[2])
                             end
                         elseif type(attack_cleave) == 'number' and attack_cleave > 0 then
