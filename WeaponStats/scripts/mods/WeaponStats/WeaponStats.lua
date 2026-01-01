@@ -287,12 +287,11 @@ local function build_stats_text(item)
 
                 -- === TIMING STATS ===
 
-                -- Get time_scale and total_time from weapon_tweak_templates (already has all bonuses applied)
+                -- Get time_scale from weapon_tweak_templates
                 local time_scale = 1
+                local action_name = attack_data.names[1]
                 local total_time = action.total_time or 0
-                local action_name_for_template = attack_data.names[1]
 
-                -- Get the finalized values from weapon_tweak_templates
                 if weapon_tweak_templates and weapon_tweak_templates.weapon_handling then
                     local handling_templates = weapon_tweak_templates.weapon_handling
                     if handling_templates and action.weapon_handling_template then
@@ -300,27 +299,75 @@ local function build_stats_text(item)
                         if action_template and action_template.time_scale then
                             time_scale = action_template.time_scale
                         end
+
+                        -- For automatic ranged weapons, get fire rate from auto_fire_time
+                        if
+                            action_template
+                            and action_template.fire_rate
+                            and action_template.fire_rate.auto_fire_time
+                        then
+                            local auto_fire_time = action_template.fire_rate.auto_fire_time
+                            local attacks_per_sec = 1 / auto_fire_time
+
+                            text = text
+                                .. '  '
+                                .. label('Fire Rate:')
+                                .. ' '
+                                .. value(COLORS.TIMING, string.format('%.2f/s', attacks_per_sec))
+                                .. '\n'
+                        end
                     end
                 end
 
-                -- Calculate actual attack time
-                local attack_time = nil
+                -- For weapons that use chain_time, find the appropriate chain action
+                if action.allowed_chain_actions then
+                    local chain_time = nil
+                    local chain_actions = action.allowed_chain_actions
 
-                -- Check for explicit timing in total_time (divided by time_scale for melee)
-                if total_time > 0 and total_time < 1000 then
-                    attack_time = total_time / time_scale
-                end
+                    -- First, try to find a chain action that loops back to the same action
+                    -- This gives us the speed for chaining the same attack type (e.g. heavy->heavy, shoot->shoot)
+                    for chain_input, chain_data in pairs(chain_actions) do
+                        if chain_data.action_name == action_name and chain_data.chain_time then
+                            chain_time = chain_data.chain_time
+                            break
+                        end
+                    end
 
-                -- Display attack speed
-                if attack_time and attack_time > 0 then
-                    local attacks_per_sec = 1 / attack_time
+                    -- If no self-chaining action found, look for common chain actions
+                    if not chain_time then
+                        -- For ranged weapons, look for shoot_pressed chain
+                        if chain_actions.shoot_pressed and chain_actions.shoot_pressed.chain_time then
+                            chain_time = chain_actions.shoot_pressed.chain_time
+                        -- For melee weapons, look for start_attack chain
+                        elseif chain_actions.start_attack and chain_actions.start_attack.chain_time then
+                            chain_time = chain_actions.start_attack.chain_time
+                        -- Some actions chain with the "shoot" input
+                        elseif chain_actions.shoot and chain_actions.shoot.chain_time then
+                            chain_time = chain_actions.shoot.chain_time
+                        end
+                    end
 
-                    text = text
-                        .. '  '
-                        .. label('Attack Speed:')
-                        .. ' '
-                        .. value(COLORS.TIMING, string.format('%.2f/s', attacks_per_sec))
-                        .. '\n'
+                    -- Fall back to total_time if no chain_time found
+                    if not chain_time and total_time > 0 and total_time < 1000 then
+                        chain_time = total_time
+                    end
+
+                    if chain_time and chain_time > 0 then
+                        local attack_time = chain_time / time_scale
+                        local attacks_per_sec = 1 / attack_time
+
+                        local label_text = 'Attack Speed:'
+                        if action.kind == 'shoot_hit_scan' or action.kind == 'shoot_pellets' then
+                            label_text = 'Fire Rate:'
+                        end
+
+                        text = text
+                            .. '  '
+                            .. label(label_text)
+                            .. ' '
+                            .. value(COLORS.TIMING, string.format('%.2f/s', attacks_per_sec))
+                            .. '\n'
+                    end
                 end
 
                 -- === DAMAGE STATS ===
@@ -355,6 +402,7 @@ local function build_stats_text(item)
 
                 -- Critical strike chance (from weapon_tweak_templates)
                 local crit_chance = nil
+                local max_crit_shots = nil
 
                 if weapon_tweak_templates and weapon_tweak_templates.weapon_handling then
                     local handling_templates = weapon_tweak_templates.weapon_handling
@@ -362,12 +410,13 @@ local function build_stats_text(item)
                     if handling_templates and action.weapon_handling_template then
                         local action_template = handling_templates[action.weapon_handling_template]
 
-                        if
-                            action_template
-                            and action_template.critical_strike
-                            and action_template.critical_strike.chance_modifier
-                        then
-                            crit_chance = action_template.critical_strike.chance_modifier
+                        if action_template and action_template.critical_strike then
+                            if action_template.critical_strike.chance_modifier then
+                                crit_chance = action_template.critical_strike.chance_modifier
+                            end
+                            if action_template.critical_strike.max_critical_shots then
+                                max_crit_shots = action_template.critical_strike.max_critical_shots
+                            end
                         end
                     end
                 end
@@ -378,6 +427,15 @@ local function build_stats_text(item)
                         .. label('Crit Chance:')
                         .. ' '
                         .. value(COLORS.CRIT, string.format('+%.1f%%', crit_chance * 100))
+                        .. '\n'
+                end
+
+                if max_crit_shots and max_crit_shots > 0 then
+                    text = text
+                        .. '  '
+                        .. label('Crit Strings:')
+                        .. ' '
+                        .. value(COLORS.CRIT, string.format('%d', max_crit_shots))
                         .. '\n'
                 end
 
