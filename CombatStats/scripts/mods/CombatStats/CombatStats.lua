@@ -2,6 +2,7 @@ local mod = get_mod('CombatStats')
 
 local CombatStatsTracker = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_tracker')
 local CombatStatsHistory = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_history')
+local CombatStatsUtils = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_utils')
 
 -- Register Combat HUD element
 mod:register_hud_element({
@@ -51,6 +52,7 @@ mod:register_view({
 -- Initialize tracker and history
 mod.tracker = CombatStatsTracker:new()
 mod.history = CombatStatsHistory:new()
+mod.utils = CombatStatsUtils:new()
 
 function mod.update(dt)
     if mod.tracker:is_tracking() then
