@@ -62,6 +62,19 @@ function mod.update(dt)
     mod.history:update()
 end
 
+function mod.on_all_mods_loaded()
+    -- Preload icon packages
+    local function load_package(package_name)
+        if not Managers.package:has_loaded(package_name) then
+            Managers.package:load(package_name, 'CombatStats')
+        end
+    end
+
+    load_package('packages/ui/views/inventory_view/inventory_view')
+    load_package('packages/ui/views/inventory_weapons_view/inventory_weapons_view')
+    load_package('packages/ui/hud/player_weapon/player_weapon')
+end
+
 mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, ...)
     -- Start tracking
     local mission_name = params.mission_name
@@ -75,11 +88,6 @@ mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, .
             mod.tracker:start(mission_name, class_name)
         end
     end
-
-    -- Preload icon packages
-    Managers.package:load('packages/ui/views/inventory_view/inventory_view', 'CombatStats', nil, true)
-    Managers.package:load('packages/ui/views/inventory_weapons_view/inventory_weapons_view', 'CombatStats', nil, true)
-    Managers.package:load('packages/ui/hud/player_weapon/player_weapon', 'CombatStats', nil, true)
 
     -- Call original function
     func(self, parent, params, ...)
