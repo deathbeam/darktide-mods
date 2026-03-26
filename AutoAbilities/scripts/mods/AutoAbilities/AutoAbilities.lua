@@ -2,10 +2,7 @@ local mod = get_mod('AutoAbilities')
 
 local PlayerUnitVisualLoadout = require('scripts/extension_systems/visual_loadout/utilities/player_unit_visual_loadout')
 
--- ┌────────────────────────────┐
--- │       CONSTANTS            │
--- └────────────────────────────┘
-
+-- Constants
 local ACTION_STAGES = {
     NONE = 0,
     SWITCH_TO = 1,
@@ -31,10 +28,7 @@ local KEYWORD_BROKER_SYRINGE = 'pocketable_broker_syringe'
 local BUFF_CHEMICAL_DEPENDENCY = 'broker_keystone_chemical_dependency'
 local BUFF_CHEMICAL_DEPENDENCY_STACK = 'broker_keystone_chemical_dependency_stack'
 
--- ┌────────────────────────────┐
--- │       STATE & CONFIG       │
--- └────────────────────────────┘
-
+-- State variables
 local current_stage = ACTION_STAGES.NONE
 local target_slot = nil
 local stage_start_time = 0
