@@ -149,6 +149,10 @@ return {
         en = 'Companion',
         ['zh-cn'] = '同伴',
     },
+    arc = {
+        en = 'Arc',
+        ['zh-cn'] = '电弧', -- FIXME: confirm translation, translated via google translate
+    },
     buff = {
         en = 'Buff',
         ['zh-cn'] = '增益',

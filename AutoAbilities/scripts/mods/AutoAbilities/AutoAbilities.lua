@@ -7,7 +7,6 @@ local ACTION_STAGES = {
     NONE = 0,
     SWITCH_TO = 1,
     WAITING_FOR_USE = 2,
-    WAITING_FOR_RELEASE = 3,
 }
 
 local CHECK_INTERVAL = 0.5
@@ -25,8 +24,6 @@ local ABILITY_POCKETABLE = 'pocketable_ability'
 local ABILITY_COMBAT = 'combat_ability'
 
 local KEYWORD_BROKER_SYRINGE = 'pocketable_broker_syringe'
-local BUFF_CHEMICAL_DEPENDENCY = 'broker_keystone_chemical_dependency'
-local BUFF_CHEMICAL_DEPENDENCY_STACK = 'broker_keystone_chemical_dependency_stack'
 
 -- State variables
 local current_stage = ACTION_STAGES.NONE
@@ -117,20 +114,6 @@ local function _reset_state()
     current_stage = ACTION_STAGES.NONE
     target_slot = nil
     stage_start_time = 0
-end
-
-local function _has_chemical_dependency()
-    local player_unit = _get_player_unit()
-    if not player_unit then
-        return false
-    end
-
-    local buff_ext = ScriptUnit.has_extension(player_unit, 'buff_system')
-    if not buff_ext then
-        return false
-    end
-
-    return buff_ext:has_buff_using_buff_template(BUFF_CHEMICAL_DEPENDENCY)
 end
 
 local function _has_broker_stim()
@@ -326,17 +309,9 @@ local _input_action_hook = function(func, self, action_name)
     -- Auto use when wielded
     if current_stage == ACTION_STAGES.WAITING_FOR_USE then
         if target_slot == SLOT_COMBAT_ABILITY and action_name == 'combat_ability_pressed' then
-            current_stage = ACTION_STAGES.WAITING_FOR_RELEASE
-            return true
-        elseif action_name == 'action_one_pressed' then
             _reset_state()
             return true
-        end
-    end
-
-    -- Auto release for combat abilities
-    if current_stage == ACTION_STAGES.WAITING_FOR_RELEASE then
-        if target_slot == SLOT_COMBAT_ABILITY and action_name == 'combat_ability_released' then
+        elseif action_name == 'action_one_pressed' then
             _reset_state()
             return true
         end

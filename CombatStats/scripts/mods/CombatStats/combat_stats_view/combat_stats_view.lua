@@ -12,6 +12,7 @@ local COLOR_MELEE = Color.gray(255, true)
 local COLOR_RANGED = { 255, 139, 101, 69 }
 local COLOR_EXPLOSION = { 255, 255, 100, 0 }
 local COLOR_COMPANION = { 255, 100, 149, 237 }
+local COLOR_ARC = { 255, 186, 85, 211 }
 
 local GRID_SPACING = { 10, 10 }
 local DETAIL_GRID_SPACING = { 0, 0 }
@@ -604,6 +605,16 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
                 stats.companion_damage,
                 stats.total_damage,
                 COLOR_COMPANION
+            )
+        end
+
+        -- Arc damage
+        if stats.arc_damage and stats.arc_damage > 0 then
+            create_progress_bar(
+                string.format('%s: %d', mod:localize('arc'), stats.arc_damage),
+                stats.arc_damage,
+                stats.total_damage,
+                COLOR_ARC
             )
         end
     end

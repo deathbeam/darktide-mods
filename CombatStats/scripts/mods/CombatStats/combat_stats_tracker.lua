@@ -108,6 +108,7 @@ function CombatStatsTracker:get_session_stats()
 
             explosion_damage = 0,
             companion_damage = 0,
+            arc_damage = 0,
 
             buff_damage = 0,
             bleed_damage = 0,
@@ -143,6 +144,7 @@ function CombatStatsTracker:get_session_stats()
 
             stats.explosion_damage = stats.explosion_damage + (engagement.stats.explosion_damage or 0)
             stats.companion_damage = stats.companion_damage + (engagement.stats.companion_damage or 0)
+            stats.arc_damage = stats.arc_damage + (engagement.stats.arc_damage or 0)
 
             stats.buff_damage = stats.buff_damage + (engagement.stats.buff_damage or 0)
             stats.bleed_damage = stats.bleed_damage + (engagement.stats.bleed_damage or 0)
@@ -206,6 +208,7 @@ function CombatStatsTracker:get_engagement_stats()
 
                 explosion_damage = engagement.stats.explosion_damage or 0,
                 companion_damage = engagement.stats.companion_damage or 0,
+                arc_damage = engagement.stats.arc_damage or 0,
 
                 buff_damage = engagement.stats.buff_damage or 0,
                 bleed_damage = engagement.stats.bleed_damage or 0,
@@ -399,6 +402,8 @@ function CombatStatsTracker:_track_enemy_damage(
         engagement.stats.explosion_damage = (engagement.stats.explosion_damage or 0) + actual_damage
     elseif attack_type == 'companion_dog' then
         engagement.stats.companion_damage = (engagement.stats.companion_damage or 0) + actual_damage
+    elseif attack_type == 'arc' then
+        engagement.stats.arc_damage = (engagement.stats.arc_damage or 0) + actual_damage
     elseif attack_type == 'buff' then
         engagement.stats.buff_damage = (engagement.stats.buff_damage or 0) + actual_damage
     end
