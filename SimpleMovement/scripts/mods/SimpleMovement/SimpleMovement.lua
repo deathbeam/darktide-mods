@@ -255,7 +255,7 @@ local function input_service_hook(func, self, action_name)
     elseif action_name == 'dodge' then
         dodge_hold = func(self, 'dodge_hold')
         if dodge_hold then
-            dodge_hold_start_time = dodge_hold_start_time or Managers.time:time('main')
+            dodge_hold_start_time = dodge_hold_start_time or Managers.time:time('gameplay')
         else
             dodge_hold_start_time = nil
         end
