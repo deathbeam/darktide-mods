@@ -3,6 +3,6 @@ return {
         en = 'Weapon Stats',
     },
     mod_description = {
-        en = 'Shows weapon stats',
+        en = 'Shows detailed weapon damage profiles, attack speed, crit, cleave, armor damage and more in the inventory.',
     },
 }

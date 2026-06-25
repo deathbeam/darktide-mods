@@ -1,598 +1,175 @@
 local mod = get_mod('WeaponStats')
 local UIWidget = require('scripts/managers/ui/ui_widget')
-local WeaponTemplate = require('scripts/utilities/weapon/weapon_template')
-local ArmorSettings = require('scripts/settings/damage/armor_settings')
-local HitScanTemplates = require('scripts/settings/projectile/hit_scan_templates')
-local ShotshellTemplates = require('scripts/settings/projectile/shotshell_templates')
-local WeaponHandlingTemplates =
-    require('scripts/settings/equipment/weapon_handling_templates/weapon_handling_templates')
-local Weapon = require('scripts/extension_systems/weapon/weapon')
+local Text = require('scripts/utilities/ui/text')
 
--- Scroll state
+local Builder = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_builder')
+
+-- Layout
+local PANEL_X, PANEL_Y = 1350, -100
+local PANEL_W, PANEL_H = 370, 650
+local TEXT_PAD = 20
+local TEXT_W = 325
+local VIEWPORT_H = PANEL_H - 2 * TEXT_PAD
+local SCROLLBAR_X = TEXT_PAD + TEXT_W
+local SCROLLBAR_W = 8
+local FONT_SIZE = 16
+local SCROLL_STEP = 60
+local LINE_H = 19.5
+
+-- State
+local stats_lines = {}
+local line_heights = {}
+local total_height = 0
 local scroll_offset = 0
 
--- Color constants
-local COLORS = {
-    HEADER = '255,200,100', -- Orange/gold for headers
-    ATTACK = '100,200,255', -- Blue for attack numbers
-    LABEL = '180,180,180', -- Gray for labels
-    ACTION = '150,150,150', -- Lighter gray for action names
-    DAMAGE = '255,200,100', -- Orange for damage values
-    ARMOR = '255,150,150', -- Red for armor damage
-    CRIT = '255,255,100', -- Yellow for crit
-    IMPACT = '200,200,255', -- Light blue for impact
-    IMPACT_CRIT = '150,200,255', -- Lighter blue for impact crit
-    WEAKSPOT = '255,200,100', -- Orange for weakspot/backstab
-    TIMING = '150,255,150', -- Green for timing info
+local MEASURE_STYLE = {
+    font_type = 'proxima_nova_bold',
+    font_size = FONT_SIZE,
 }
 
--- Color utility functions
-local function colored(color, text)
-    return string.format('{#color(%s)}%s{#reset()}', color, text)
+-- Split a string on newlines, preserving empty lines.
+local function split_lines(str)
+    local lines = {}
+    local i = 1
+    while true do
+        local j = string.find(str, '\n', i, true)
+        if not j then
+            lines[#lines + 1] = string.sub(str, i)
+            break
+        end
+        lines[#lines + 1] = string.sub(str, i, j - 1)
+        i = j + 1
+    end
+    return lines
 end
 
-local function label(text)
-    return colored(COLORS.LABEL, text)
+-- Strip inline colour tags ({#color(...)} / {#reset()}) so a width probe measures the
+-- visible text, not the markup.
+local function strip_tags(s)
+    return (s:gsub('{#[^}]*}', ''))
 end
 
-local function value(color, text)
-    return colored(color, text)
+local function max_scroll()
+    return math.max(0, total_height - VIEWPORT_H)
 end
 
--- Armor type display names
-local armor_names = {
-    unarmored = 'Unarmored',
-    armored = 'Flak',
-    resistant = 'Unyielding',
-    player = 'Player',
-    berserker = 'Maniac',
-    super_armor = 'Carapace',
-    disgustingly_resilient = 'Infested',
-    void_shield = 'Void Shield',
-}
-
--- Build stats text from weapon
-local function build_stats_text(item)
-    if not item then
-        return 'No weapon selected'
+-- Height of each line: one row by default, more if the visible text wraps past TEXT_W.
+local function measure_line(renderer, line)
+    if not renderer then
+        return LINE_H
     end
-
-    local weapon_template = WeaponTemplate.weapon_template_from_item(item)
-    if not weapon_template or not weapon_template.actions then
-        return 'No weapon template found'
+    local ok, w = pcall(Text.text_width, renderer, strip_tags(line), MEASURE_STYLE, { 9999, 9999 })
+    if ok and w and w > TEXT_W then
+        return math.min(8, math.ceil(w / TEXT_W)) * LINE_H
     end
-
-    local text = ''
-
-    -- Use fixed lerp value of 0.8 (80%) for consistency
-    local item_lerp = 0.8
-
-    -- Get weapon traits (includes finesse and other stat bonuses from base_stats)
-    local weapon_tweak_templates, damage_profile_lerp_values, explosion_template_lerp_values, buffs =
-        Weapon._init_traits(nil, weapon_template, item, nil, nil, {})
-
-    -- Helper to resolve lerp values
-    local function resolve_lerp(value, lerp_value)
-        lerp_value = lerp_value or item_lerp
-        if type(value) ~= 'table' then
-            return value
-        end
-        -- Interpolate: min + (max - min) * lerp
-        return value[1] + (value[2] - value[1]) * lerp_value
-    end
-
-    -- Organize attacks by type and deduplicate
-    local attacks = {
-        ranged = {},
-        light = {},
-        heavy = {},
-        special = {},
-    }
-
-    -- Helper to check if attack already exists with same stats
-    local function is_duplicate(list, profile, action_name)
-        for _, existing in ipairs(list) do
-            local e = existing.profile
-            local is_same = true
-
-            -- Compare damage type
-            if e.damage_type ~= profile.damage_type then
-                is_same = false
-            end
-
-            -- Compare damage values (targets)
-            if is_same then
-                local e_target = e.targets and e.targets[1] or e
-                local p_target = profile.targets and profile.targets[1] or profile
-
-                if e_target.power_distribution and p_target.power_distribution then
-                    local e_dmg = e_target.power_distribution.attack
-                    local p_dmg = p_target.power_distribution.attack
-                    if e_dmg and p_dmg then
-                        local e_val = resolve_lerp(e_dmg)
-                        local p_val = resolve_lerp(p_dmg)
-                        if math.abs(e_val - p_val) > 0.01 then
-                            is_same = false
-                        end
-                    end
-                end
-            end
-
-            -- Compare armor damage modifiers
-            if is_same then
-                local e_target = e.targets and e.targets[1] or e
-                local p_target = profile.targets and profile.targets[1] or profile
-                local e_armor = e_target.armor_damage_modifier or e.armor_damage_modifier
-                local p_armor = p_target.armor_damage_modifier or profile.armor_damage_modifier
-
-                if e_armor and p_armor and e_armor.attack and p_armor.attack then
-                    local armor_types_obj = ArmorSettings.types
-                    for armor_key, armor_type_id in pairs(armor_types_obj) do
-                        local e_mod = e_armor.attack[armor_type_id] or e_armor.attack[armor_key]
-                        local p_mod = p_armor.attack[armor_type_id] or p_armor.attack[armor_key]
-                        local e_val = e_mod and resolve_lerp(e_mod) or 0
-                        local p_val = p_mod and resolve_lerp(p_mod) or 0
-                        if math.abs(e_val - p_val) > 0.01 then
-                            is_same = false
-                            break
-                        end
-                    end
-                elseif (e_armor ~= nil) ~= (p_armor ~= nil) then
-                    is_same = false
-                end
-            end
-
-            -- Compare other properties
-            if
-                is_same
-                and (e.finesse_ability_damage_multiplier or 1) ~= (profile.finesse_ability_damage_multiplier or 1)
-            then
-                is_same = false
-            end
-            if is_same and (e.backstab_bonus or 0) ~= (profile.backstab_bonus or 0) then
-                is_same = false
-            end
-            if is_same and e.stagger_category ~= profile.stagger_category then
-                is_same = false
-            end
-
-            -- Compare cleave
-            if is_same and profile.cleave_distribution and e.cleave_distribution then
-                for k, v in pairs(profile.cleave_distribution) do
-                    if type(v) == 'table' then
-                        if
-                            not e.cleave_distribution[k]
-                            or e.cleave_distribution[k][1] ~= v[1]
-                            or e.cleave_distribution[k][2] ~= v[2]
-                        then
-                            is_same = false
-                            break
-                        end
-                    elseif type(v) == 'number' then
-                        if e.cleave_distribution[k] ~= v then
-                            is_same = false
-                            break
-                        end
-                    end
-                end
-            end
-
-            if is_same then
-                -- Add this action name to the existing entry
-                table.insert(existing.names, action_name)
-                return true
-            end
-        end
-        return false
-    end
-
-    for action_name, action in pairs(weapon_template.actions) do
-        local profile = nil
-
-        -- Handle melee weapons (damage_profile directly in action)
-        if action.damage_profile and type(action.damage_profile) == 'table' then
-            profile = action.damage_profile
-        -- Handle ranged weapons (damage_profile in hit_scan_template)
-        elseif action.fire_configuration and action.fire_configuration.hit_scan_template then
-            local hit_scan_template = action.fire_configuration.hit_scan_template
-            -- hit_scan_template can be a table or a reference to HitScanTemplates
-            if type(hit_scan_template) == 'table' then
-                if hit_scan_template.damage and hit_scan_template.damage.impact then
-                    profile = hit_scan_template.damage.impact.damage_profile
-                end
-            elseif type(hit_scan_template) == 'string' then
-                local template = HitScanTemplates[hit_scan_template]
-                if template and template.damage and template.damage.impact then
-                    profile = template.damage.impact.damage_profile
-                end
-            end
-        -- Handle dual weapons with multiple fire configurations
-        elseif action.fire_configurations and type(action.fire_configurations) == 'table' then
-            local first_config = action.fire_configurations[1]
-            if first_config and first_config.hit_scan_template then
-                local hit_scan_template = first_config.hit_scan_template
-                if type(hit_scan_template) == 'table' then
-                    if hit_scan_template.damage and hit_scan_template.damage.impact then
-                        profile = hit_scan_template.damage.impact.damage_profile
-                    end
-                elseif type(hit_scan_template) == 'string' then
-                    local template = HitScanTemplates[hit_scan_template]
-                    if template and template.damage and template.damage.impact then
-                        profile = template.damage.impact.damage_profile
-                    end
-                end
-            end
-        -- Handle shotguns/shotshells (shotshell template)
-        elseif action.fire_configuration and action.fire_configuration.shotshell then
-            local shotshell_template = action.fire_configuration.shotshell
-            if type(shotshell_template) == 'table' then
-                if shotshell_template.damage and shotshell_template.damage.impact then
-                    profile = shotshell_template.damage.impact.damage_profile
-                end
-            elseif type(shotshell_template) == 'string' then
-                local template = ShotshellTemplates[shotshell_template]
-                if template and template.damage and template.damage.impact then
-                    profile = template.damage.impact.damage_profile
-                end
-            end
-        end
-
-        if profile then
-            -- Categorize attack
-            local category = nil
-            if string.match(action_name, 'special') then
-                category = 'special'
-            elseif string.match(action_name, 'shoot') or string.match(action_name, 'zoom') then
-                category = 'ranged'
-            elseif profile.melee_attack_strength == 'heavy' or string.match(action_name, 'heavy') then
-                category = 'heavy'
-            elseif profile.melee_attack_strength == 'light' or string.match(action_name, 'light') then
-                category = 'light'
-            end
-
-            if category and not is_duplicate(attacks[category], profile, action_name) then
-                table.insert(attacks[category], { names = { action_name }, action = action, profile = profile })
-            end
-        end
-    end
-
-    -- Display attacks by category
-    for _, category in ipairs({ 'ranged', 'light', 'heavy', 'special' }) do
-        local category_attacks = attacks[category]
-        if #category_attacks > 0 then
-            text = text .. colored(COLORS.HEADER, string.upper(category) .. ' ATTACKS') .. '\n\n'
-
-            for i, attack_data in ipairs(category_attacks) do
-                local profile = attack_data.profile
-                local action = attack_data.action
-
-                text = text .. colored(COLORS.ATTACK, 'Attack ' .. i) .. '\n'
-
-                -- Sort and list all action names for this attack
-                table.sort(attack_data.names)
-                for _, name in ipairs(attack_data.names) do
-                    text = text .. '  ' .. colored(COLORS.ACTION, name) .. '\n'
-                end
-                text = text .. '\n'
-
-                local target = profile.targets and profile.targets[1]
-                if not target then
-                    target = profile
-                end
-
-                -- Damage type
-                if profile.damage_type then
-                    text = text .. '  ' .. label('Type:') .. ' ' .. tostring(profile.damage_type) .. '\n'
-                end
-
-                -- === TIMING STATS ===
-
-                -- Get time_scale from weapon_tweak_templates
-                local time_scale = 1
-                local action_name = attack_data.names[1]
-                local total_time = action.total_time or 0
-
-                if weapon_tweak_templates and weapon_tweak_templates.weapon_handling then
-                    local handling_templates = weapon_tweak_templates.weapon_handling
-                    if handling_templates and action.weapon_handling_template then
-                        local action_template = handling_templates[action.weapon_handling_template]
-                        if action_template and action_template.time_scale then
-                            time_scale = action_template.time_scale
-                        end
-
-                        -- For automatic ranged weapons, get fire rate from auto_fire_time
-                        if
-                            action_template
-                            and action_template.fire_rate
-                            and action_template.fire_rate.auto_fire_time
-                        then
-                            local auto_fire_time = action_template.fire_rate.auto_fire_time
-                            local attacks_per_sec = 1 / auto_fire_time
-
-                            text = text
-                                .. '  '
-                                .. label('Fire Rate:')
-                                .. ' '
-                                .. value(COLORS.TIMING, string.format('%.2f/s', attacks_per_sec))
-                                .. '\n'
-                        end
-                    end
-                end
-
-                -- For weapons that use chain_time, find the appropriate chain action
-                if action.allowed_chain_actions then
-                    local chain_time = nil
-                    local chain_actions = action.allowed_chain_actions
-
-                    -- First, try to find a chain action that loops back to the same action
-                    -- This gives us the speed for chaining the same attack type (e.g. heavy->heavy, shoot->shoot)
-                    for chain_input, chain_data in pairs(chain_actions) do
-                        if chain_data.action_name == action_name and chain_data.chain_time then
-                            chain_time = chain_data.chain_time
-                            break
-                        end
-                    end
-
-                    -- If no self-chaining action found, look for common chain actions
-                    if not chain_time then
-                        -- For ranged weapons, look for shoot_pressed chain
-                        if chain_actions.shoot_pressed and chain_actions.shoot_pressed.chain_time then
-                            chain_time = chain_actions.shoot_pressed.chain_time
-                        -- For melee weapons, look for start_attack chain
-                        elseif chain_actions.start_attack and chain_actions.start_attack.chain_time then
-                            chain_time = chain_actions.start_attack.chain_time
-                        -- Some actions chain with the "shoot" input
-                        elseif chain_actions.shoot and chain_actions.shoot.chain_time then
-                            chain_time = chain_actions.shoot.chain_time
-                        end
-                    end
-
-                    -- Fall back to total_time if no chain_time found
-                    if not chain_time and total_time > 0 and total_time < 1000 then
-                        chain_time = total_time
-                    end
-
-                    if chain_time and chain_time > 0 then
-                        local attack_time = chain_time / time_scale
-                        local attacks_per_sec = 1 / attack_time
-
-                        local label_text = 'Attack Speed:'
-                        if action.kind == 'shoot_hit_scan' or action.kind == 'shoot_pellets' then
-                            label_text = 'Fire Rate:'
-                        end
-
-                        text = text
-                            .. '  '
-                            .. label(label_text)
-                            .. ' '
-                            .. value(COLORS.TIMING, string.format('%.2f/s', attacks_per_sec))
-                            .. '\n'
-                    end
-                end
-
-                -- === DAMAGE STATS ===
-
-                -- Power distribution (damage values at 80% power)
-                if target.power_distribution and type(target.power_distribution) == 'table' then
-                    if target.power_distribution.attack then
-                        local atk = target.power_distribution.attack
-                        local dmg = resolve_lerp(atk)
-                        text = text
-                            .. '  '
-                            .. label('Damage:')
-                            .. ' '
-                            .. value(COLORS.DAMAGE, string.format('%.0f', dmg))
-                            .. '\n'
-                    end
-
-                    -- Impact damage (stagger) - separate stat from damage
-                    if target.power_distribution.impact then
-                        local imp = target.power_distribution.impact
-                        local impact_dmg = resolve_lerp(imp)
-                        text = text
-                            .. '  '
-                            .. label('Impact:')
-                            .. ' '
-                            .. value(COLORS.IMPACT, string.format('%.0f', impact_dmg))
-                            .. '\n'
-                    end
-                end
-
-                -- === CRIT & MODIFIERS ===
-
-                -- Critical strike chance (from weapon_tweak_templates)
-                local crit_chance = nil
-                local max_crit_shots = nil
-
-                if weapon_tweak_templates and weapon_tweak_templates.weapon_handling then
-                    local handling_templates = weapon_tweak_templates.weapon_handling
-
-                    if handling_templates and action.weapon_handling_template then
-                        local action_template = handling_templates[action.weapon_handling_template]
-
-                        if action_template and action_template.critical_strike then
-                            if action_template.critical_strike.chance_modifier then
-                                crit_chance = action_template.critical_strike.chance_modifier
-                            end
-                            if action_template.critical_strike.max_critical_shots then
-                                max_crit_shots = action_template.critical_strike.max_critical_shots
-                            end
-                        end
-                    end
-                end
-
-                if crit_chance and crit_chance ~= 0 then
-                    text = text
-                        .. '  '
-                        .. label('Crit Chance:')
-                        .. ' '
-                        .. value(COLORS.CRIT, string.format('%.1f%%', crit_chance * 100))
-                        .. '\n'
-                end
-
-                if max_crit_shots and max_crit_shots ~= 0 then
-                    text = text
-                        .. '  '
-                        .. label('Crit Strings:')
-                        .. ' '
-                        .. value(COLORS.CRIT, string.format('%d', max_crit_shots))
-                        .. '\n'
-                end
-
-                -- Crit boost (damage bonus)
-                if target.crit_boost then
-                    local crit_val = resolve_lerp(target.crit_boost)
-                    if crit_val ~= 0 then
-                        text = text
-                            .. '  '
-                            .. label('Crit Damage:')
-                            .. ' '
-                            .. value(COLORS.CRIT, string.format('%.0f%%', crit_val * 100))
-                            .. '\n'
-                    end
-                end
-
-                -- Weakspot multiplier
-                local weakspot_mult = profile.finesse_ability_damage_multiplier
-                if weakspot_mult and weakspot_mult ~= 1 then
-                    weakspot_mult = resolve_lerp(weakspot_mult)
-                    text = text
-                        .. '  '
-                        .. label('Weakspot:')
-                        .. ' '
-                        .. value(COLORS.WEAKSPOT, string.format('%.1fx', weakspot_mult))
-                        .. '\n'
-                end
-
-                -- Backstab bonus
-                local backstab_bonus = profile.backstab_bonus
-                if backstab_bonus and backstab_bonus ~= 0 then
-                    backstab_bonus = resolve_lerp(backstab_bonus)
-                    text = text
-                        .. '  '
-                        .. label('Backstab:')
-                        .. ' '
-                        .. value(COLORS.WEAKSPOT, string.format('%.0f%%', backstab_bonus * 100))
-                        .. '\n'
-                end
-
-                -- === CLEAVE ===
-
-                -- Cleave stats - only show attack cleave if it's > 0
-                if profile.cleave_distribution and type(profile.cleave_distribution) == 'table' then
-                    local attack_cleave = profile.cleave_distribution.attack
-                    if attack_cleave then
-                        local cleave_value = nil
-
-                        if type(attack_cleave) == 'table' then
-                            -- Only show if at least one value is non-zero
-                            if attack_cleave[1] > 0.01 or attack_cleave[2] > 0.01 then
-                                cleave_value = string.format('%.1f-%.1f', attack_cleave[1], attack_cleave[2])
-                            end
-                        elseif type(attack_cleave) == 'number' and attack_cleave > 0 then
-                            cleave_value = string.format('%.1f', attack_cleave)
-                        end
-
-                        if cleave_value then
-                            text = text .. '  ' .. label('Cleave:') .. ' ' .. cleave_value .. '\n'
-                        end
-                    end
-                end
-
-                -- Stagger
-                if profile.stagger_category then
-                    text = text .. '  ' .. label('Stagger:') .. ' ' .. tostring(profile.stagger_category) .. '\n'
-                end
-
-                -- === ARMOR DAMAGE ===
-
-                -- Armor damage modifiers
-                local armor_mod = target.armor_damage_modifier or profile.armor_damage_modifier
-                if armor_mod and type(armor_mod) == 'table' then
-                    text = text .. '  ' .. label('Armor Damage:') .. '\n'
-
-                    local armor_types_obj = ArmorSettings.types
-
-                    -- Iterate through armor types
-                    for armor_key, armor_type_id in pairs(armor_types_obj) do
-                        local attack_mod = armor_mod.attack
-                            and (armor_mod.attack[armor_type_id] or armor_mod.attack[armor_key])
-                        if not attack_mod then
-                            attack_mod = 1
-                        end
-
-                        local impact_mod = armor_mod.impact
-                            and (armor_mod.impact[armor_type_id] or armor_mod.impact[armor_key])
-
-                        local crit_mod = profile.crit_mod
-                            and profile.crit_mod.attack
-                            and (profile.crit_mod.attack[armor_type_id] or profile.crit_mod.attack[armor_key])
-
-                        local impact_crit_mod = profile.crit_mod
-                            and profile.crit_mod.impact
-                            and (profile.crit_mod.impact[armor_type_id] or profile.crit_mod.impact[armor_key])
-
-                        if attack_mod then
-                            local armor_val = resolve_lerp(attack_mod)
-                            local crit_bonus = crit_mod and resolve_lerp(crit_mod) or 0
-                            local crit_val = armor_val + crit_bonus
-                            local armor_display = armor_names[armor_key] or tostring(armor_key)
-                            local line = string.format('    %s: ', armor_display)
-                                .. value(COLORS.ARMOR, string.format('%.0f%%', armor_val * 100))
-
-                            -- Show crit value if different from normal
-                            if math.abs(crit_bonus) > 0.01 then
-                                line = line .. ' ' .. value(COLORS.CRIT, string.format('(C: %.0f%%)', crit_val * 100))
-                            end
-
-                            -- Show impact modifier if it exists and differs from attack
-                            if impact_mod then
-                                local impact_val = resolve_lerp(impact_mod)
-                                if math.abs(impact_val - armor_val) > 0.01 then
-                                    line = line
-                                        .. ' '
-                                        .. value(COLORS.IMPACT, string.format('I: %.0f%%', impact_val * 100))
-
-                                    -- Show impact crit if it differs
-                                    if impact_crit_mod then
-                                        local impact_crit_bonus = resolve_lerp(impact_crit_mod)
-                                        if math.abs(impact_crit_bonus) > 0.01 then
-                                            local impact_crit_val = impact_val + impact_crit_bonus
-                                            line = line
-                                                .. ' '
-                                                .. value(
-                                                    COLORS.CRIT,
-                                                    string.format('(IC: %.0f%%)', impact_crit_val * 100)
-                                                )
-                                        end
-                                    end
-                                end
-                            end
-
-                            text = text .. line .. '\n'
-                        end
-                    end
-                end
-
-                text = text .. '\n'
-            end
-        end
-    end
-
-    return text
+    return LINE_H
 end
 
--- Hook the inventory weapons view
+local function measure_content(self, full_text)
+    stats_lines = split_lines(full_text)
+    line_heights = {}
+    total_height = 0
+    local renderer = self._ui_renderer
+    for i, line in ipairs(stats_lines) do
+        local h = measure_line(renderer, line)
+        line_heights[i] = h
+        total_height = total_height + h
+    end
+end
+
+-- Put the lines intersecting the current scroll window into the text widget and shift the
+-- text up by the sub-line offset so partial lines at the top/bottom are hidden by the covers.
+local function render_visible(widget, renderer)
+    if #stats_lines == 0 then
+        return
+    end
+
+    local ms = max_scroll()
+    local offset = math.clamp(scroll_offset, 0, ms)
+
+    -- Find the first line whose bottom is below the window top, and the last whose top is
+    -- above the window bottom. These bracket every line that touches the viewport.
+    local cum = 0
+    local start, ends, cum_start = nil, #stats_lines, 0
+    for i = 1, #stats_lines do
+        if not start and cum + line_heights[i] > offset then
+            start = i
+            cum_start = cum
+        end
+        if cum < offset + VIEWPORT_H then
+            ends = i
+        else
+            break
+        end
+        cum = cum + line_heights[i]
+    end
+    if not start then
+        start = #stats_lines
+        cum_start = cum - (line_heights[#stats_lines] or 0)
+    end
+
+    local visible = {}
+    for i = start, ends do
+        visible[#visible + 1] = stats_lines[i]
+    end
+    widget.content.stats_text = table.concat(visible, '\n')
+
+    -- Shift the text up so the start line's top sits at (viewport top - sub-line offset).
+    -- When scrolled mid-line this puts the start line partly above the viewport, where the
+    -- top cover hides it; the last line likewise spills into the bottom cover.
+    local text_style = widget.style.stats_text
+    text_style.offset[2] = TEXT_PAD - (offset - cum_start)
+    widget.dirty = true
+end
+
+-- Position the scrollbar thumb (and hide it) to reflect the current scroll progress.
+local function render_scrollbar(widget)
+    local thumb_style = widget.style and widget.style.scrollbar_thumb
+    local track_style = widget.style and widget.style.scrollbar_track
+    if not thumb_style then
+        return
+    end
+
+    local ms = max_scroll()
+    local show = ms > 0
+
+    if track_style and track_style.color then
+        track_style.color[4] = show and 255 or 0
+    end
+    if not show then
+        thumb_style.size[2] = 0
+        return
+    end
+
+    local thumb_h = math.max(24, (VIEWPORT_H / total_height) * VIEWPORT_H)
+    local progress = scroll_offset / ms
+    thumb_style.size[2] = thumb_h
+    thumb_style.offset[2] = TEXT_PAD + progress * (VIEWPORT_H - thumb_h)
+    if thumb_style.color then
+        thumb_style.color[4] = 255
+    end
+    widget.dirty = true
+end
+
+local function refresh(self)
+    local widget = self._widgets_by_name.weapon_damage_stats
+    if not widget then
+        return
+    end
+    render_visible(widget, self._ui_renderer)
+    render_scrollbar(widget)
+end
+
+-- Register the stats panel (text + covers + scrollbar) with the inventory weapons view.
 mod:hook_require('scripts/ui/views/inventory_weapons_view/inventory_weapons_view_definitions', function(defs)
     defs.scenegraph_definition.weapon_damage_stats = {
         parent = 'canvas',
         vertical_alignment = 'bottom',
         horizontal_alignment = 'left',
-        size = { 370, 650 },
-        position = { 1350, -100, 50 },
+        size = { PANEL_W, PANEL_H },
+        position = { PANEL_X, PANEL_Y, 50 },
     }
 
-    -- Background + scrollable text with hotspot for input
     defs.widget_definitions.weapon_damage_stats = UIWidget.create_definition({
         {
             pass_type = 'hotspot',
@@ -603,6 +180,9 @@ mod:hook_require('scripts/ui/views/inventory_weapons_view/inventory_weapons_view
             value = 'content/ui/materials/backgrounds/terminal_basic',
             style = {
                 color = Color.terminal_background(200, true),
+                scale_to_material = true,
+                vertical_alignment = 'center',
+                horizontal_alignment = 'center',
             },
         },
         {
@@ -612,24 +192,30 @@ mod:hook_require('scripts/ui/views/inventory_weapons_view/inventory_weapons_view
             style_id = 'stats_text',
             style = {
                 font_type = 'proxima_nova_bold',
-                font_size = 16,
+                font_size = FONT_SIZE,
                 text_vertical_alignment = 'top',
                 text_horizontal_alignment = 'left',
                 text_color = Color.terminal_text_body(255, true),
-                offset = { 15, 15, 1 },
-                size = { 340, 590 },
+                offset = { TEXT_PAD, TEXT_PAD, 1 },
+                size = { TEXT_W, VIEWPORT_H },
             },
         },
         {
-            pass_type = 'text',
-            value = '[Hover and scroll to view more]',
+            pass_type = 'rect',
+            style_id = 'scrollbar_track',
             style = {
-                font_type = 'proxima_nova_bold',
-                font_size = 14,
-                text_vertical_alignment = 'bottom',
-                text_horizontal_alignment = 'center',
-                text_color = Color.terminal_text_header_selected(150, true),
-                offset = { 0, -5, 2 },
+                color = { 255, 45, 45, 50 },
+                size = { SCROLLBAR_W, VIEWPORT_H },
+                offset = { SCROLLBAR_X, TEXT_PAD, 2 },
+            },
+        },
+        {
+            pass_type = 'rect',
+            style_id = 'scrollbar_thumb',
+            style = {
+                color = { 255, 190, 165, 95 },
+                size = { SCROLLBAR_W, 24 },
+                offset = { SCROLLBAR_X, TEXT_PAD, 3 },
             },
         },
     }, 'weapon_damage_stats')
@@ -637,46 +223,49 @@ mod:hook_require('scripts/ui/views/inventory_weapons_view/inventory_weapons_view
     return defs
 end)
 
--- Update stats when weapon is selected
+-- Build stats when a weapon is selected.
 mod:hook_safe(CLASS.InventoryWeaponsView, '_preview_item', function(self, item)
     local widget = self._widgets_by_name.weapon_damage_stats
-    if widget then
-        scroll_offset = 0 -- Reset scroll when changing weapons
-        local stats_text = build_stats_text(item)
-        -- mod:debug(stats_text:gsub('%%', ''))
-        widget.content.stats_text = stats_text
+    if not widget then
+        return
     end
+
+    scroll_offset = 0
+    measure_content(self, Builder.build_stats_text(item))
+    refresh(self)
 end)
 
--- Make widget always visible
 mod:hook_safe(CLASS.InventoryWeaponsView, 'on_enter', function(self)
     local widget = self._widgets_by_name.weapon_damage_stats
     if widget then
         widget.visible = true
-        scroll_offset = 0
     end
+    scroll_offset = 0
+    refresh(self)
 end)
 
--- Handle scroll input with mouse wheel when hovering
+-- Wheel scrolling over the panel.
 mod:hook(CLASS.InventoryWeaponsView, 'update', function(func, self, dt, t, input_service)
     func(self, dt, t, input_service)
 
     local widget = self._widgets_by_name.weapon_damage_stats
-    if widget and widget.visible and widget.content and widget.content.hotspot then
-        -- Check if hovering over widget
-        if widget.content.hotspot.is_hover then
-            -- Get scroll input
-            local scroll_axis = input_service:get('scroll_axis')
-            if scroll_axis and scroll_axis[2] and scroll_axis[2] ~= 0 then
-                scroll_offset = scroll_offset - (scroll_axis[2] * 50)
-                scroll_offset = math.max(0, math.min(scroll_offset, 5000))
+    if not (widget and widget.visible and widget.content and widget.content.hotspot) then
+        return
+    end
 
-                -- Update text offset
-                if widget.style and widget.style.stats_text then
-                    widget.style.stats_text.offset[2] = 15 - scroll_offset
-                    widget.dirty = true
-                end
-            end
+    if widget.content.hotspot.is_hover then
+        local scroll_axis = input_service:get('scroll_axis')
+        if scroll_axis and scroll_axis[2] and scroll_axis[2] ~= 0 then
+            scroll_offset = math.clamp(scroll_offset - (scroll_axis[2] * SCROLL_STEP), 0, max_scroll())
+            refresh(self)
         end
     end
 end)
+
+-- Reset state when the mod is disabled so stale line data doesn't linger.
+mod.on_disabled = function()
+    stats_lines = {}
+    line_heights = {}
+    total_height = 0
+    scroll_offset = 0
+end
