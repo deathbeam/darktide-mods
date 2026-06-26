@@ -12,11 +12,11 @@ on:
         required: false
         type: string
         default: ''
-      upload_to_nexusmods:
-        description: 'Upload to NexusMods'
-        required: false
-        type: boolean
-        default: false
+      # upload_to_nexusmods:
+      #   description: 'Upload to NexusMods'
+      #   required: false
+      #   type: boolean
+      #   default: false
 
 jobs:
   create-release:
@@ -100,17 +100,17 @@ jobs:
   #     NEXUSMODS_APIKEY: ${{ secrets.NEXUSMODS_APIKEY }}
   #     NEXUSMODS_COOKIES: ${{ secrets.NEXUSMODS_COOKIES }}
 
-  upload-combatstats:
-    needs: create-release
-    uses: BUTR/workflows/.github/workflows/release-nexusmods.yml@master
-    if: ${{ inputs.upload_to_nexusmods }}
-    with:
-      nexusmods_game_id: warhammer40kdarktide
-      nexusmods_mod_id: 661
-      mod_filename: CombatStats-${{ inputs.version }}.zip
-      mod_version: ${{ inputs.version }}
-      mod_description: ${{ needs.create-release.outputs.changelog }}
-      artifact_name: CombatStats
-    secrets:
-      NEXUSMODS_APIKEY: ${{ secrets.NEXUSMODS_APIKEY }}
-      NEXUSMODS_SESSION_COOKIE: ${{ secrets.NEXUSMODS_SESSION_COOKIE }}
+  # upload-combatstats:
+  #   needs: create-release
+  #   uses: BUTR/workflows/.github/workflows/release-nexusmods.yml@master
+  #   if: ${{ inputs.upload_to_nexusmods }}
+  #   with:
+  #     nexusmods_game_id: warhammer40kdarktide
+  #     nexusmods_mod_id: 661
+  #     mod_filename: CombatStats-${{ inputs.version }}.zip
+  #     mod_version: ${{ inputs.version }}
+  #     mod_description: ${{ needs.create-release.outputs.changelog }}
+  #     artifact_name: CombatStats
+  #   secrets:
+  #     NEXUSMODS_APIKEY: ${{ secrets.NEXUSMODS_APIKEY }}
+  #     NEXUSMODS_SESSION_COOKIE: ${{ secrets.NEXUSMODS_SESSION_COOKIE }}
