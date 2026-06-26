@@ -118,6 +118,14 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
             text = string.format('%.0f%%', pct),
         })
     end
+    if stats.arc_damage and stats.arc_damage > 0 then
+        local pct = (stats.arc_damage / stats.total_damage * 100)
+        table.insert(damage_types, {
+            icon = 'content/ui/materials/icons/presets/preset_20',
+            color = { 255, 186, 85, 211 },
+            text = string.format('%.0f%%', pct),
+        })
+    end
     if stats.companion_damage > 0 then
         local pct = (stats.companion_damage / stats.total_damage * 100)
         table.insert(damage_types, {
@@ -139,6 +147,9 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
     widget.content.damage_type_4_icon = damage_types[4] and damage_types[4].icon or nil
     widget.style.damage_type_4_icon.color = damage_types[4] and damage_types[4].color or Color.white(255, true)
     widget.content.damage_type_4_text = damage_types[4] and damage_types[4].text or ''
+    widget.content.damage_type_5_icon = damage_types[5] and damage_types[5].icon or nil
+    widget.style.damage_type_5_icon.color = damage_types[5] and damage_types[5].color or Color.white(255, true)
+    widget.content.damage_type_5_text = damage_types[5] and damage_types[5].text or ''
 
     local buff_types = {}
     if stats.bleed_damage > 0 then

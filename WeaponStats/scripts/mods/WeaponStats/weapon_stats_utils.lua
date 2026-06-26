@@ -1,9 +1,18 @@
 local mod = get_mod('WeaponStats')
 
 local DamageProfile = mod:original_require('scripts/utilities/attack/damage_profile')
+local DamageCalculation = mod:original_require('scripts/utilities/attack/damage_calculation')
 local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settings')
+local Action = mod:original_require('scripts/utilities/action/action')
 
 local FALLBACK_LERP = 0.5
+local DEFAULT_POWER_LEVEL = 500
+
+-- Damage output range used by the game to convert attack power into raw hit damage.
+local DAMAGE_OUTPUT = {
+    min = 0,
+    max = 20,
+}
 
 local ARMOR_NAMES = {
     unarmored = 'Unarmored',
@@ -169,47 +178,167 @@ function WeaponStatsUtils.lerp_from_path(action_lerp, ...)
     return value
 end
 
--- Resolve a power_distribution entry at the item's real lerp for the given action.
-function WeaponStatsUtils.resolve_power(action_lerp, entry, power_type)
-    if type(entry) ~= 'table' then
-        return entry
+-- The lerp table returned by Weapon._init_traits is keyed by action name; this fetches the
+-- lerp values for one action (and its damage profile) in the shape DamageProfile expects.
+function WeaponStatsUtils.lerp_for_action(damage_profile_lerp_values, action_name, damage_profile)
+    if not damage_profile_lerp_values then
+        return nil
     end
-    local lerp = WeaponStatsUtils.lerp_from_path(action_lerp, 'power_distribution', power_type) or FALLBACK_LERP
-    return math.lerp(entry[1], entry[2], lerp)
+    local cur = damage_profile_lerp_values[action_name]
+    if not cur then
+        return nil
+    end
+    if damage_profile and damage_profile.name then
+        cur = cur[damage_profile.name] or cur
+    end
+    return cur
 end
 
--- Resolve the armor damage modifiers for every armor type, using the item's lerp.
--- Returns a list of { armor_key, normal, crit } (only types that have a modifier).
-function WeaponStatsUtils.resolve_armor_table(profile, target_settings, action_lerp, power_type)
-    local adm = target_settings.armor_damage_modifier or profile.armor_damage_modifier
-    if not adm then
-        return {}
-    end
-
-    local results = {}
-    local crit_mod = profile.crit_mod
-
-    for _, armor_key in ipairs(ARMOR_ORDER) do
-        local armor_type = ArmorSettings.types[armor_key]
-        local entry = adm[power_type] and adm[power_type][armor_type]
-        if entry ~= nil then
-            local lerp = WeaponStatsUtils.lerp_from_path(action_lerp, 'armor_damage_modifier', power_type, armor_type)
-                or FALLBACK_LERP
-            local normal = WeaponStatsUtils.lerp_entry(entry, lerp)
-            local crit = normal
-            local crit_entry = crit_mod and crit_mod[power_type] and crit_mod[power_type][armor_type]
-            if crit_entry then
-                crit = normal + WeaponStatsUtils.lerp_entry(crit_entry, lerp)
-            end
-            results[#results + 1] = {
-                armor_key = armor_key,
-                normal = normal,
-                crit = crit,
-            }
+-- Resolve the power_level used for stat display for an action/template index.
+-- Mirrors Action.stat_power_level so explosive/charged profiles use the right power.
+function WeaponStatsUtils.action_power_level(action, template_index)
+    if Action and Action.stat_power_level then
+        local ok, pl = pcall(Action.stat_power_level, action, template_index)
+        if ok and pl then
+            return pl
         end
     end
+    return action.power_level or DEFAULT_POWER_LEVEL
+end
 
-    return results
+-- Target settings the game uses for damage UI (first target for melee, default for ranged).
+function WeaponStatsUtils.target_settings(damage_profile, is_ranged)
+    if not damage_profile or not damage_profile.targets then
+        return damage_profile
+    end
+    local idx = is_ranged and 'default_target' or 1
+    return DamageProfile.target_settings(damage_profile, idx)
+end
+
+-- The game's damage helpers read `current_target_settings_lerp_values` off the lerp table.
+-- For UI calls with no real attacker, set it from the per-target sub-table (and restore the
+-- previous value afterwards) so lerpable armor/power entries resolve correctly.
+local function _with_target_lerps(action_lerp, target_index)
+    local cur = action_lerp or {}
+    local targets = cur.targets
+    local key = target_index or 1
+    local ts_lerps = targets and (targets[key] or targets.default_target)
+    local prev = cur.current_target_settings_lerp_values
+    if ts_lerps then
+        cur.current_target_settings_lerp_values = ts_lerps
+    end
+    return cur, prev
+end
+
+local function _restore_lerps(action_lerp, prev)
+    if action_lerp then
+        action_lerp.current_target_settings_lerp_values = prev
+    end
+end
+
+-- Scaled base attack/impact power at the item's real lerp, using the game's own helper so the
+-- numbers match what the in-game weapon card shows.
+function WeaponStatsUtils.base_powers(
+    damage_profile,
+    target_settings,
+    power_level,
+    action_lerp,
+    dropoff_scalar,
+    target_index
+)
+    local cur_lerps, prev = _with_target_lerps(action_lerp, target_index)
+    local ok, attack, impact = pcall(
+        DamageCalculation.base_ui_damage,
+        damage_profile,
+        target_settings,
+        power_level or DEFAULT_POWER_LEVEL,
+        1, -- charge_level (full)
+        dropoff_scalar,
+        cur_lerps
+    )
+    _restore_lerps(action_lerp, prev)
+    if not ok then
+        return nil, nil
+    end
+    return attack, impact
+end
+
+-- Finesse (weakspot) and crit multipliers at the item's real lerp, matching the in-game card.
+-- Returns the additive-over-1 multiplier, e.g. 1.75 means +75% weakspot damage.
+function WeaponStatsUtils.finesse_multiplier(
+    damage_profile,
+    target_settings,
+    action_lerp,
+    hit_weakspot,
+    is_crit,
+    target_index
+)
+    local cur_lerps, prev = _with_target_lerps(action_lerp, target_index)
+    local ok, mult = pcall(
+        DamageCalculation.ui_finesse_multiplier,
+        damage_profile,
+        target_settings,
+        ArmorSettings.types.unarmored,
+        hit_weakspot,
+        is_crit,
+        cur_lerps
+    )
+    _restore_lerps(action_lerp, prev)
+    if not ok then
+        return 1
+    end
+    return mult or 1
+end
+
+-- Armor damage modifier (0..1+) for a power_type/armor/crit combo at the item's lerp.
+function WeaponStatsUtils.armor_modifier(
+    damage_profile,
+    target_settings,
+    action_lerp,
+    power_type,
+    armor_type,
+    is_crit,
+    dropoff_scalar,
+    target_index
+)
+    local cur_lerps, prev = _with_target_lerps(action_lerp, target_index)
+    local ok, mod = pcall(
+        DamageProfile.armor_damage_modifier,
+        power_type or 'attack',
+        damage_profile,
+        target_settings,
+        cur_lerps,
+        armor_type,
+        is_crit,
+        dropoff_scalar,
+        false -- armor_penetrating
+    )
+    _restore_lerps(action_lerp, prev)
+    if not ok then
+        return nil
+    end
+    return mod
+end
+
+-- Effective range min/max (near/far) for ranged profiles at the item's lerp.
+function WeaponStatsUtils.ranges(damage_profile, action_lerp)
+    if not damage_profile or not damage_profile.ranges then
+        return nil, nil
+    end
+    local cur_lerps = action_lerp or {}
+    local ok, min_r, max_r = pcall(DamageProfile.ranges, damage_profile, cur_lerps)
+    if not ok then
+        return nil, nil
+    end
+    return min_r, max_r
+end
+
+function WeaponStatsUtils.armor_order()
+    return ARMOR_ORDER
+end
+
+function WeaponStatsUtils.fallback_lerp()
+    return FALLBACK_LERP
 end
 
 return WeaponStatsUtils

@@ -187,6 +187,35 @@ local widget_definitions = {
         },
         {
             pass_type = 'texture',
+            style_id = 'damage_type_5_icon',
+            value_id = 'damage_type_5_icon',
+            style = {
+                size = { 18, 18 },
+                offset = { 330, 95, 3 },
+                color = Color.white(255, true),
+            },
+            visibility_function = function(content, style)
+                return content.damage_type_5_icon ~= nil
+            end,
+        },
+        {
+            pass_type = 'text',
+            style_id = 'damage_type_5_text',
+            value_id = 'damage_type_5_text',
+            style = {
+                font_size = 14,
+                text_vertical_alignment = 'top',
+                text_horizontal_alignment = 'left',
+                font_type = 'proxima_nova_bold',
+                text_color = UIHudSettings.color_tint_main_2,
+                offset = { 352, 95, 2 },
+            },
+            visibility_function = function(content, style)
+                return content.damage_type_5_text ~= nil and content.damage_type_5_text ~= ''
+            end,
+        },
+        {
+            pass_type = 'texture',
             style_id = 'buff_type_1_icon',
             value_id = 'buff_type_1_icon',
             style = {

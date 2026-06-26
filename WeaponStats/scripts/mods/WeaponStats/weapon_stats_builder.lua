@@ -1,12 +1,12 @@
 local mod = get_mod('WeaponStats')
 
 local WeaponTemplate = mod:original_require('scripts/utilities/weapon/weapon_template')
-local HitScanTemplates = mod:original_require('scripts/settings/projectile/hit_scan_templates')
-local ShotshellTemplates = mod:original_require('scripts/settings/projectile/shotshell_templates')
 local Weapon = mod:original_require('scripts/extension_systems/weapon/weapon')
-
+local Action = mod:original_require('scripts/utilities/action/action')
+local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settings')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
 
+-- Colors
 local COLORS = {
     HEADER = '255,200,100',
     ATTACK = '100,200,255',
@@ -20,7 +20,10 @@ local COLORS = {
     FALLOFF = '180,220,255',
     PELLET = '255,180,255',
     ADVANCED = '160,160,200',
+    SPECIAL = '255,140,255',
 }
+
+-- Helpers -----------------------------------------------------------------
 
 local function colored(color, text)
     return string.format('{#color(%s)}%s{#reset()}', color, text)
@@ -38,6 +41,33 @@ local function line(out, lbl, val, val_color)
     return out .. '  ' .. label(lbl) .. ' ' .. value(val_color or COLORS.DAMAGE, val) .. '\n'
 end
 
+-- Format a number compactly: integers as-is, small fractions with 1-2 decimals.
+local function fmt_num(n)
+    if n == nil then
+        return '-'
+    end
+    if math.abs(n - math.floor(n)) < 0.05 then
+        return string.format('%d', math.floor(n + 0.5))
+    end
+    if math.abs(n) >= 100 then
+        return string.format('%.0f', n)
+    end
+    return string.format('%.1f', n)
+end
+
+local function fmt_mult(n)
+    if n == nil then
+        return '-'
+    end
+    if math.abs(n - 1) < 0.005 then
+        return '1.00x'
+    end
+    return string.format('%.2fx', n)
+end
+
+-- Profile extraction ------------------------------------------------------
+
+-- Resolve a template reference (table or name) against a registry of templates.
 local function resolve_template_ref(ref, template_table)
     if type(ref) == 'table' then
         return ref
@@ -48,174 +78,138 @@ local function resolve_template_ref(ref, template_table)
     return nil
 end
 
--- Extract the damage profile and ranged info (pellets, range, power_level) from an action.
-local function extract_profile(action)
-    if action.damage_profile and type(action.damage_profile) == 'table' then
-        return action.damage_profile, nil
+-- Extract every (damage_profile, info) pair an action can deal, using the game's own
+-- Action.damage_template helper so we cover melee sweeps, hitscan, shotshell, projectile,
+-- flamer gas, and explosion profiles uniformly.
+local function extract_profiles(action, action_name)
+    local profiles = {}
+
+    local num_templates = 1
+    local ok_n, n = pcall(Action.num_damage_templates, action)
+    if ok_n and type(n) == 'number' and n > 0 then
+        num_templates = n
     end
 
-    local configs = {}
-    if action.fire_configuration then
-        configs[#configs + 1] = action.fire_configuration
-    end
-    if type(action.fire_configurations) == 'table' then
-        for _, cfg in ipairs(action.fire_configurations) do
-            configs[#configs + 1] = cfg
-        end
-    end
-
-    for _, cfg in ipairs(configs) do
-        if cfg.hit_scan_template then
-            local template = resolve_template_ref(cfg.hit_scan_template, HitScanTemplates)
-            if template and template.damage and template.damage.impact then
-                return template.damage.impact.damage_profile,
-                    {
-                        range = template.range,
-                        power_level = template.power_level,
-                    }
-            end
-        end
-        if cfg.shotshell then
-            local template = resolve_template_ref(cfg.shotshell, ShotshellTemplates)
-            if template and template.damage and template.damage.impact then
-                return template.damage.impact.damage_profile,
-                    {
-                        range = template.range,
-                        power_level = template.power_level,
-                        num_pellets = template.num_pellets,
-                    }
-            end
-        end
-    end
-
-    return nil, nil
-end
-
--- Skip an attack if one with the same effective stats is already listed.
-local function is_duplicate(list, profile, action_name, ranged_extra)
-    for _, existing in ipairs(list) do
-        local e = existing.profile
-        local is_same = e.damage_type == profile.damage_type
-
-        if is_same then
-            local e_target = e.targets and e.targets[1] or e
-            local p_target = profile.targets and profile.targets[1] or profile
-            if e_target.power_distribution and p_target.power_distribution then
-                local e_dmg = e_target.power_distribution.attack
-                local p_dmg = p_target.power_distribution.attack
-                if e_dmg and p_dmg then
-                    if type(e_dmg) == 'table' and type(p_dmg) == 'table' then
-                        is_same = e_dmg[1] == p_dmg[1] and e_dmg[2] == p_dmg[2]
-                    else
-                        is_same = e_dmg == p_dmg
+    for i = 1, num_templates do
+        local ok, dmg_profile, special_profile, on_abort, special_on_abort = pcall(Action.damage_template, action, i)
+        if ok and dmg_profile then
+            -- Ranged: pull pellets/range/power_level out of the source fire config template.
+            local ranged_extra
+            local cfg_ok, cfg = pcall(function()
+                local fire_configs = action.fire_configurations
+                if not fire_configs then
+                    fire_configs = { action.fire_configuration }
+                end
+                return fire_configs[i] or fire_configs[1]
+            end)
+            if cfg_ok and cfg then
+                for _, key in ipairs({ 'shotshell', 'hit_scan_template', 'projectile', 'flamer_gas_template' }) do
+                    local ref = cfg[key]
+                    if ref then
+                        local tmpl = resolve_template_ref(ref, _G) or ref
+                        if type(tmpl) == 'table' then
+                            ranged_extra = ranged_extra or {}
+                            ranged_extra.num_pellets = tmpl.num_pellets
+                            ranged_extra.range = tmpl.range
+                            ranged_extra.power_level = tmpl.power_level or tmpl.stat_power_level
+                            ranged_extra.spread_pitch = tmpl.spread_pitch
+                            ranged_extra.spread_yaw = tmpl.spread_yaw
+                        end
                     end
                 end
             end
-        end
 
-        if is_same then
-            local e_pellets = existing.ranged_extra and existing.ranged_extra.num_pellets
-            local p_pellets = ranged_extra and ranged_extra.num_pellets
-            is_same = (e_pellets or 0) == (p_pellets or 0)
-        end
-        if is_same then
-            is_same = (e.finesse_ability_damage_multiplier or 1) == (profile.finesse_ability_damage_multiplier or 1)
-                and (e.backstab_bonus or 0) == (profile.backstab_bonus or 0)
-                and e.stagger_category == profile.stagger_category
-        end
-
-        if is_same and profile.cleave_distribution and e.cleave_distribution then
-            for k, v in pairs(profile.cleave_distribution) do
-                local ev = e.cleave_distribution[k]
-                if type(v) == 'table' then
-                    is_same = type(ev) == 'table' and ev[1] == v[1] and ev[2] == v[2]
-                else
-                    is_same = ev == v
-                end
-                if not is_same then
-                    break
-                end
-            end
-        elseif is_same and (profile.cleave_distribution or e.cleave_distribution) then
-            is_same = false
-        end
-
-        if is_same then
-            table.insert(existing.names, action_name)
-            return true
+            profiles[#profiles + 1] = {
+                profile = dmg_profile,
+                special_active_profile = special_profile and special_profile ~= dmg_profile and special_profile or nil,
+                ranged_extra = ranged_extra,
+                template_index = i,
+            }
         end
     end
-    return false
+
+    return profiles
 end
 
--- Build the per-target damage falloff chain (resolved attack power per target hit).
-local function build_falloff_chain(profile, action_lerp)
-    local targets = profile.targets
-    if not targets then
-        return nil
+-- Category (light/heavy/ranged/special) for an action.
+local function categorize(action_name, profile)
+    if string.match(action_name, 'special') then
+        return 'special'
     end
-
-    local chain = {}
-    local function add_target(target)
-        local attack = target and target.power_distribution and target.power_distribution.attack
-        if attack ~= nil then
-            chain[#chain + 1] = Utils.resolve_power(action_lerp, attack, 'attack')
-        end
+    if string.match(action_name, 'shoot') or string.match(action_name, 'zoom') then
+        return 'ranged'
     end
-
-    local i = 1
-    while targets[i] do
-        add_target(targets[i])
-        i = i + 1
+    if profile.melee_attack_strength == 'heavy' or string.match(action_name, 'heavy') then
+        return 'heavy'
     end
-    add_target(targets.default_target)
-
-    if #chain <= 1 then
-        return nil
+    if profile.melee_attack_strength == 'light' or string.match(action_name, 'light') then
+        return 'light'
     end
-    return chain
+    if string.match(action_name, 'push') then
+        return 'special'
+    end
+    return nil
 end
+
+-- Two profiles are "the same" for dedup purposes (so we don't list light_1..light_4 separately
+-- when they share a damage profile). Special-active profiles count toward identity so a power
+-- sword's inactive+active pair is kept distinct from a plain sword's single profile.
+local function profiles_equivalent(a, b)
+    if not a or not b or not a.profile or not b.profile then
+        return false
+    end
+    local ap, bp = a.profile, b.profile
+    if ap.name ~= bp.name then
+        return false
+    end
+    local asp, bsp = a.special_active_profile, b.special_active_profile
+    local an = asp and asp.name
+    local bn = bsp and bsp.name
+    if an ~= bn then
+        return false
+    end
+    local ra, rb = a.ranged_extra, b.ranged_extra
+    local pa, pb = ra and ra.num_pellets or 0, rb and rb.num_pellets or 0
+    return pa == pb
+end
+
+-- Render a single (profile) block ----------------------------------------
 
 local function render_timing(out, action, weapon_tweak_templates, action_name)
     local time_scale = 1
     local total_time = action.total_time or 0
     local fire_rate_shown = false
 
-    if weapon_tweak_templates and weapon_tweak_templates.weapon_handling then
-        local handling_templates = weapon_tweak_templates.weapon_handling
-        if handling_templates and action.weapon_handling_template then
-            local action_template = handling_templates[action.weapon_handling_template]
-            if action_template then
-                time_scale = action_template.time_scale or 1
-                local auto_fire_time = action_template.fire_rate and action_template.fire_rate.auto_fire_time
-                if type(auto_fire_time) == 'number' and auto_fire_time > 0 then
-                    out = line(out, 'Fire Rate:', string.format('%.2f/s', 1 / auto_fire_time), COLORS.TIMING)
-                    fire_rate_shown = true
-                end
+    local handling = weapon_tweak_templates and weapon_tweak_templates.weapon_handling
+    if handling and action.weapon_handling_template then
+        local tmpl = handling[action.weapon_handling_template]
+        if tmpl then
+            time_scale = tmpl.time_scale or 1
+            local auto_fire_time = tmpl.fire_rate and tmpl.fire_rate.auto_fire_time
+            if type(auto_fire_time) == 'number' and auto_fire_time > 0 then
+                out = line(out, 'Fire Rate:', string.format('%.2f/s', 1 / auto_fire_time), COLORS.TIMING)
+                fire_rate_shown = true
             end
         end
     end
 
-    -- Melee and semi-auto ranged use the chain time back into the same action.
-    if action.allowed_chain_actions and not fire_rate_shown then
+    if not fire_rate_shown and action.allowed_chain_actions then
         local chain_time
-        local chain_actions = action.allowed_chain_actions
-
-        for _, chain_data in pairs(chain_actions) do
+        local chains = action.allowed_chain_actions
+        for _, chain_data in pairs(chains) do
             if chain_data.action_name == action_name and chain_data.chain_time then
                 chain_time = chain_data.chain_time
                 break
             end
         end
         if not chain_time then
-            chain_time = (chain_actions.shoot_pressed and chain_actions.shoot_pressed.chain_time)
-                or (chain_actions.start_attack and chain_actions.start_attack.chain_time)
-                or (chain_actions.shoot and chain_actions.shoot.chain_time)
+            chain_time = (chains.shoot_pressed and chains.shoot_pressed.chain_time)
+                or (chains.start_attack and chains.start_attack.chain_time)
+                or (chains.shoot and chains.shoot.chain_time)
         end
         if not chain_time and total_time > 0 and total_time < 1000 then
             chain_time = total_time
         end
-
         if chain_time and chain_time > 0 then
             local lbl = (action.kind == 'shoot_hit_scan' or action.kind == 'shoot_pellets') and 'Fire Rate:'
                 or 'Attack Speed:'
@@ -226,155 +220,143 @@ local function render_timing(out, action, weapon_tweak_templates, action_name)
     return out
 end
 
-local function render_armor(out, profile, target_settings, action_lerp)
-    local results = Utils.resolve_armor_table(profile, target_settings, action_lerp, 'attack')
-    if #results == 0 then
+-- Render one damage profile (inactive or special-active) for an attack.
+local render_armor
+local function render_profile(out, ctx)
+    local profile = ctx.profile
+    local action = ctx.action
+    local action_name = ctx.action_name
+    local action_lerp = ctx.action_lerp
+    local is_ranged = ctx.is_ranged
+    local is_active = ctx.is_active
+    local power_level = ctx.power_level
+
+    local target_settings = Utils.target_settings(profile, is_ranged)
+    if not target_settings then
         return out
     end
 
-    out = out .. '  ' .. label('Armor Damage:') .. '\n'
-    for _, entry in ipairs(results) do
-        -- Skip rows that are 100% with no crit difference (keeps the table concise).
-        if math.abs(entry.normal - 1) > 0.005 or math.abs(entry.crit - entry.normal) > 0.005 then
-            local seg = string.format(
-                '    %s: %s',
-                Utils.armor_name(entry.armor_key),
-                value(COLORS.ARMOR, string.format('%.0f%%', entry.normal * 100))
-            )
-            if math.abs(entry.crit - entry.normal) > 0.005 then
-                seg = seg .. ' ' .. value(COLORS.CRIT, string.format('(C: %.0f%%)', entry.crit * 100))
-            end
-            out = out .. seg .. '\n'
+    local dropoff = is_ranged and 0 or nil
+
+    if is_active then
+        out = out .. '    ' .. value(COLORS.SPECIAL, '⚡ Special Active') .. '\n'
+    end
+
+    -- Base resolved damage (matches the in-game card) and impact.
+    local base_attack, base_impact = Utils.base_powers(profile, target_settings, power_level, action_lerp, dropoff)
+    if base_attack then
+        out = line(out, 'Damage:', fmt_num(base_attack), COLORS.DAMAGE)
+    end
+    if base_impact and math.abs(base_impact) > 0.01 then
+        out = line(out, 'Impact:', fmt_num(base_impact), COLORS.IMPACT)
+    end
+
+    -- Multipliers: weakspot (finesse), crit, and crit+weakspot.
+    local weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, false)
+    local crit_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, false, true)
+    local crit_weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, true)
+
+    local any_mult = (weakspot_mult and math.abs(weakspot_mult - 1) > 0.005)
+        or (crit_mult and math.abs(crit_mult - 1) > 0.005)
+    if any_mult then
+        out = out .. '  ' .. label('Multipliers:') .. '\n'
+        if weakspot_mult and math.abs(weakspot_mult - 1) > 0.005 then
+            out = line(out, '  Weakspot:', fmt_mult(weakspot_mult), COLORS.WEAKSPOT)
+        end
+        if crit_mult and math.abs(crit_mult - 1) > 0.005 then
+            out = line(out, '  Crit:', fmt_mult(crit_mult), COLORS.CRIT)
+        end
+        if
+            crit_weakspot_mult
+            and math.abs(crit_weakspot_mult - math.max(weakspot_mult or 1, crit_mult or 1)) > 0.005
+        then
+            out = line(out, '  Crit+Weak:', fmt_mult(crit_weakspot_mult), COLORS.CRIT)
         end
     end
-    return out
-end
 
-local function render_attack(out, attack_data, weapon_tweak_templates, damage_profile_lerp_values)
-    local profile = attack_data.profile
-    local action = attack_data.action
-    local action_name = attack_data.names[1]
-    local action_lerp = damage_profile_lerp_values and damage_profile_lerp_values[action_name] or nil
-    local first_target = profile.targets and profile.targets[1] or profile
-
-    local labels = {}
-    for _, name in ipairs(attack_data.names) do
-        labels[#labels + 1] = Utils.friendly_action_label(name)
-    end
-    out = out .. '  ' .. value(COLORS.ATTACK, table.concat(labels, ', ')) .. '\n'
-
-    if profile.damage_type then
-        out = line(out, 'Type:', tostring(Utils.damage_type_name(profile.damage_type)), COLORS.LABEL)
-    end
-
-    out = render_timing(out, action, weapon_tweak_templates, action_name)
-
-    local ranged_extra = attack_data.ranged_extra
+    -- Ranged-specific: pellets, range, effective range, spread, suppression.
+    local ranged_extra = ctx.ranged_extra
     if ranged_extra then
         if ranged_extra.num_pellets then
             out = line(out, 'Pellets:', string.format('×%d', ranged_extra.num_pellets), COLORS.PELLET)
         end
         if ranged_extra.range then
-            out = line(out, 'Range:', tostring(ranged_extra.range), COLORS.PELLET)
+            out = line(out, 'Max Range:', tostring(ranged_extra.range), COLORS.PELLET)
         end
-        if ranged_extra.power_level then
-            out = line(out, 'Power Level:', tostring(ranged_extra.power_level), COLORS.PELLET)
+        if ranged_extra.spread_pitch and ranged_extra.spread_yaw then
+            out = line(
+                out,
+                'Spread:',
+                string.format('%.1f / %.1f', ranged_extra.spread_pitch, ranged_extra.spread_yaw),
+                COLORS.PELLET
+            )
         end
     end
 
-    if first_target.power_distribution and type(first_target.power_distribution) == 'table' then
-        if first_target.power_distribution.attack then
-            local chain = build_falloff_chain(profile, action_lerp)
-            if chain then
-                local segments = {}
-                for idx, v in ipairs(chain) do
-                    if idx > 1 then
-                        segments[#segments + 1] = ' ' .. value(COLORS.FALLOFF, '→') .. ' '
-                    end
-                    segments[#segments + 1] = value(COLORS.DAMAGE, string.format('%.0f', v))
-                end
-                out = out .. '  ' .. label('Damage:') .. ' ' .. table.concat(segments, '') .. '\n'
-            else
-                local dmg = Utils.resolve_power(action_lerp, first_target.power_distribution.attack, 'attack')
-                out = line(out, 'Damage:', string.format('%.0f', dmg), COLORS.DAMAGE)
+    local min_r, max_r = Utils.ranges(profile, action_lerp)
+    if min_r and max_r then
+        out = line(out, 'Effective Range:', string.format('%.0f - %.0f m', min_r, max_r), COLORS.FALLOFF)
+    end
+
+    if profile.suppression_value ~= nil then
+        local sup = Utils.lerp_entry(profile.suppression_value, Utils.lerp_from_path(action_lerp, 'suppression_value'))
+        if sup and math.abs(sup) > 0.01 then
+            out = line(out, 'Suppression:', fmt_num(sup), COLORS.ADVANCED)
+        end
+    end
+
+    -- Crit modifier (weapon handling) and crit strings.
+    local handling = ctx.weapon_tweak_templates and ctx.weapon_tweak_templates.weapon_handling
+    if handling and action.weapon_handling_template then
+        local tmpl = handling[action.weapon_handling_template]
+        local crit_strike = tmpl and tmpl.critical_strike
+        if crit_strike then
+            if crit_strike.chance_modifier and crit_strike.chance_modifier ~= 0 then
+                local sign = crit_strike.chance_modifier >= 0 and '+' or ''
+                out = line(
+                    out,
+                    'Crit Modifier:',
+                    string.format('%s%.1f%%', sign, crit_strike.chance_modifier * 100),
+                    COLORS.CRIT
+                )
+            end
+            if crit_strike.max_critical_shots and crit_strike.max_critical_shots ~= 0 then
+                out = line(out, 'Crit Strings:', tostring(crit_strike.max_critical_shots), COLORS.CRIT)
             end
         end
-
-        if first_target.power_distribution.impact then
-            local impact_dmg = Utils.resolve_power(action_lerp, first_target.power_distribution.impact, 'impact')
-            out = line(out, 'Impact:', string.format('%.0f', impact_dmg), COLORS.IMPACT)
-        end
     end
 
-    -- Crit modifier (additive modifier to the archetype base crit chance, not the chance itself).
-    local crit_chance, max_crit_shots
-    if weapon_tweak_templates and weapon_tweak_templates.weapon_handling then
-        local handling_templates = weapon_tweak_templates.weapon_handling
-        if handling_templates and action.weapon_handling_template then
-            local action_template = handling_templates[action.weapon_handling_template]
-            local crit_strike = action_template and action_template.critical_strike
-            if crit_strike then
-                crit_chance = crit_strike.chance_modifier
-                max_crit_shots = crit_strike.max_critical_shots
-            end
-        end
-    end
-
-    if crit_chance and crit_chance ~= 0 then
-        local sign = crit_chance >= 0 and '+' or ''
-        out = line(out, 'Crit Modifier:', string.format('%s%.1f%%', sign, crit_chance * 100), COLORS.CRIT)
-    end
-    if max_crit_shots and max_crit_shots ~= 0 then
-        out = line(out, 'Crit Strings:', tostring(max_crit_shots), COLORS.CRIT)
-    end
-
-    if first_target.crit_boost then
-        local crit_val = Utils.lerp_entry(first_target.crit_boost)
-        if crit_val and crit_val ~= 0 then
-            out = line(out, 'Crit Damage:', string.format('%.0f%%', crit_val * 100), COLORS.CRIT)
-        end
-    end
-
-    if profile.finesse_ability_damage_multiplier and profile.finesse_ability_damage_multiplier ~= 1 then
-        local mult = Utils.lerp_entry(profile.finesse_ability_damage_multiplier)
-        out = line(out, 'Weakspot:', string.format('%.1fx', mult), COLORS.WEAKSPOT)
-    end
-
+    -- Backstab bonus (extra damage on rear hits).
     if profile.backstab_bonus and profile.backstab_bonus ~= 0 then
         local bonus = Utils.lerp_entry(profile.backstab_bonus)
         out = line(out, 'Backstab:', string.format('%.0f%%', bonus * 100), COLORS.WEAKSPOT)
     end
 
+    -- Cleave (attack/impact distribution).
     if profile.cleave_distribution and type(profile.cleave_distribution) == 'table' then
-        local cleave_lerp = Utils.lerp_from_path(action_lerp, 'cleave_distribution', 'attack') or 0.5
-        local attack_cleave = profile.cleave_distribution.attack
-        local impact_cleave = profile.cleave_distribution.impact
-        local attack_str = Utils.lerp_entry(attack_cleave, cleave_lerp)
-        local impact_str = Utils.lerp_entry(impact_cleave, cleave_lerp)
-        if type(attack_str) == 'number' and attack_str > 0.01 then
-            if type(impact_str) == 'number' and impact_str > 0.01 and math.abs(impact_str - attack_str) > 0.01 then
-                out = line(out, 'Cleave:', string.format('%.1f (A) / %.1f (I)', attack_str, impact_str), COLORS.DAMAGE)
+        local cleave_lerp = Utils.lerp_from_path(action_lerp, 'cleave_distribution', 'attack') or Utils.fallback_lerp()
+        local attack_cleave = Utils.lerp_entry(profile.cleave_distribution.attack, cleave_lerp)
+        local impact_cleave = Utils.lerp_entry(profile.cleave_distribution.impact, cleave_lerp)
+        if type(attack_cleave) == 'number' and attack_cleave > 0.01 then
+            if
+                type(impact_cleave) == 'number'
+                and impact_cleave > 0.01
+                and math.abs(impact_cleave - attack_cleave) > 0.01
+            then
+                out = line(out, 'Cleave:', string.format('%.2f / %.2f', attack_cleave, impact_cleave), COLORS.DAMAGE)
             else
-                out = line(out, 'Cleave:', string.format('%.1f', attack_str), COLORS.DAMAGE)
+                out = line(out, 'Cleave:', string.format('%.2f', attack_cleave), COLORS.DAMAGE)
             end
         end
     end
 
+    -- Stagger category.
     local stagger = Utils.stagger_name(profile.stagger_category)
     if stagger then
         out = line(out, 'Stagger:', stagger, COLORS.LABEL)
     end
 
-    -- Extra detail that only applies to some attacks.
-    if first_target.boost_curve_multiplier_finesse and type(first_target.boost_curve_multiplier_finesse) == 'table' then
-        local curve = first_target.boost_curve_multiplier_finesse
-        out = line(out, 'Finesse Curve:', string.format('%.2f - %.2f', curve[1], curve[2]), COLORS.ADVANCED)
-    end
-    if first_target.power_level_multiplier and type(first_target.power_level_multiplier) == 'table' then
-        local plm = first_target.power_level_multiplier
-        out = line(out, 'Power Mult:', string.format('%.2f - %.2f', plm[1], plm[2]), COLORS.ADVANCED)
-    end
-
+    -- Gibbing.
     local gib_power = Utils.gibbing_power_name(profile.gibbing_power)
     local gib_type = Utils.gibbing_type_name(profile.gibbing_type)
     local gib_parts = {}
@@ -388,6 +370,7 @@ local function render_attack(out, attack_data, weapon_tweak_templates, damage_pr
         out = line(out, 'Gibbing:', table.concat(gib_parts, ' / '), COLORS.ADVANCED)
     end
 
+    -- Flags.
     local flags = {}
     if profile.weapon_special then
         flags[#flags + 1] = 'Weapon Special'
@@ -399,11 +382,107 @@ local function render_attack(out, attack_data, weapon_tweak_templates, damage_pr
         out = line(out, 'Flags:', table.concat(flags, ', '), COLORS.ADVANCED)
     end
 
-    local target_settings = profile.targets and (profile.targets[1] or profile.targets.default_target) or profile
-    out = render_armor(out, profile, target_settings, action_lerp)
+    -- Armor damage table (normal / crit).
+    out = render_armor(out, profile, target_settings, action_lerp, dropoff)
+
+    return out
+end
+
+render_armor = function(out, profile, target_settings, action_lerp, dropoff)
+    local armor_order = Utils.armor_order()
+    local has_any = false
+    local rows = {}
+
+    for _, armor_key in ipairs(armor_order) do
+        local armor_type = ArmorSettings.types[armor_key]
+        if armor_type then
+            local normal =
+                Utils.armor_modifier(profile, target_settings, action_lerp, 'attack', armor_type, false, dropoff)
+            local crit =
+                Utils.armor_modifier(profile, target_settings, action_lerp, 'attack', armor_type, true, dropoff)
+            if normal and (math.abs(normal - 1) > 0.005 or math.abs(crit - normal) > 0.005) then
+                has_any = true
+                rows[#rows + 1] = { armor_key = armor_key, normal = normal, crit = crit }
+            end
+        end
+    end
+
+    if not has_any then
+        return out
+    end
+
+    out = out .. '  ' .. label('Armor Damage:') .. '\n'
+    for _, entry in ipairs(rows) do
+        local seg = string.format(
+            '    %s: %s',
+            Utils.armor_name(entry.armor_key),
+            value(COLORS.ARMOR, string.format('%.0f%%', entry.normal * 100))
+        )
+        if math.abs(entry.crit - entry.normal) > 0.005 then
+            seg = seg .. ' ' .. value(COLORS.CRIT, string.format('(C: %.0f%%)', entry.crit * 100))
+        end
+        out = out .. seg .. '\n'
+    end
+    return out
+end
+
+-- Render one attack (which may carry an inactive + a special-active profile).
+local function render_attack(out, attack_data, weapon_tweak_templates, damage_profile_lerp_values)
+    local action = attack_data.action
+    local action_name = attack_data.names[1]
+    local is_ranged = attack_data.is_ranged
+
+    local labels = {}
+    for _, name in ipairs(attack_data.names) do
+        labels[#labels + 1] = Utils.friendly_action_label(name)
+    end
+    out = out .. '  ' .. value(COLORS.ATTACK, table.concat(labels, ', ')) .. '\n'
+
+    if attack_data.profile.damage_type then
+        out = line(out, 'Type:', tostring(Utils.damage_type_name(attack_data.profile.damage_type)), COLORS.LABEL)
+    end
+
+    out = render_timing(out, action, weapon_tweak_templates, action_name)
+
+    for _, prof_info in ipairs(attack_data.profiles) do
+        local action_lerp = Utils.lerp_for_action(damage_profile_lerp_values, action_name, prof_info.profile)
+        local power_level = Utils.action_power_level(action, prof_info.template_index)
+
+        local ctx = {
+            profile = prof_info.profile,
+            action = action,
+            action_name = action_name,
+            action_lerp = action_lerp,
+            is_ranged = is_ranged,
+            is_active = false,
+            power_level = power_level,
+            ranged_extra = prof_info.ranged_extra,
+            weapon_tweak_templates = weapon_tweak_templates,
+        }
+        out = render_profile(out, ctx)
+
+        if prof_info.special_active_profile then
+            local active_lerp =
+                Utils.lerp_for_action(damage_profile_lerp_values, action_name, prof_info.special_active_profile)
+            local active_ctx = {
+                profile = prof_info.special_active_profile,
+                action = action,
+                action_name = action_name,
+                action_lerp = active_lerp,
+                is_ranged = is_ranged,
+                is_active = true,
+                power_level = power_level,
+                ranged_extra = prof_info.ranged_extra,
+                weapon_tweak_templates = weapon_tweak_templates,
+            }
+            out = render_profile(out, active_ctx)
+        end
+    end
 
     return out .. '\n'
 end
+
+-- Build the full stats text for a weapon item ----------------------------
 
 local function build_stats_text(item)
     if not item then
@@ -415,7 +494,6 @@ local function build_stats_text(item)
         return 'No weapon template found'
     end
 
-    -- _init_traits can fail on malformed items; degrade gracefully instead of crashing.
     local init_ok, weapon_tweak_templates, damage_profile_lerp_values = pcall(function()
         local wt, lerp_values = Weapon._init_traits(nil, weapon_template, item, nil, nil)
         return wt, lerp_values
@@ -426,6 +504,8 @@ local function build_stats_text(item)
         damage_profile_lerp_values = nil
     end
 
+    local is_ranged_weapon = WeaponTemplate.is_ranged(weapon_template)
+
     local attacks = {
         ranged = {},
         light = {},
@@ -434,30 +514,36 @@ local function build_stats_text(item)
     }
 
     for action_name, action in pairs(weapon_template.actions) do
-        local profile, ranged_extra = extract_profile(action)
-        if profile then
-            local category
-            if string.match(action_name, 'special') then
-                category = 'special'
-            elseif string.match(action_name, 'shoot') or string.match(action_name, 'zoom') then
-                category = 'ranged'
-            elseif profile.melee_attack_strength == 'heavy' or string.match(action_name, 'heavy') then
-                category = 'heavy'
-            elseif profile.melee_attack_strength == 'light' or string.match(action_name, 'light') then
-                category = 'light'
-            end
-            if category and not is_duplicate(attacks[category], profile, action_name, ranged_extra) then
-                table.insert(attacks[category], {
-                    names = { action_name },
-                    action = action,
-                    profile = profile,
-                    ranged_extra = ranged_extra,
-                })
+        local profiles = extract_profiles(action, action_name)
+        if #profiles > 0 then
+            -- Use the first profile for categorization.
+            local first_profile = profiles[1].profile
+            local category = categorize(action_name, first_profile)
+            if category then
+                -- Dedup against existing attacks in this category. Special-active-aware so
+                -- power sword combos (which differ only in the active profile) are preserved.
+                local existing = attacks[category]
+                local merged = false
+                for _, existing_attack in ipairs(existing) do
+                    if profiles_equivalent(existing_attack.profiles[1], profiles[1]) then
+                        table.insert(existing_attack.names, action_name)
+                        merged = true
+                        break
+                    end
+                end
+                if not merged then
+                    table.insert(existing, {
+                        names = { action_name },
+                        action = action,
+                        profile = first_profile,
+                        profiles = profiles,
+                        is_ranged = is_ranged_weapon or category == 'ranged',
+                    })
+                end
             end
         end
     end
 
-    -- Stable, sensible combo order (e.g. light_1, light_2, light_3).
     for _, category in pairs(attacks) do
         table.sort(category, function(a, b)
             return a.names[1] < b.names[1]
@@ -468,7 +554,13 @@ local function build_stats_text(item)
     for _, category in ipairs({ 'ranged', 'light', 'heavy', 'special' }) do
         local category_attacks = attacks[category]
         if #category_attacks > 0 then
-            text = text .. colored(COLORS.HEADER, string.upper(category) .. ' ATTACKS') .. '\n\n'
+            local header = string.upper(category)
+            if category == 'ranged' and not is_ranged_weapon then
+                header = 'RANGED (ALT)'
+            elseif category == 'special' then
+                header = 'WEAPON SPECIAL'
+            end
+            text = text .. colored(COLORS.HEADER, header .. ' ATTACKS') .. '\n\n'
             for _, attack_data in ipairs(category_attacks) do
                 text = render_attack(text, attack_data, weapon_tweak_templates, damage_profile_lerp_values)
             end
