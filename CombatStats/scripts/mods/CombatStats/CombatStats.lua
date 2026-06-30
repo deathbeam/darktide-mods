@@ -58,8 +58,6 @@ function mod.update(dt)
     if mod.tracker:is_tracking() then
         mod.tracker:update(dt)
     end
-
-    mod.history:update()
 end
 
 function mod.on_all_mods_loaded()
@@ -73,6 +71,10 @@ function mod.on_all_mods_loaded()
     load_package('packages/ui/views/inventory_view/inventory_view')
     load_package('packages/ui/views/inventory_weapons_view/inventory_weapons_view')
     load_package('packages/ui/hud/player_weapon/player_weapon')
+    -- Warm the history index so the stats view opens instantly
+    if mod.history then
+        mod.history:load_index()
+    end
 end
 
 mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, ...)

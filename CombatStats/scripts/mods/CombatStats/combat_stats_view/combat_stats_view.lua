@@ -36,6 +36,8 @@ function CombatStatsView:init(settings, context)
     self._using_cursor_navigation = Managers.ui:using_cursor_navigation()
     self._viewing_history = false
     self._viewing_history_entry = false
+    self._history_loading = false
+    self._history_entry_loading = false
     self._tracker = mod.tracker
 end
 
@@ -66,8 +68,9 @@ end
 
 function CombatStatsView:_format_entry_subtext(entry)
     if entry.is_history then
-        -- History entries show timestamp
-        return entry.history_data.date, Color.terminal_text_body_sub_header(255, true)
+        -- Placeholders (e.g. "Loading...") have no history_data
+        local date = entry.history_data and entry.history_data.date
+        return date or '', Color.terminal_text_body_sub_header(255, true)
     end
 
     local dps = 0
@@ -130,8 +133,26 @@ function CombatStatsView:_setup_entries()
     search_text = search_text:lower()
 
     if self._viewing_history then
-        -- Load history entries
+        -- Load history entries. If the index is still loading asynchronously,
+        -- show a placeholder entry so the player knows to wait.
         local history_entries = mod.history:get_history_entries()
+
+        -- Placeholder until the index loads or if there are no entries
+        if #history_entries == 0 then
+            local label = self._history_loading and 'Loading history...' or 'No history entries'
+            local placeholder = {
+                widget_type = 'stats_entry',
+                name = label,
+                duration = 0,
+                stats = {},
+                buffs = {},
+                is_session = true,
+                is_history = true,
+                disabled = true,
+            }
+            placeholder.subtext, placeholder.subtext_color = self:_format_entry_subtext(placeholder)
+            entries[#entries + 1] = placeholder
+        end
 
         for _, history_entry in ipairs(history_entries) do
             local mission_display = mod.utils:get_mission_display_name(history_entry.mission_name)
@@ -161,7 +182,26 @@ function CombatStatsView:_setup_entries()
             end
         end
     else
+        -- Show a placeholder while a history entry loads
+        if self._history_entry_loading then
+            local placeholder = {
+                widget_type = 'stats_entry',
+                name = 'Loading entry...',
+                duration = 0,
+                stats = {},
+                buffs = {},
+                is_session = true,
+                disabled = true,
+            }
+            placeholder.subtext, placeholder.subtext_color = self:_format_entry_subtext(placeholder)
+            entries[#entries + 1] = placeholder
+            return entries
+        end
+
         local tracker = self._tracker
+        if not tracker then
+            return entries
+        end
         local current_time = tracker:get_time()
         local engagements = tracker:get_engagement_stats()
         local session = tracker:get_session_stats()
@@ -740,11 +780,19 @@ function CombatStatsView:cb_on_history_pressed()
         -- Already in history list, toggle back to current
         self:cb_on_back_to_current_pressed()
     else
-        -- Go to history list
+        -- Go to history list (index loads async)
         self._viewing_history = true
         self._viewing_history_entry = false
+        self._history_loading = true
         self._selected_entry = nil
         self:_setup_entries()
+
+        mod.history:load_index(function()
+            self._history_loading = false
+            if self._viewing_history and not self._viewing_history_entry then
+                self:_setup_entries()
+            end
+        end)
     end
 end
 
@@ -758,6 +806,9 @@ function CombatStatsView:cb_on_back_to_current_pressed()
         -- Go back to history list from loaded history entry
         self._viewing_history = true
         self._viewing_history_entry = false
+        self._history_entry_loading = false
+        self._history_loading = false
+        self._current_history_file = nil
         self._selected_entry = nil
         self._tracker = mod.tracker
         self:_setup_entries()
@@ -765,6 +816,9 @@ function CombatStatsView:cb_on_back_to_current_pressed()
         -- Go back to current from history list
         self._viewing_history = false
         self._viewing_history_entry = false
+        self._history_entry_loading = false
+        self._history_loading = false
+        self._current_history_file = nil
         self._selected_entry = nil
         self._tracker = mod.tracker
         self:_setup_entries()
@@ -794,26 +848,35 @@ function CombatStatsView:_load_history_entry(entry)
         return
     end
 
-    -- Load full history data from file
-    local full_data = mod.history:load_history_entry(entry.history_data.file)
-    if not full_data then
-        return
-    end
+    -- Token guards against a stale callback if the user navigates away
+    local file_name = entry.history_data.file
+    self._current_history_file = file_name
+    self._history_entry_loading = true
 
-    -- Create a temporary tracker for history viewing
-    self._tracker = CombatStatsTracker:new()
-    self._tracker:load_from_history(full_data)
-
-    -- Store the file name for deletion
-    self._current_history_file = full_data.file
-
-    -- Switch to history entry view (not history list, not current)
+    self._tracker = nil
     self._viewing_history = false
     self._viewing_history_entry = true
     self._selected_entry = nil
-
-    -- Refresh entries - will now show the loaded history data
     self:_setup_entries()
+
+    mod.history:load_history_entry(file_name, function(full_data)
+        self._history_entry_loading = false
+
+        -- Bail out if the user navigated away or selected a different entry.
+        if self._current_history_file ~= file_name then
+            return
+        end
+
+        if not full_data then
+            self:cb_on_back_to_current_pressed()
+            return
+        end
+
+        self._tracker = CombatStatsTracker:new()
+        self._tracker:load_from_history(full_data)
+
+        self:_setup_entries()
+    end)
 end
 
 function CombatStatsView:update(dt, t, input_service)

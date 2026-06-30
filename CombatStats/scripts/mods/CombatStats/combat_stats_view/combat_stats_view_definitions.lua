@@ -182,7 +182,7 @@ local legend_inputs = {
         display_name = 'loc_combat_stats_back_to_history',
         alignment = 'right_alignment',
         visibility_function = function(parent)
-            return parent._viewing_history_entry
+            return parent._viewing_history_entry and not parent._history_entry_loading
         end,
     },
     {
@@ -209,7 +209,7 @@ local legend_inputs = {
         display_name = 'loc_combat_stats_delete_entry',
         alignment = 'right_alignment',
         visibility_function = function(parent)
-            return parent._viewing_history_entry
+            return parent._viewing_history_entry and not parent._history_entry_loading
         end,
     },
 }
