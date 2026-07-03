@@ -8,7 +8,7 @@ local ViewElementInputLegend =
 
 local WeaponTemplates = mod:original_require('scripts/settings/equipment/weapon_templates/weapon_templates')
 local WeaponTemplate = mod:original_require('scripts/utilities/weapon/weapon_template')
-local TextUtilities = mod:original_require('scripts/utilities/ui/text')
+local UIFontSettings = mod:original_require('scripts/managers/ui/ui_font_settings')
 
 local Builder = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_builder')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
@@ -17,9 +17,11 @@ local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_u
 local MAX_STAT_VALUE = 0.8
 
 local GRID_SPACING = { 4, 4 }
-local DETAIL_GRID_SPACING = { 0, 0 }
-local FONT_SIZE = 16
-local LINE_H = 19.5
+local DETAIL_GRID_SPACING = { 0, 2 }
+
+-- Detail-pane layout constants
+local INDENT_PX = 18
+local STAT_ROW_HEIGHT = 21
 
 local WeaponStatsView = class('WeaponStatsView', 'BaseView')
 
@@ -55,7 +57,7 @@ function WeaponStatsView:_build_weapon_list()
 end
 
 -- Construct a placeholder item with every stat trait maxed (0.8), in the shape
--- Weapon._init_traits / build_stats_text expect.
+-- Weapon._init_traits / build_stats expect.
 function WeaponStatsView._placeholder_item(weapon_template)
     local template_name = weapon_template.name
     local stats = {}
@@ -255,21 +257,166 @@ function WeaponStatsView:_select_entry(widget, entry)
     self:_rebuild_detail_widgets(entry)
 end
 
--- Measure the wrapped height of a single stats line at the detail pane width.
-local function measure_line_height(renderer, line, text_width)
-    if not renderer then
-        return LINE_H
+-- Detail-pane renderer -----------------------------------------------------
+-- The builder returns a flat list of typed records; each helper below turns one
+-- record into a single grid widget. The pane is just a vertical stack of these,
+-- so the layout (spacers, section rules, stat rows, armor bars) lives entirely
+-- here, decoupled from the data-extraction logic in the builder.
+
+local COLOR_LABEL = Color.terminal_text_body_sub_header(255, true)
+local COLOR_VALUE = Color.terminal_text_body(255, true)
+local COLOR_RULE = Color.terminal_corner(120, true)
+local COLOR_ARMOR_BONUS = Color.ui_orange_medium(255, true)
+local COLOR_ARMOR_PENALTY = Color.ui_hud_red_light(255, true)
+
+local function _make_text_widget(self, text, font_size, color, width, height, offset_x)
+    local h = height or (font_size + 6)
+    local widget_def = UIWidget.create_definition({
+        {
+            pass_type = 'text',
+            value_id = 'text',
+            value = text,
+            style = {
+                font_type = 'proxima_nova_bold',
+                font_size = font_size,
+                text_vertical_alignment = 'top',
+                text_horizontal_alignment = 'left',
+                text_color = color or COLOR_VALUE,
+                offset = { offset_x or 0, 0, 2 },
+                size = { width, h },
+            },
+        },
+    }, 'weapon_stats_detail_pivot', nil, { width, h })
+
+    local widget = self:_create_widget('detail_' .. #self._detail_widgets, widget_def)
+    self._detail_widgets[#self._detail_widgets + 1] = widget
+    return widget
+end
+
+-- A full-width divider line. Sits just below the baseline of the section header.
+local function _make_rule(self, width)
+    local h = 2
+    local widget_def = UIWidget.create_definition({
+        {
+            pass_type = 'rect',
+            style = {
+                color = COLOR_RULE,
+                offset = { 0, 0, 1 },
+                size = { width, h },
+            },
+        },
+    }, 'weapon_stats_detail_pivot', nil, { width, h })
+
+    local widget = self:_create_widget('detail_rule_' .. #self._detail_widgets, widget_def)
+    self._detail_widgets[#self._detail_widgets + 1] = widget
+end
+
+local function _make_spacer(self, height, width)
+    local h = height or 8
+    local widget_def = UIWidget.create_definition({
+        {
+            pass_type = 'rect',
+            style = {
+                color = { 0, 0, 0, 0 },
+            },
+        },
+    }, 'weapon_stats_detail_pivot', nil, { width, h })
+
+    local widget = self:_create_widget('detail_spacer_' .. #self._detail_widgets, widget_def)
+    self._detail_widgets[#self._detail_widgets + 1] = widget
+end
+
+-- Two-column row: muted label left, colored value right-aligned.
+local function _make_stat_row(self, label, value, value_color, width, indent)
+    local h = STAT_ROW_HEIGHT
+    local x = (indent or 0) * INDENT_PX
+    local label_w = width * 0.55
+    local value_w = width - label_w
+    local widget_def = UIWidget.create_definition({
+        {
+            pass_type = 'text',
+            value_id = 'label',
+            value = label,
+            style = {
+                font_type = 'proxima_nova_bold',
+                font_size = 16,
+                text_vertical_alignment = 'center',
+                text_horizontal_alignment = 'left',
+                text_color = COLOR_LABEL,
+                offset = { x, 0, 2 },
+                size = { label_w - x, h },
+                text_overflow_mode = 'truncate',
+            },
+        },
+        {
+            pass_type = 'text',
+            value_id = 'value',
+            value = value,
+            style = {
+                font_type = 'proxima_nova_bold',
+                font_size = 16,
+                text_vertical_alignment = 'center',
+                text_horizontal_alignment = 'right',
+                text_color = value_color or COLOR_VALUE,
+                offset = { label_w, 0, 2 },
+                size = { value_w, h },
+                text_overflow_mode = 'truncate',
+            },
+        },
+    }, 'weapon_stats_detail_pivot', nil, { width, h })
+
+    local widget = self:_create_widget('detail_stat_' .. #self._detail_widgets, widget_def)
+    self._detail_widgets[#self._detail_widgets + 1] = widget
+end
+
+-- Armor row as a stat row: "Name" left, "100% (C: 90%)" right.
+-- Color hints at the modifier: bonus (orange), penalty (red), baseline (muted).
+local function _armor_value_text(row)
+    local normal = string.format('%.0f%%', row.normal * 100)
+    if row.has_crit then
+        return normal .. string.format(' (C: %.0f%%)', row.crit * 100)
     end
-    local Text = TextUtilities
-    local stripped = line:gsub('{#[^}]*}', '')
-    local ok, w = pcall(Text.text_width, renderer, stripped, {
-        font_type = 'proxima_nova_bold',
-        font_size = FONT_SIZE,
-    }, { 9999, 9999 })
-    if ok and w and w > text_width then
-        return math.min(8, math.ceil(w / text_width)) * LINE_H
+    return normal
+end
+
+local function _armor_value_color(value)
+    if value > 1.005 then
+        return COLOR_ARMOR_BONUS
+    elseif value < 0.995 then
+        return COLOR_ARMOR_PENALTY
     end
-    return LINE_H
+    return COLOR_VALUE
+end
+
+local function _make_armor_row(self, row, width)
+    -- When crit differs, color by the normal value; the crit figure rides along.
+    local color = _armor_value_color(row.normal)
+    _make_stat_row(self, row.name, _armor_value_text(row), color, width, 1)
+end
+
+-- Dispatch a single builder record to the matching widget helper.
+local function _render_record(self, record, width)
+    local rtype = record.type
+    if rtype == 'spacer' then
+        _make_spacer(self, record.height, width)
+    elseif rtype == 'section' then
+        _make_text_widget(self, record.text, 22, record.color, width, 30)
+        _make_rule(self, width)
+        _make_spacer(self, 4, width)
+    elseif rtype == 'attack' then
+        _make_spacer(self, 2, width)
+        _make_text_widget(self, record.text, 19, record.color, width, 26)
+    elseif rtype == 'subheader' then
+        _make_text_widget(self, record.text, 16, record.color, width, 22, (record.indent or 0) * INDENT_PX)
+    elseif rtype == 'stat' then
+        _make_stat_row(self, record.label, record.value, record.value_color, width, record.indent or 0)
+    elseif rtype == 'armor' then
+        _make_spacer(self, 2, width)
+        _make_text_widget(self, record.header, 16, record.color, width, 22)
+        for _, row in ipairs(record.rows) do
+            _make_armor_row(self, row, width)
+        end
+    end
 end
 
 function WeaponStatsView:_rebuild_detail_widgets(entry)
@@ -286,83 +433,21 @@ function WeaponStatsView:_rebuild_detail_widgets(entry)
     end
 
     local detail_scenegraph = self._ui_scenegraph.weapon_stats_detail_content
-    local detail_content_width = detail_scenegraph and detail_scenegraph.size[1] or 600
-    local text_width = detail_content_width
+    local detail_width = detail_scenegraph and detail_scenegraph.size[1] or 600
+
+    -- Header: weapon name (bold, terminal orange) + kind subtext.
+    _make_text_widget(self, entry.name, 26, Color.terminal_text_header(255, true), detail_width, 34)
+    if entry.subtext then
+        _make_text_widget(self, entry.subtext, 16, entry.subtext_color or COLOR_LABEL, detail_width, 22)
+    end
+    _make_spacer(self, 8, detail_width)
 
     local weapon = entry.weapon
     local item = WeaponStatsView._placeholder_item(weapon.weapon_template)
-    local stats_text = Builder.build_stats_text(item)
+    local records = Builder.build_stats(item)
 
-    -- Split into lines, one text widget per line so the grid can scroll them.
-    local function split_lines(str)
-        local lines = {}
-        local i = 1
-        while true do
-            local j = string.find(str, '\n', i, true)
-            if not j then
-                lines[#lines + 1] = string.sub(str, i)
-                break
-            end
-            lines[#lines + 1] = string.sub(str, i, j - 1)
-            i = j + 1
-        end
-        return lines
-    end
-
-    local lines = split_lines(stats_text)
-    local renderer = self._ui_renderer
-
-    -- Header (weapon name + kind) then the stats lines, each with its own font size/color/height.
-    local records = {}
-    records[#records + 1] = {
-        text = entry.name,
-        font_size = 26,
-        color = Color.terminal_text_header(255, true),
-        height = 34,
-    }
-    if entry.subtext then
-        records[#records + 1] = {
-            text = entry.subtext,
-            font_size = 18,
-            color = entry.subtext_color or Color.terminal_text_body_sub_header(255, true),
-            height = 24,
-        }
-    end
-    records[#records + 1] = { text = '', font_size = FONT_SIZE, color = nil, height = 10 }
-
-    for idx = 1, #lines do
-        local line = lines[idx]
-        records[#records + 1] = {
-            text = line,
-            font_size = FONT_SIZE,
-            color = Color.terminal_text_body(255, true),
-            height = measure_line_height(renderer, line, text_width),
-        }
-    end
-
-    for idx = 1, #records do
-        local rec = records[idx]
-        local h = rec.height
-
-        local widget_def = UIWidget.create_definition({
-            {
-                pass_type = 'text',
-                value_id = 'text',
-                value = rec.text,
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = rec.font_size,
-                    text_vertical_alignment = 'top',
-                    text_horizontal_alignment = 'left',
-                    text_color = rec.color or Color.terminal_text_body(255, true),
-                    offset = { 0, 0, 2 },
-                    size = { text_width, h },
-                },
-            },
-        }, 'weapon_stats_detail_pivot', nil, { text_width, h })
-
-        local widget = self:_create_widget('detail_line_' .. idx, widget_def)
-        self._detail_widgets[#self._detail_widgets + 1] = widget
+    for i = 1, #records do
+        _render_record(self, records[i], detail_width)
     end
 
     local detail_grid_scenegraph_id = 'weapon_stats_detail_content'

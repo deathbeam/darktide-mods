@@ -7,39 +7,64 @@ local WeaponTweakTemplates = mod:original_require('scripts/extension_systems/wea
 local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settings')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
 
--- Colors
+-- Semantic colors, resolved to the game's terminal palette so the view matches native UI.
 local COLORS = {
-    HEADER = '255,200,100',
-    ATTACK = '100,200,255',
-    LABEL = '180,180,180',
-    DAMAGE = '255,200,100',
-    ARMOR = '255,150,150',
-    CRIT = '255,255,100',
-    IMPACT = '200,200,255',
-    WEAKSPOT = '255,200,100',
-    TIMING = '150,255,150',
-    FALLOFF = '180,220,255',
-    PELLET = '255,180,255',
-    ADVANCED = '160,160,200',
-    SPECIAL = '255,140,255',
+    HEADER = Color.terminal_text_header(255, true),
+    ATTACK = Color.ui_terminal(255, true),
+    LABEL = Color.terminal_text_body_sub_header(255, true),
+    DAMAGE = Color.ui_orange_light(255, true),
+    ARMOR = Color.ui_hud_red_light(255, true),
+    CRIT = Color.ui_hud_yellow_light(255, true),
+    IMPACT = Color.ui_blue_light(255, true),
+    WEAKSPOT = Color.ui_orange_light(255, true),
+    TIMING = Color.ui_hud_green_light(255, true),
+    FALLOFF = Color.ui_blue_light(255, true),
+    PELLET = Color.ui_hud_warp_charge_low(255, true),
+    ADVANCED = Color.ui_grey_light(255, true),
+    SPECIAL = Color.ui_orange_medium(255, true),
 }
 
--- Helpers -----------------------------------------------------------------
+-- Record helpers -----------------------------------------------------------
+-- Each render function appends typed records to a shared `records` list. The
+-- view is a thin renderer over these record types, so changing the layout
+-- never touches the data-extraction logic below.
 
-local function colored(color, text)
-    return string.format('{#color(%s)}%s{#reset()}', color, text)
+local function add(records, rec)
+    records[#records + 1] = rec
 end
 
-local function label(text)
-    return colored(COLORS.LABEL, text)
+local function add_section(records, text)
+    add(records, { type = 'section', text = text, color = COLORS.HEADER })
 end
 
-local function value(color, text)
-    return colored(color, text)
+local function add_attack(records, text)
+    add(records, { type = 'attack', text = text, color = COLORS.ATTACK })
 end
 
-local function line(out, lbl, val, val_color)
-    return out .. '  ' .. label(lbl) .. ' ' .. value(val_color or COLORS.DAMAGE, val) .. '\n'
+local function add_subheader(records, text, indent)
+    add(records, { type = 'subheader', text = text, color = COLORS.HEADER, indent = indent or 0 })
+end
+
+local function add_special_active(records)
+    add(records, { type = 'subheader', text = '> Special Active', color = COLORS.SPECIAL, indent = 1 })
+end
+
+local function add_stat(records, label, value, value_color, indent)
+    add(records, {
+        type = 'stat',
+        label = label,
+        value = value,
+        value_color = value_color or COLORS.DAMAGE,
+        indent = indent or 0,
+    })
+end
+
+local function add_armor(records, rows)
+    add(records, { type = 'armor', header = 'Armor Damage', color = COLORS.HEADER, rows = rows })
+end
+
+local function add_spacer(records, height)
+    add(records, { type = 'spacer', height = height or 8 })
 end
 
 -- Format a number compactly: integers as-is, small fractions with 1-2 decimals.
@@ -208,7 +233,7 @@ end
 
 -- Render a single (profile) block ----------------------------------------
 
-local function render_timing(out, action, weapon_template, weapon_tweak_templates, action_name)
+local function render_timing(records, action, weapon_template, weapon_tweak_templates, action_name)
     local time_scale = 1
     local total_time = action.total_time or 0
     local fire_rate_shown = false
@@ -218,7 +243,7 @@ local function render_timing(out, action, weapon_template, weapon_tweak_template
         time_scale = tmpl.time_scale or 1
         local auto_fire_time = tmpl.fire_rate and tmpl.fire_rate.auto_fire_time
         if type(auto_fire_time) == 'number' and auto_fire_time > 0 then
-            out = line(out, 'Fire Rate:', string.format('%.2f/s', 1 / auto_fire_time), COLORS.TIMING)
+            add_stat(records, 'Fire Rate', string.format('%.2f/s', 1 / auto_fire_time), COLORS.TIMING)
             fire_rate_shown = true
         end
     end
@@ -241,18 +266,16 @@ local function render_timing(out, action, weapon_template, weapon_tweak_template
             chain_time = total_time
         end
         if chain_time and chain_time > 0 then
-            local lbl = (action.kind == 'shoot_hit_scan' or action.kind == 'shoot_pellets') and 'Fire Rate:'
-                or 'Attack Speed:'
-            out = line(out, lbl, string.format('%.2f/s', 1 / (chain_time / time_scale)), COLORS.TIMING)
+            local lbl = (action.kind == 'shoot_hit_scan' or action.kind == 'shoot_pellets') and 'Fire Rate'
+                or 'Attack Speed'
+            add_stat(records, lbl, string.format('%.2f/s', 1 / (chain_time / time_scale)), COLORS.TIMING)
         end
     end
-
-    return out
 end
 
 -- Render one damage profile (inactive or special-active) for an attack.
 local render_armor
-local function render_profile(out, ctx)
+local function render_profile(records, ctx)
     local profile = ctx.profile
     local action_lerp = ctx.action_lerp
     local is_ranged = ctx.is_ranged
@@ -261,22 +284,22 @@ local function render_profile(out, ctx)
 
     local target_settings = Utils.target_settings(profile, is_ranged)
     if not target_settings then
-        return out
+        return
     end
 
     local dropoff = is_ranged and 0 or nil
 
     if is_active then
-        out = out .. '    ' .. value(COLORS.SPECIAL, '> Special Active') .. '\n'
+        add_special_active(records)
     end
 
     -- Base resolved damage (matches the in-game card) and impact.
     local base_attack, base_impact = Utils.base_powers(profile, target_settings, power_level, action_lerp, dropoff)
     if base_attack and math.abs(base_attack) > 0.01 then
-        out = line(out, 'Damage:', fmt_num(base_attack), COLORS.DAMAGE)
+        add_stat(records, 'Damage', fmt_num(base_attack), COLORS.DAMAGE)
     end
     if base_impact and math.abs(base_impact) > 0.01 then
-        out = line(out, 'Impact:', fmt_num(base_impact), COLORS.IMPACT)
+        add_stat(records, 'Impact', fmt_num(base_impact), COLORS.IMPACT)
     end
 
     -- Multipliers: weakspot (finesse), crit, and crit+weakspot.
@@ -287,18 +310,18 @@ local function render_profile(out, ctx)
     local any_mult = (weakspot_mult and math.abs(weakspot_mult - 1) > 0.005)
         or (crit_mult and math.abs(crit_mult - 1) > 0.005)
     if any_mult then
-        out = out .. '  ' .. label('Multipliers:') .. '\n'
+        add_subheader(records, 'Multipliers')
         if weakspot_mult and math.abs(weakspot_mult - 1) > 0.005 then
-            out = line(out, '  Weakspot:', fmt_mult(weakspot_mult), COLORS.WEAKSPOT)
+            add_stat(records, 'Weakspot', fmt_mult(weakspot_mult), COLORS.WEAKSPOT, 1)
         end
         if crit_mult and math.abs(crit_mult - 1) > 0.005 then
-            out = line(out, '  Crit:', fmt_mult(crit_mult), COLORS.CRIT)
+            add_stat(records, 'Crit', fmt_mult(crit_mult), COLORS.CRIT, 1)
         end
         if
             crit_weakspot_mult
             and math.abs(crit_weakspot_mult - math.max(weakspot_mult or 1, crit_mult or 1)) > 0.005
         then
-            out = line(out, '  Crit+Weak:', fmt_mult(crit_weakspot_mult), COLORS.CRIT)
+            add_stat(records, 'Crit+Weak', fmt_mult(crit_weakspot_mult), COLORS.CRIT, 1)
         end
     end
 
@@ -306,12 +329,12 @@ local function render_profile(out, ctx)
     local ranged_extra = ctx.ranged_extra
     if ranged_extra then
         if ranged_extra.num_pellets then
-            out = line(out, 'Pellets:', string.format('x%d', ranged_extra.num_pellets), COLORS.PELLET)
+            add_stat(records, 'Pellets', string.format('x%d', ranged_extra.num_pellets), COLORS.PELLET)
         end
         if ranged_extra.spread_pitch and ranged_extra.spread_yaw then
-            out = line(
-                out,
-                'Spread:',
+            add_stat(
+                records,
+                'Spread',
                 string.format('%.1f / %.1f', ranged_extra.spread_pitch, ranged_extra.spread_yaw),
                 COLORS.PELLET
             )
@@ -320,13 +343,13 @@ local function render_profile(out, ctx)
 
     local min_r, max_r = Utils.ranges(profile, action_lerp)
     if min_r and max_r then
-        out = line(out, 'Falloff:', string.format('%.0f - %.0f m', min_r, max_r), COLORS.FALLOFF)
+        add_stat(records, 'Falloff', string.format('%.0f - %.0f m', min_r, max_r), COLORS.FALLOFF)
     end
 
     if profile.suppression_value ~= nil then
         local sup = Utils.lerp_entry(profile.suppression_value, Utils.lerp_from_path(action_lerp, 'suppression_value'))
         if sup and math.abs(sup) > 0.01 then
-            out = line(out, 'Suppression:', fmt_num(sup), COLORS.ADVANCED)
+            add_stat(records, 'Suppression', fmt_num(sup), COLORS.ADVANCED)
         end
     end
 
@@ -336,22 +359,22 @@ local function render_profile(out, ctx)
     if crit_strike then
         if crit_strike.chance_modifier and crit_strike.chance_modifier ~= 0 then
             local sign = crit_strike.chance_modifier >= 0 and '+' or ''
-            out = line(
-                out,
-                'Crit Modifier:',
+            add_stat(
+                records,
+                'Crit Modifier',
                 string.format('%s%.1f%%', sign, crit_strike.chance_modifier * 100),
                 COLORS.CRIT
             )
         end
         if crit_strike.max_critical_shots and crit_strike.max_critical_shots ~= 0 then
-            out = line(out, 'Crit Strings:', tostring(crit_strike.max_critical_shots), COLORS.CRIT)
+            add_stat(records, 'Crit Strings', tostring(crit_strike.max_critical_shots), COLORS.CRIT)
         end
     end
 
     -- Backstab bonus (extra damage on rear hits).
     if profile.backstab_bonus and profile.backstab_bonus ~= 0 then
         local bonus = Utils.lerp_entry(profile.backstab_bonus)
-        out = line(out, 'Backstab:', string.format('%.0f%%', bonus * 100), COLORS.WEAKSPOT)
+        add_stat(records, 'Backstab', string.format('%.0f%%', bonus * 100), COLORS.WEAKSPOT)
     end
 
     -- Cleave (attack/impact distribution).
@@ -365,9 +388,9 @@ local function render_profile(out, ctx)
                 and impact_cleave > 0.01
                 and math.abs(impact_cleave - attack_cleave) > 0.01
             then
-                out = line(out, 'Cleave:', string.format('%.2f / %.2f', attack_cleave, impact_cleave), COLORS.DAMAGE)
+                add_stat(records, 'Cleave', string.format('%.2f / %.2f', attack_cleave, impact_cleave), COLORS.DAMAGE)
             else
-                out = line(out, 'Cleave:', string.format('%.2f', attack_cleave), COLORS.DAMAGE)
+                add_stat(records, 'Cleave', string.format('%.2f', attack_cleave), COLORS.DAMAGE)
             end
         end
     end
@@ -375,7 +398,7 @@ local function render_profile(out, ctx)
     -- Stagger category.
     local stagger = Utils.stagger_name(profile.stagger_category)
     if stagger then
-        out = line(out, 'Stagger:', stagger, COLORS.LABEL)
+        add_stat(records, 'Stagger', stagger, COLORS.LABEL)
     end
 
     -- Gibbing.
@@ -389,7 +412,7 @@ local function render_profile(out, ctx)
         gib_parts[#gib_parts + 1] = gib_type
     end
     if #gib_parts > 0 then
-        out = line(out, 'Gibbing:', table.concat(gib_parts, ' / '), COLORS.ADVANCED)
+        add_stat(records, 'Gibbing', table.concat(gib_parts, ' / '), COLORS.ADVANCED)
     end
 
     -- Flags.
@@ -401,56 +424,60 @@ local function render_profile(out, ctx)
         flags[#flags + 1] = 'Ignores Stagger Reduction'
     end
     if #flags > 0 then
-        out = line(out, 'Flags:', table.concat(flags, ', '), COLORS.ADVANCED)
+        add_stat(records, 'Flags', table.concat(flags, ', '), COLORS.ADVANCED)
     end
 
     -- Armor damage table (normal / crit).
-    out = render_armor(out, profile, target_settings, action_lerp, dropoff)
-
-    return out
+    render_armor(records, profile, target_settings, action_lerp, dropoff)
 end
 
--- Per-armor damage modifiers as percentages.
-render_armor = function(out, profile, target_settings, action_lerp, dropoff)
+-- Per-armor damage modifiers as a compact table of rows.
+render_armor = function(records, profile, target_settings, action_lerp, dropoff)
     local armor_order = Utils.armor_order()
-    local has_any = false
     local rows = {}
 
     for _, armor_key in ipairs(armor_order) do
         local armor_type = ArmorSettings.types[armor_key]
         if armor_type then
-            local normal =
-                Utils.armor_modifier(profile, target_settings, action_lerp, 'attack', armor_type, false, dropoff)
-            local crit =
-                Utils.armor_modifier(profile, target_settings, action_lerp, 'attack', armor_type, true, dropoff)
-            if normal and (math.abs(normal - 1) > 0.005 or math.abs(crit - normal) > 0.005) then
-                has_any = true
-                rows[#rows + 1] = { armor_key = armor_key, normal = normal, crit = crit }
+            -- A nil modifier means "no special handling" = baseline 100% damage.
+            -- Default both to 1.0 so the row logic below treats absence as 100%.
+            local normal = Utils.armor_modifier(
+                profile,
+                target_settings,
+                action_lerp,
+                'attack',
+                armor_type,
+                false,
+                dropoff
+            ) or 1
+            local crit = Utils.armor_modifier(
+                profile,
+                target_settings,
+                action_lerp,
+                'attack',
+                armor_type,
+                true,
+                dropoff
+            ) or 1
+            -- Skip rows that are baseline 100% with no crit difference (no info to convey).
+            if math.abs(normal - 1) > 0.005 or math.abs(crit - normal) > 0.005 then
+                rows[#rows + 1] = {
+                    name = Utils.armor_name(armor_key),
+                    normal = normal,
+                    crit = crit,
+                    has_crit = math.abs(crit - normal) > 0.005,
+                }
             end
         end
     end
 
-    if not has_any then
-        return out
+    if #rows > 0 then
+        add_armor(records, rows)
     end
-
-    out = out .. '  ' .. label('Armor Damage:') .. '\n'
-    for _, entry in ipairs(rows) do
-        local seg = string.format(
-            '    %s: %s',
-            Utils.armor_name(entry.armor_key),
-            value(COLORS.ARMOR, string.format('%.0f%%', entry.normal * 100))
-        )
-        if math.abs(entry.crit - entry.normal) > 0.005 then
-            seg = seg .. ' ' .. value(COLORS.CRIT, string.format('(C: %.0f%%)', entry.crit * 100))
-        end
-        out = out .. seg .. '\n'
-    end
-    return out
 end
 
 -- Render one attack (which may carry an inactive + a special-active profile).
-local function render_attack(out, attack_data, weapon_template, weapon_tweak_templates, damage_profile_lerp_values)
+local function render_attack(records, attack_data, weapon_template, weapon_tweak_templates, damage_profile_lerp_values)
     local action = attack_data.action
     local action_name = attack_data.names[1]
     local is_ranged = attack_data.is_ranged
@@ -459,13 +486,13 @@ local function render_attack(out, attack_data, weapon_template, weapon_tweak_tem
     for _, name in ipairs(attack_data.names) do
         labels[#labels + 1] = Utils.friendly_action_label(name)
     end
-    out = out .. '  ' .. value(COLORS.ATTACK, table.concat(labels, ', ')) .. '\n'
+    add_attack(records, table.concat(labels, ', '))
 
     if attack_data.profile.damage_type then
-        out = line(out, 'Type:', tostring(Utils.damage_type_name(attack_data.profile.damage_type)), COLORS.LABEL)
+        add_stat(records, 'Type', tostring(Utils.damage_type_name(attack_data.profile.damage_type)), COLORS.LABEL)
     end
 
-    out = render_timing(out, action, weapon_template, weapon_tweak_templates, action_name)
+    render_timing(records, action, weapon_template, weapon_tweak_templates, action_name)
 
     for _, prof_info in ipairs(attack_data.profiles) do
         local action_lerp = Utils.lerp_for_action(damage_profile_lerp_values, action_name, prof_info.profile)
@@ -483,7 +510,7 @@ local function render_attack(out, attack_data, weapon_template, weapon_tweak_tem
             weapon_tweak_templates = weapon_tweak_templates,
             weapon_template = weapon_template,
         }
-        out = render_profile(out, ctx)
+        render_profile(records, ctx)
 
         if prof_info.special_active_profile then
             local active_lerp =
@@ -500,23 +527,23 @@ local function render_attack(out, attack_data, weapon_template, weapon_tweak_tem
                 weapon_tweak_templates = weapon_tweak_templates,
                 weapon_template = weapon_template,
             }
-            out = render_profile(out, active_ctx)
+            render_profile(records, active_ctx)
         end
     end
 
-    return out .. '\n'
+    add_spacer(records, 10)
 end
 
--- Build the full stats text for a weapon item ----------------------------
+-- Build the full list of stat records for a weapon item ------------------
 
-local function build_stats_text(item)
+local function build_stats(item)
     if not item then
-        return 'No weapon selected'
+        return {}
     end
 
     local weapon_template = WeaponTemplate.weapon_template_from_item(item)
     if not weapon_template or not weapon_template.actions then
-        return 'No weapon template found'
+        return {}
     end
 
     local init_ok, weapon_tweak_templates, damage_profile_lerp_values = pcall(function()
@@ -575,7 +602,7 @@ local function build_stats_text(item)
         end)
     end
 
-    local text = ''
+    local records = {}
     for _, category in ipairs({ 'ranged', 'light', 'heavy', 'special' }) do
         local category_attacks = attacks[category]
         if #category_attacks > 0 then
@@ -585,22 +612,17 @@ local function build_stats_text(item)
             elseif category == 'special' then
                 header = 'WEAPON SPECIAL'
             end
-            text = text .. colored(COLORS.HEADER, header .. ' ATTACKS') .. '\n\n'
+            add_section(records, header .. ' ATTACKS')
+            add_spacer(records, 4)
             for _, attack_data in ipairs(category_attacks) do
-                text = render_attack(
-                    text,
-                    attack_data,
-                    weapon_template,
-                    weapon_tweak_templates,
-                    damage_profile_lerp_values
-                )
+                render_attack(records, attack_data, weapon_template, weapon_tweak_templates, damage_profile_lerp_values)
             end
         end
     end
 
-    return text
+    return records
 end
 
 return {
-    build_stats_text = build_stats_text,
+    build_stats = build_stats,
 }
