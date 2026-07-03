@@ -172,8 +172,8 @@ function WeaponStatsUtils.lerp_from_path(action_lerp, ...)
     return value
 end
 
--- The lerp table returned by Weapon._init_traits is keyed by action name; this fetches the
--- lerp values for one action (and its damage profile) in the shape DamageProfile expects.
+-- Fetch lerp values for one action (keyed by action name, then damage profile name), in the
+-- shape DamageProfile expects.
 function WeaponStatsUtils.lerp_for_action(damage_profile_lerp_values, action_name, damage_profile)
     if not damage_profile_lerp_values then
         return nil
@@ -209,9 +209,8 @@ function WeaponStatsUtils.target_settings(damage_profile, is_ranged)
     return DamageProfile.target_settings(damage_profile, idx)
 end
 
--- The game's damage helpers read `current_target_settings_lerp_values` off the lerp table.
--- For UI calls with no real attacker, set it from the per-target sub-table (and restore the
--- previous value afterwards) so lerpable armor/power entries resolve correctly.
+-- The game's damage helpers read `current_target_settings_lerp_values` off the lerp table. Set it
+-- from the per-target sub-table for UI calls (no real attacker), restoring the previous value after.
 local function _with_target_lerps(action_lerp, target_index)
     local cur = action_lerp or {}
     local targets = cur.targets
@@ -230,8 +229,7 @@ local function _restore_lerps(action_lerp, prev)
     end
 end
 
--- Scaled base attack/impact power at the item's real lerp, using the game's own helper so the
--- numbers match what the in-game weapon card shows.
+-- Scaled base attack/impact power at the item's real lerp, via the game's own helper.
 function WeaponStatsUtils.base_powers(
     damage_profile,
     target_settings,

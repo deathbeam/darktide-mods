@@ -66,11 +66,9 @@ local function fmt_mult(n)
     return string.format('%.2fx', n)
 end
 
--- Resolve the per-action weapon-handling template the way the game does: the built
--- weapon_tweak_templates.weapon_handling table is keyed by a per-action identifier returned
--- by WeaponTweakTemplates.get_template_identifiers, NOT by the raw weapon_handling_template
--- name on the action. Looking it up by the raw name silently returns nil for almost every
--- weapon, so crit modifiers / fire rate / time scale were never shown.
+-- Resolve the per-action weapon-handling template. The built weapon_handling table is keyed by
+-- a per-action identifier from get_template_identifiers, NOT the raw weapon_handling_template name
+-- -- so we must use that helper (matching the game's weapon_stats.lua).
 local function handling_template_for_action(weapon_template, weapon_tweak_templates, action_name)
     local handling = weapon_tweak_templates and weapon_tweak_templates.weapon_handling
     if not handling or not weapon_template or not action_name then
@@ -109,15 +107,9 @@ local function extract_profiles(action)
         num_templates = n
     end
 
-    -- Action.damage_template returns its secondary profile for two unrelated reasons:
-    --   * a true special-active mode (melee sweeps with damage_profile_special_active, e.g. power
-    --     swords/chainaxes), or
-    --   * an on-hit explosion's close_damage_profile (ranged hitscan/projectile/shotshell with an
-    --     explosion_template, e.g. the phosphor pistol's backblast).
-    -- The two are reached via different code paths: the special-active only comes back when the
-    -- action carries a direct damage_profile/inner_damage_profile/sweeps, while the explosion only
-    -- comes back through the fire_configuration path. Use that to tell them apart so we never label
-    -- a backblast explosion as a "Special Active" mode.
+    -- A secondary profile is either a special-active mode (melee with damage_profile_special_active)
+    -- or an on-hit explosion (ranged hitscan/projectile). We only surface the special-active;
+    -- explosions are skipped (the main profile already carries crit/weakspot data).
     local has_direct_profile = action.damage_profile ~= nil
         or action.inner_damage_profile ~= nil
         or action.sweeps ~= nil
@@ -150,25 +142,18 @@ local function extract_profiles(action)
                 end
             end
 
-            local special_active_profile, explosion_profile, explosion_power_level
-            if special_profile and special_profile ~= dmg_profile then
-                if has_direct_profile then
-                    special_active_profile = special_profile
-                else
-                    explosion_profile = special_profile
-                    -- Explosions may carry their own static power level (e.g. phosphor backblast = 500).
-                    local expl_ok, expl_template = pcall(Action.explosion_template, action, i)
-                    if expl_ok and expl_template and expl_template.static_power_level then
-                        explosion_power_level = expl_template.static_power_level
-                    end
-                end
+            -- The secondary profile is either a special-active mode (melee with
+            -- damage_profile_special_active) or an on-hit explosion (ranged hitscan/projectile).
+            -- We only surface the special-active; explosions are skipped (their impact damage
+            -- isn't shown separately, and the main profile already carries crit/weakspot data).
+            local special_active_profile
+            if special_profile and special_profile ~= dmg_profile and has_direct_profile then
+                special_active_profile = special_profile
             end
 
             profiles[#profiles + 1] = {
                 profile = dmg_profile,
                 special_active_profile = special_active_profile,
-                explosion_profile = explosion_profile,
-                explosion_power_level = explosion_power_level,
                 ranged_extra = ranged_extra,
                 template_index = i,
             }
@@ -178,10 +163,9 @@ local function extract_profiles(action)
     return profiles
 end
 
--- Category (light/heavy/ranged/special) for an action.
--- The game marks the weapon's special action explicitly via weapon_template.special_action_name
--- (which can be action_bash, action_stab, action_pistol_whip, action_push, etc. -- names that do
--- NOT all contain "special"), so we must compare against that field rather than substring-match.
+-- Category (light/heavy/ranged/special). The game marks the special action via
+-- weapon_template.special_action_name (action_bash/action_stab/action_pistol_whip/etc. --
+-- names that don't all contain "special"), so compare against that field, not substring-match.
 local function categorize(action_name, profile, weapon_template)
     if weapon_template and weapon_template.special_action_name == action_name then
         return 'special'
@@ -212,10 +196,9 @@ local function profiles_equivalent(a, b)
     local function secondary_name(p)
         return p and p.name
     end
-    -- Identity covers both kinds of secondary profile (special-active and on-hit explosion)
-    -- so two attacks only collapse together when their full profile set matches.
-    local a_second = secondary_name(a.special_active_profile) or secondary_name(a.explosion_profile)
-    local b_second = secondary_name(b.special_active_profile) or secondary_name(b.explosion_profile)
+    -- Identity covers the special-active secondary profile so two attacks only collapse together
+    local a_second = secondary_name(a.special_active_profile)
+    local b_second = secondary_name(b.special_active_profile)
     if a_second ~= b_second then
         return false
     end
@@ -288,37 +271,13 @@ local function render_profile(out, ctx)
         out = out .. '    ' .. value(COLORS.SPECIAL, '> Special Active') .. '\n'
     end
 
-    -- On-hit explosions (e.g. the phosphor pistol's backblast) are merged into the main profile's
-    -- per-armor damage by the game (attack[i] += explosion[i]), never shown separately. Compute
-    -- the explosion's impact power here so it can be folded into the armor table and base impact.
-    local explosion = nil
-    if ctx.explosion_profile then
-        local expl_target = Utils.target_settings(ctx.explosion_profile, is_ranged)
-        if expl_target then
-            local expl_lerp = ctx.explosion_lerp
-            local expl_power = ctx.explosion_power_level or power_level
-            local _, expl_base_impact =
-                Utils.base_powers(ctx.explosion_profile, expl_target, expl_power, expl_lerp, nil)
-            explosion = {
-                profile = ctx.explosion_profile,
-                target_settings = expl_target,
-                lerp = expl_lerp,
-                base_impact = expl_base_impact or 0,
-            }
-        end
-    end
-
     -- Base resolved damage (matches the in-game card) and impact.
     local base_attack, base_impact = Utils.base_powers(profile, target_settings, power_level, action_lerp, dropoff)
     if base_attack and math.abs(base_attack) > 0.01 then
         out = line(out, 'Damage:', fmt_num(base_attack), COLORS.DAMAGE)
     end
-    local shown_impact = base_impact or 0
-    if explosion and explosion.base_impact then
-        shown_impact = shown_impact + explosion.base_impact
-    end
-    if math.abs(shown_impact) > 0.01 then
-        out = line(out, 'Impact:', fmt_num(shown_impact), COLORS.IMPACT)
+    if base_impact and math.abs(base_impact) > 0.01 then
+        out = line(out, 'Impact:', fmt_num(base_impact), COLORS.IMPACT)
     end
 
     -- Multipliers: weakspot (finesse), crit, and crit+weakspot.
@@ -450,50 +409,25 @@ local function render_profile(out, ctx)
     end
 
     -- Armor damage table (normal / crit).
-    out = render_armor(out, base_attack or 0, profile, target_settings, action_lerp, dropoff, explosion)
+    out = render_armor(out, profile, target_settings, action_lerp, dropoff)
 
     return out
 end
 
--- Per-armor damage table. The game merges on-hit explosions into the main profile's per-armor
--- damage (attack[i] += explosion[i]), so we do the same: each row's damage is the main profile's
--- attack damage plus the explosion's impact damage (explosions are impact-only). Shown as damage
--- values, matching the in-game card's body/crit columns.
-render_armor = function(out, base_attack, profile, target_settings, action_lerp, dropoff, explosion)
+-- Per-armor damage modifiers as percentages.
+render_armor = function(out, profile, target_settings, action_lerp, dropoff)
     local armor_order = Utils.armor_order()
     local has_any = false
     local rows = {}
 
-    local expl_base = explosion and explosion.base_impact or 0
-    local expl_profile = explosion and explosion.profile
-    local expl_target = explosion and explosion.target_settings
-    local expl_lerp = explosion and explosion.lerp
-
     for _, armor_key in ipairs(armor_order) do
         local armor_type = ArmorSettings.types[armor_key]
         if armor_type then
-            local main_mod =
+            local normal =
                 Utils.armor_modifier(profile, target_settings, action_lerp, 'attack', armor_type, false, dropoff)
-            local main_mod_crit =
+            local crit =
                 Utils.armor_modifier(profile, target_settings, action_lerp, 'attack', armor_type, true, dropoff)
-
-            local normal = (main_mod and base_attack * main_mod) or 0
-            local crit = (main_mod_crit and base_attack * main_mod_crit) or 0
-
-            if expl_profile and expl_base > 0 then
-                local expl_mod =
-                    Utils.armor_modifier(expl_profile, expl_target, expl_lerp, 'impact', armor_type, false, nil)
-                local expl_mod_crit =
-                    Utils.armor_modifier(expl_profile, expl_target, expl_lerp, 'impact', armor_type, true, nil)
-                if expl_mod then
-                    normal = normal + expl_base * expl_mod
-                end
-                if expl_mod_crit then
-                    crit = crit + expl_base * expl_mod_crit
-                end
-            end
-
-            if normal > 0.01 or crit > 0.01 then
+            if normal and (math.abs(normal - 1) > 0.005 or math.abs(crit - normal) > 0.005) then
                 has_any = true
                 rows[#rows + 1] = { armor_key = armor_key, normal = normal, crit = crit }
             end
@@ -506,10 +440,13 @@ render_armor = function(out, base_attack, profile, target_settings, action_lerp,
 
     out = out .. '  ' .. label('Armor Damage:') .. '\n'
     for _, entry in ipairs(rows) do
-        local seg =
-            string.format('    %s: %s', Utils.armor_name(entry.armor_key), value(COLORS.ARMOR, fmt_num(entry.normal)))
-        if math.abs(entry.crit - entry.normal) > 0.01 then
-            seg = seg .. ' ' .. value(COLORS.CRIT, string.format('(C: %s)', fmt_num(entry.crit)))
+        local seg = string.format(
+            '    %s: %s',
+            Utils.armor_name(entry.armor_key),
+            value(COLORS.ARMOR, string.format('%.0f%%', entry.normal * 100))
+        )
+        if math.abs(entry.crit - entry.normal) > 0.005 then
+            seg = seg .. ' ' .. value(COLORS.CRIT, string.format('(C: %.0f%%)', entry.crit * 100))
         end
         out = out .. seg .. '\n'
     end
@@ -550,16 +487,6 @@ local function render_attack(out, attack_data, weapon_template, weapon_tweak_tem
             weapon_tweak_templates = weapon_tweak_templates,
             weapon_template = weapon_template,
         }
-        -- On-hit explosions merge into the main profile's per-armor damage (the game does
-        -- attack[i] += explosion[i]); set this BEFORE render_profile so it is actually applied.
-        if prof_info.explosion_profile then
-            ctx.explosion_profile = prof_info.explosion_profile
-            ctx.explosion_lerp =
-                Utils.lerp_for_action(damage_profile_lerp_values, action_name, prof_info.explosion_profile)
-            -- Explosions may carry their own static power level (e.g. phosphor backblast = 500).
-            ctx.explosion_power_level = prof_info.explosion_power_level or power_level
-        end
-
         out = render_profile(out, ctx)
 
         if prof_info.special_active_profile then

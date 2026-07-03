@@ -13,8 +13,7 @@ local TextUtilities = mod:original_require('scripts/utilities/ui/text')
 local Builder = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_builder')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
 
--- Max stat value a real weapon can roll: items cap at 0.8 (80/100), see items.lua
--- `max_weapon_preview`. Using 1.0 would show theoretical maxes no weapon can reach.
+-- Max stat value a real weapon can roll: items cap at 0.8 (items.lua max_weapon_preview).
 local MAX_STAT_VALUE = 0.8
 
 local GRID_SPACING = { 4, 4 }
@@ -55,8 +54,8 @@ function WeaponStatsView:_build_weapon_list()
     return list
 end
 
--- Construct a placeholder item with every stat trait maxed (0.8 = real max roll),
--- matching the shape Weapon._init_traits / build_stats_text expect.
+-- Construct a placeholder item with every stat trait maxed (0.8), in the shape
+-- Weapon._init_traits / build_stats_text expect.
 function WeaponStatsView._placeholder_item(weapon_template)
     local template_name = weapon_template.name
     local stats = {}
@@ -294,8 +293,7 @@ function WeaponStatsView:_rebuild_detail_widgets(entry)
     local item = WeaponStatsView._placeholder_item(weapon.weapon_template)
     local stats_text = Builder.build_stats_text(item)
 
-    -- Split into lines, measure each for wrapping, lay out one text widget per line so the
-    -- grid can scroll them with correct hit-testing (mirrors the old inventory-panel renderer).
+    -- Split into lines, one text widget per line so the grid can scroll them.
     local function split_lines(str)
         local lines = {}
         local i = 1
@@ -314,8 +312,7 @@ function WeaponStatsView:_rebuild_detail_widgets(entry)
     local lines = split_lines(stats_text)
     local renderer = self._ui_renderer
 
-    -- Build render records: header (weapon name + kind) then the stats lines. Each record carries
-    -- its own font size / color / height so the header stands out (mirrors CombatStats' detail).
+    -- Header (weapon name + kind) then the stats lines, each with its own font size/color/height.
     local records = {}
     records[#records + 1] = {
         text = entry.name,
