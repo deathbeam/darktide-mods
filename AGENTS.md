@@ -277,12 +277,22 @@ return {
 }
 ```
 
-### Error Handling
+### Error Handling & Logging
 
 - Use `pcall()` for operations that might fail
 - Always validate inputs and state before operations
 - Return `nil` or early exit on invalid state
 - Log errors with `mod:error()` for debugging
+
+**DMF logging API** (`scripts/mods/dmf/modules/core/logging.lua`):
+
+- `mod:info()` / `mod:debug()` / `mod:echo()` / `mod:warning()` / `mod:error()`
+- Each goes to a configurable output (log file, chat, notification) per the mod's DMF logging settings.
+- **Default modes:** `info` = log-file only (mode 1), `debug` = disabled (mode 0), `echo`/`warning` = log + chat (mode 4), `error` = all (mode 7).
+- **For diagnostic/debug logging, use `mod:info()`** — it writes to the game's console log file (no chat spam) and is enabled by default. Output lands in `AppData/Roaming/Fatshark/Darktide/console_logs/console-*.log`, prefixed `[MOD][ModName][INFO] ...`.
+- `mod:debug()` requires the user to enable debug output in DMF settings (otherwise it no-ops) — only use for verbose/conditional dev traces.
+- `mod:echo()` is fine for transient dev visibility but spams the chat window; prefer `mod:info()` for anything copyable.
+- Tag temporary diagnostic logs with a unique prefix (e.g. `[DEBUG-adm]`) and `grep` them out at cleanup.
 
 ## Best Practices
 

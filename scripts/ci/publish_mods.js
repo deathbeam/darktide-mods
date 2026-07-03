@@ -291,7 +291,7 @@ async function uploadMod(modName, zipPath, version, fileGroupId, apiKey) {
       name: modName,
       version,
       file_category: "main",
-      archive_existing_file: true,
+      archive_existing_file: false,
     },
   );
   const versionId = result.version && result.version.id;

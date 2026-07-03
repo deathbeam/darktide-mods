@@ -115,7 +115,8 @@ function WeaponStatsUtils.friendly_action_label(action_name)
     return prettify_enum(name)
 end
 
--- Localize a loc-id defensively (returns nil on failure / unlocalized passthrough).
+-- Weapon display names ----------------------------------------------------
+
 local function _safe_localize(text)
     if not text or text == '' or text == 'n/a' then
         return nil
@@ -127,17 +128,14 @@ local function _safe_localize(text)
     return localized
 end
 
--- Resolve the localized lore name held in an item's display_name descriptor table:
--- item.weapon_family_display_name / weapon_pattern_display_name / weapon_mark_display_name,
--- each shaped { loc_id = "..." }.
+-- item.weapon_family/pattern/mark_display_name are each { loc_id = "..." }.
 local function _lore_name(item, field)
     local desc = item and item[field]
     local loc_id = desc and desc.loc_id
     return loc_id and _safe_localize(loc_id) or nil
 end
 
--- Build a template_name -> { family, pattern, mark } map from the master item cache.
--- Cached on the module so repeated lookups (re-opening the view) are free.
+-- template_name -> { family, pattern, mark }. Cached on the module.
 local _weapon_name_cache
 local function _weapon_name_map()
     if _weapon_name_cache then
@@ -161,9 +159,7 @@ local function _weapon_name_map()
     return map
 end
 
--- Resolve a weapon template's display name and mark/pattern sub-line.
--- Returns display_name, sub_display_name (either may be nil, in which case the
--- caller should fall back to the prettified template key).
+-- Matches the in-game card: title = family, subtitle = pattern • mark.
 function WeaponStatsUtils.weapon_display_name(template_name)
     local map = _weapon_name_map()
     local entry = map[template_name]
@@ -174,8 +170,6 @@ function WeaponStatsUtils.weapon_display_name(template_name)
     local pattern = entry.pattern
     local mark = entry.mark
 
-    -- Match the in-game weapon card: title = family, subtitle = pattern • mark
-    -- (Items.weapon_card_display_name / Items.weapon_card_sub_display_name).
     local display_name = (family and family ~= 'n/a') and family or nil
 
     local sub_parts = {}
@@ -190,7 +184,8 @@ function WeaponStatsUtils.weapon_display_name(template_name)
     return display_name, sub_display_name, family
 end
 
--- Resolve a {min, max} entry at the given lerp value; non-table values pass through.
+-- Damage profile helpers --------------------------------------------------
+
 function WeaponStatsUtils.lerp_entry(entry, lerp_value)
     if type(entry) ~= 'table' then
         return entry
@@ -198,7 +193,6 @@ function WeaponStatsUtils.lerp_entry(entry, lerp_value)
     return math.lerp(entry[1], entry[2], lerp_value or FALLBACK_LERP)
 end
 
--- Look up a per-item lerp value (0-1) by path inside the action's lerp table.
 function WeaponStatsUtils.lerp_from_path(action_lerp, ...)
     if not action_lerp then
         return nil
@@ -210,8 +204,7 @@ function WeaponStatsUtils.lerp_from_path(action_lerp, ...)
     return value
 end
 
--- Fetch lerp values for one action (keyed by action name, then damage profile name), in the
--- shape DamageProfile expects.
+-- lerp_values are keyed by action name, then optionally damage profile name.
 function WeaponStatsUtils.lerp_for_action(damage_profile_lerp_values, action_name, damage_profile)
     if not damage_profile_lerp_values then
         return nil
@@ -226,7 +219,6 @@ function WeaponStatsUtils.lerp_for_action(damage_profile_lerp_values, action_nam
     return cur
 end
 
--- Resolve the power_level used for stat display for an action/template index.
 -- Mirrors Action.stat_power_level so explosive/charged profiles use the right power.
 function WeaponStatsUtils.action_power_level(action, template_index)
     if Action and Action.stat_power_level then
@@ -238,7 +230,7 @@ function WeaponStatsUtils.action_power_level(action, template_index)
     return action.power_level or DEFAULT_POWER_LEVEL
 end
 
--- Target settings the game uses for damage UI (first target for melee, default for ranged).
+-- first target for melee, default for ranged.
 function WeaponStatsUtils.target_settings(damage_profile, is_ranged)
     if not damage_profile or not damage_profile.targets then
         return damage_profile
@@ -247,17 +239,18 @@ function WeaponStatsUtils.target_settings(damage_profile, is_ranged)
     return DamageProfile.target_settings(damage_profile, idx)
 end
 
--- The game's damage helpers read `current_target_settings_lerp_values` off the lerp table. Set it
--- from the per-target sub-table for UI calls (no real attacker), restoring the previous value after.
+-- The game's damage helpers read `current_target_settings_lerp_values` off the lerp
+-- table; set it from the per-target sub-table for UI calls (no real attacker),
+-- restoring the previous value after.
+local _TARGET_SETTINGS_NO_LERP_VALUES = {}
+
 local function _with_target_lerps(action_lerp, target_index)
     local cur = action_lerp or {}
     local targets = cur.targets
     local key = target_index or 1
-    local ts_lerps = targets and (targets[key] or targets.default_target)
+    local ts_lerps = targets and (targets[key] or targets.default_target) or _TARGET_SETTINGS_NO_LERP_VALUES
     local prev = cur.current_target_settings_lerp_values
-    if ts_lerps then
-        cur.current_target_settings_lerp_values = ts_lerps
-    end
+    cur.current_target_settings_lerp_values = ts_lerps
     return cur, prev
 end
 
@@ -267,7 +260,6 @@ local function _restore_lerps(action_lerp, prev)
     end
 end
 
--- Scaled base attack/impact power at the item's real lerp, via the game's own helper.
 function WeaponStatsUtils.base_powers(
     damage_profile,
     target_settings,
@@ -293,7 +285,6 @@ function WeaponStatsUtils.base_powers(
     return attack, impact
 end
 
--- Finesse (weakspot) and crit multipliers at the item's real lerp, matching the in-game card.
 -- Returns the additive-over-1 multiplier, e.g. 1.75 means +75% weakspot damage.
 function WeaponStatsUtils.finesse_multiplier(
     damage_profile,
@@ -320,7 +311,6 @@ function WeaponStatsUtils.finesse_multiplier(
     return mult or 1
 end
 
--- Armor damage modifier (0..1+) for a power_type/armor/crit combo at the item's lerp.
 function WeaponStatsUtils.armor_modifier(
     damage_profile,
     target_settings,
@@ -350,15 +340,14 @@ function WeaponStatsUtils.armor_modifier(
     return mod
 end
 
--- The game's fallback ADM for an armor type when a profile lacks an explicit entry.
--- Matches DamageProfile.armor_damage_modifier's `else` branch (PowerLevelSettings.default_armor_damage_modifier).
+-- The game's fallback ADM for an armor type when a profile lacks an explicit entry
+-- (PowerLevelSettings.default_armor_damage_modifier).
 function WeaponStatsUtils.default_armor_modifier(power_type, armor_type)
     local defaults = PowerLevelSettings.default_armor_damage_modifier
     local by_type = defaults and defaults[power_type or 'attack']
     return by_type and by_type[armor_type] or 1
 end
 
--- Effective range min/max (near/far) for ranged profiles at the item's lerp.
 function WeaponStatsUtils.ranges(damage_profile, action_lerp)
     if not damage_profile or not damage_profile.ranges then
         return nil, nil
@@ -371,9 +360,8 @@ function WeaponStatsUtils.ranges(damage_profile, action_lerp)
     return min_r, max_r
 end
 
--- Falloff scalar (0..1) for a hit at `hit_distance`. 0 = point-blank (no falloff),
--- 1 = at/inside max range (full falloff). false when the profile has no ranges
--- (melee), meaning distance is irrelevant. Mirrors DamageProfile.dropoff_scalar.
+-- 0 = point-blank (no falloff), 1 = at/inside max range (full falloff).
+-- false when the profile has no ranges (melee).
 function WeaponStatsUtils.dropoff_scalar(hit_distance, damage_profile, action_lerp)
     local cur_lerps = action_lerp or {}
     local ok, scalar = pcall(DamageProfile.dropoff_scalar, hit_distance, damage_profile, cur_lerps)

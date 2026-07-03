@@ -7,14 +7,6 @@ local WeaponTweakTemplates = mod:original_require('scripts/extension_systems/wea
 local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settings')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
 
--- Color philosophy: LABELS carry the semantic color (what kind of stat it is),
--- values stay a neutral readable tone. This matches the game's own damage-number
--- convention: crit=orange, weakspot=yellow, default=white/cream. Categories:
---   CRIT     - crit-related labels (Crit, Crit Modifier, Crit Strings)
---   WEAKSPOT - weakspot/finesse labels (Weakspot, Crit+Weak, Backstab)
---   DAMAGE   - core damage labels (Damage, Impact, Cleave)
---   TIMING   - attack-speed/fire-rate labels
---   META     - descriptive metadata (Type, Stagger, Range, Pellets, Flags)
 local COLORS = {
     HEADER = Color.terminal_text_header(255, true),
     ATTACK = Color.ui_terminal(255, true),
@@ -26,11 +18,6 @@ local COLORS = {
     META = Color.terminal_text_body_sub_header(255, true),
 }
 
--- Per-armor-type label colors. No canonical in-game palette exists, so these
--- group intuitively: flesh/pink for the unarmored-adjacent types, metallic blue
--- for Flak, red for Unyielding, orange for Maniac, brown for Carapace, green for
--- Infested, purple for Void Shield. Mirrors CombatStats'
--- per-category enemy coloring approach.
 local ARMOR_COLORS = {
     unarmored = Color.ui_hud_red_super_light(255, true),
     armored = Color.ui_blue_light(255, true),
@@ -41,10 +28,7 @@ local ARMOR_COLORS = {
     void_shield = Color.ui_hud_warp_charge_low(255, true),
 }
 
--- Record helpers -----------------------------------------------------------
--- Each render function appends typed records to a shared `records` list. The
--- view is a thin renderer over these record types, so changing the layout
--- never touches the data-extraction logic below.
+-- Records ----------------------------------------------------------------
 
 local function add(records, rec)
     records[#records + 1] = rec
@@ -71,7 +55,6 @@ local function add_stat(records, label, value, label_color, indent)
         type = 'stat',
         label = label,
         value = value,
-        -- Labels carry the semantic color; values stay neutral & readable.
         label_color = label_color or COLORS.META,
         indent = indent or 0,
     })
@@ -91,7 +74,6 @@ local function add_spacer(records, height)
     add(records, { type = 'spacer', height = height or 8 })
 end
 
--- Format a number compactly: integers as-is, small fractions with 1-2 decimals.
 local function fmt_num(n)
     if n == nil then
         return '-'
@@ -115,9 +97,8 @@ local function fmt_mult(n)
     return string.format('%.2fx', n)
 end
 
--- Resolve the per-action weapon-handling template. The built weapon_handling table is keyed by
--- a per-action identifier from get_template_identifiers, NOT the raw weapon_handling_template name
--- -- so we must use that helper (matching the game's weapon_stats.lua).
+-- weapon_handling is keyed by a per-action identifier from get_template_identifiers,
+-- not the raw weapon_handling_template name.
 local function handling_template_for_action(weapon_template, weapon_tweak_templates, action_name)
     local handling = weapon_tweak_templates and weapon_tweak_templates.weapon_handling
     if not handling or not weapon_template or not action_name then
@@ -131,9 +112,8 @@ local function handling_template_for_action(weapon_template, weapon_tweak_templa
     return handling[identifier]
 end
 
--- Profile extraction ------------------------------------------------------
+-- Profile extraction -----------------------------------------------------
 
--- Resolve a template reference (table or name) against a registry of templates.
 local function resolve_template_ref(ref, template_table)
     if type(ref) == 'table' then
         return ref
@@ -144,9 +124,6 @@ local function resolve_template_ref(ref, template_table)
     return nil
 end
 
--- Extract every (damage_profile, info) pair an action can deal, using the game's own
--- Action.damage_template helper so we cover melee sweeps, hitscan, shotshell, projectile,
--- flamer gas, and explosion profiles uniformly.
 local function extract_profiles(action)
     local profiles = {}
 
@@ -156,9 +133,8 @@ local function extract_profiles(action)
         num_templates = n
     end
 
-    -- A secondary profile is either a special-active mode (melee with damage_profile_special_active)
-    -- or an on-hit explosion (ranged hitscan/projectile). We only surface the special-active;
-    -- explosions are skipped (the main profile already carries crit/weakspot data).
+    -- A secondary profile is a special-active mode; on-hit explosions are skipped
+    -- (the main profile already carries their crit/weakspot data).
     local has_direct_profile = action.damage_profile ~= nil
         or action.inner_damage_profile ~= nil
         or action.sweeps ~= nil
@@ -166,7 +142,6 @@ local function extract_profiles(action)
     for i = 1, num_templates do
         local ok, dmg_profile, special_profile = pcall(Action.damage_template, action, i)
         if ok and dmg_profile then
-            -- Ranged: pull pellets/range/power_level out of the source fire config template.
             local ranged_extra
             local cfg_ok, cfg = pcall(function()
                 local fire_configs = action.fire_configurations
@@ -190,10 +165,6 @@ local function extract_profiles(action)
                 end
             end
 
-            -- The secondary profile is either a special-active mode (melee with
-            -- damage_profile_special_active) or an on-hit explosion (ranged hitscan/projectile).
-            -- We only surface the special-active; explosions are skipped (their impact damage
-            -- isn't shown separately, and the main profile already carries crit/weakspot data).
             local special_active_profile
             if special_profile and special_profile ~= dmg_profile and has_direct_profile then
                 special_active_profile = special_profile
@@ -211,9 +182,9 @@ local function extract_profiles(action)
     return profiles
 end
 
--- Category (light/heavy/ranged/special). The game marks the special action via
--- weapon_template.special_action_name (action_bash/action_stab/action_pistol_whip/etc. --
--- names that don't all contain "special"), so compare against that field, not substring-match.
+-- The game marks the special action via weapon_template.special_action_name
+-- (action_bash/action_stab/action_pistol_whip/etc.), so compare against that
+-- field rather than substring-matching "special".
 local function categorize(action_name, profile, weapon_template)
     if weapon_template and weapon_template.special_action_name == action_name then
         return 'special'
@@ -230,9 +201,9 @@ local function categorize(action_name, profile, weapon_template)
     return nil
 end
 
--- Two profiles are "the same" for dedup purposes (so we don't list light_1..light_4 separately
--- when they share a damage profile). Special-active profiles count toward identity so a power
--- sword's inactive+active pair is kept distinct from a plain sword's single profile.
+-- Dedup profiles that share a damage profile (so light_1..light_4 collapse).
+-- Special-active profiles count toward identity so a power sword's
+-- inactive+active pair stays distinct from a plain sword's single profile.
 local function profiles_equivalent(a, b)
     if not a or not b or not a.profile or not b.profile then
         return false
@@ -244,7 +215,6 @@ local function profiles_equivalent(a, b)
     local function secondary_name(p)
         return p and p.name
     end
-    -- Identity covers the special-active secondary profile so two attacks only collapse together
     local a_second = secondary_name(a.special_active_profile)
     local b_second = secondary_name(b.special_active_profile)
     if a_second ~= b_second then
@@ -255,7 +225,7 @@ local function profiles_equivalent(a, b)
     return pa == pb
 end
 
--- Render a single (profile) block ----------------------------------------
+-- Render -----------------------------------------------------------------
 
 local function render_timing(records, action, weapon_template, weapon_tweak_templates, action_name)
     local time_scale = 1
@@ -297,7 +267,6 @@ local function render_timing(records, action, weapon_template, weapon_tweak_temp
     end
 end
 
--- Render one damage profile (inactive or special-active) for an attack.
 local render_armor
 local function render_profile(records, ctx)
     local profile = ctx.profile
@@ -317,7 +286,6 @@ local function render_profile(records, ctx)
         add_special_active(records)
     end
 
-    -- Base resolved damage (matches the in-game card) and impact.
     local base_attack, base_impact = Utils.base_powers(profile, target_settings, power_level, action_lerp, dropoff)
     if base_attack and math.abs(base_attack) > 0.01 then
         add_stat(records, 'Damage', fmt_num(base_attack), COLORS.DAMAGE)
@@ -326,7 +294,6 @@ local function render_profile(records, ctx)
         add_stat(records, 'Impact', fmt_num(base_impact), COLORS.DAMAGE)
     end
 
-    -- Cleave (attack/impact distribution).
     if profile.cleave_distribution and type(profile.cleave_distribution) == 'table' then
         local cleave_lerp = Utils.lerp_from_path(action_lerp, 'cleave_distribution', 'attack') or Utils.fallback_lerp()
         local attack_cleave = Utils.lerp_entry(profile.cleave_distribution.attack, cleave_lerp)
@@ -344,13 +311,11 @@ local function render_profile(records, ctx)
         end
     end
 
-    -- Backstab bonus (extra damage on rear hits).
     if profile.backstab_bonus and profile.backstab_bonus ~= 0 then
         local bonus = Utils.lerp_entry(profile.backstab_bonus)
         add_stat(records, 'Backstab', string.format('%.0f%%', bonus * 100), COLORS.WEAKSPOT)
     end
 
-    -- Finesse & crit multipliers: weakspot, crit, and crit+weakspot.
     local weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, false)
     local crit_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, false, true)
     local crit_weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, true)
@@ -373,7 +338,6 @@ local function render_profile(records, ctx)
         end
     end
 
-    -- Crit modifier (weapon handling) and crit strings.
     local tmpl = handling_template_for_action(ctx.weapon_template, ctx.weapon_tweak_templates, ctx.action_name)
     local crit_strike = tmpl and tmpl.critical_strike
     if crit_strike then
@@ -391,7 +355,6 @@ local function render_profile(records, ctx)
         end
     end
 
-    -- Ranged-specific: pellets, spread, range, suppression.
     local ranged_extra = ctx.ranged_extra
     if ranged_extra then
         if ranged_extra.num_pellets then
@@ -411,6 +374,7 @@ local function render_profile(records, ctx)
     if min_r and max_r then
         add_stat(records, 'Falloff Range', string.format('%.0f - %.0f m', min_r, max_r), COLORS.META)
     end
+
     if profile.suppression_value ~= nil then
         local sup = Utils.lerp_entry(profile.suppression_value, Utils.lerp_from_path(action_lerp, 'suppression_value'))
         if sup and math.abs(sup) > 0.01 then
@@ -418,13 +382,11 @@ local function render_profile(records, ctx)
         end
     end
 
-    -- Stagger category.
     local stagger = Utils.stagger_name(profile.stagger_category)
     if stagger then
         add_stat(records, 'Stagger', stagger, COLORS.META)
     end
 
-    -- Flags.
     local flags = {}
     if profile.weapon_special then
         flags[#flags + 1] = 'Weapon Special'
@@ -436,22 +398,16 @@ local function render_profile(records, ctx)
         add_stat(records, 'Flags', table.concat(flags, ', '), COLORS.META)
     end
 
-    -- Armor damage table (normal / crit, with near/far falloff for ranged).
     render_armor(records, profile, target_settings, action_lerp, is_ranged, 'attack', 'ADM')
-    -- Stagger impact follows the same per-armor model but uses the `impact` ADM
-    -- table (StaggerCalculation scales stagger_strength by impact ADM per armor).
     render_armor(records, profile, target_settings, action_lerp, is_ranged, 'impact', 'Impact')
 end
 
--- Per-armor damage modifiers for a power_type. Ranged profiles carry near/far ADM
--- (point-blank vs max-range falloff); melee has a single distance-independent
--- value. Rows are skipped when they match the game's default with no crit diff.
+-- Ranged profiles carry near/far ADM (point-blank vs max-range falloff);
+-- melee has a single distance-independent value.
 render_armor = function(records, profile, target_settings, action_lerp, is_ranged, power_type, header)
     local armor_order = Utils.armor_order()
     local rows = {}
 
-    -- dropoff scalars: 0 = point-blank (near), 1 = at/inside max range (far).
-    -- For melee (no ranges) both are nil -> single-value rows.
     local near_dropoff, far_dropoff
     if is_ranged then
         near_dropoff = 0
@@ -461,10 +417,6 @@ render_armor = function(records, profile, target_settings, action_lerp, is_range
     for _, armor_key in ipairs(armor_order) do
         local armor_type = ArmorSettings.types[armor_key]
         if armor_type then
-            -- The game's fallback ADM for a missing entry varies per armor type
-            -- (e.g. Carapace=0, Berserker=0.75), not a flat 1.0. Use it so a
-            -- weapon with no explicit entry shows the game's real default, and
-            -- rows only disappear when they match that default with no crit diff.
             local default_adm = Utils.default_armor_modifier(power_type, armor_type)
 
             local normal_near = Utils.armor_modifier(
@@ -508,9 +460,6 @@ render_armor = function(records, profile, target_settings, action_lerp, is_range
                 ) or default_adm
             end
 
-            -- Always show every armor type. A missing explicit entry resolves to
-            -- the game's default (e.g. 0 for Carapace) via armor_modifier's `or`
-            -- fallback, so it's never silently hidden.
             rows[#rows + 1] = {
                 name = Utils.armor_name(armor_key),
                 name_color = ARMOR_COLORS[armor_key],
@@ -529,7 +478,6 @@ render_armor = function(records, profile, target_settings, action_lerp, is_range
     end
 end
 
--- Render one attack (which may carry an inactive + a special-active profile).
 local function render_attack(records, attack_data, weapon_template, weapon_tweak_templates, damage_profile_lerp_values)
     local action = attack_data.action
     local action_name = attack_data.names[1]
@@ -587,8 +535,6 @@ local function render_attack(records, attack_data, weapon_template, weapon_tweak
     add_spacer(records, 10)
 end
 
--- Build the full list of stat records for a weapon item ------------------
-
 local function build_stats(item)
     if not item then
         return {}
@@ -621,12 +567,9 @@ local function build_stats(item)
     for action_name, action in pairs(weapon_template.actions) do
         local profiles = extract_profiles(action)
         if #profiles > 0 then
-            -- Use the first profile for categorization.
             local first_profile = profiles[1].profile
             local category = categorize(action_name, first_profile, weapon_template)
             if category then
-                -- Dedup against existing attacks in this category. Special-active-aware so
-                -- power sword combos (which differ only in the active profile) are preserved.
                 local existing = attacks[category]
                 local merged = false
                 for _, existing_attack in ipairs(existing) do

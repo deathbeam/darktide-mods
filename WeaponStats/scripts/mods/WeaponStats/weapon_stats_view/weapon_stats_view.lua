@@ -13,19 +13,17 @@ local UIFontSettings = mod:original_require('scripts/managers/ui/ui_font_setting
 local Builder = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_builder')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
 
--- Max stat value a real weapon can roll: items cap at 0.8 (items.lua max_weapon_preview).
+-- Items cap at 0.8 (items.lua max_weapon_preview).
 local MAX_STAT_VALUE = 0.8
 
 local GRID_SPACING = { 4, 4 }
 local DETAIL_GRID_SPACING = { 0, 2 }
-
--- Detail-pane layout constants
 local INDENT_PX = 18
 local STAT_ROW_HEIGHT = 21
 
 local WeaponStatsView = class('WeaponStatsView', 'BaseView')
 
--- Build the full weapon list once. Cached on the class so re-opening the view is instant.
+-- Cached on the class so re-opening the view is instant.
 function WeaponStatsView:_build_weapon_list()
     if WeaponStatsView._weapon_list then
         return WeaponStatsView._weapon_list
@@ -33,13 +31,11 @@ function WeaponStatsView:_build_weapon_list()
 
     local list = {}
     for name, weapon_template in pairs(WeaponTemplates) do
-        local has_stats = weapon_template.base_stats ~= nil
-        if has_stats then
+        if weapon_template.base_stats ~= nil then
             local is_ranged = WeaponTemplate.is_ranged(weapon_template)
             local display_name, sub_name, family = Utils.weapon_display_name(name)
             list[#list + 1] = {
                 name = name,
-                -- Fall back to the prettified template key if no master item resolves it.
                 display_name = display_name or Utils.friendly_action_label(name),
                 sub_display_name = sub_name,
                 family = family,
@@ -60,8 +56,7 @@ function WeaponStatsView:_build_weapon_list()
     return list
 end
 
--- Construct a placeholder item with every stat trait maxed (0.8), in the shape
--- Weapon._init_traits / build_stats expect.
+-- Placeholder item with every stat trait maxed (0.8), in the shape build_stats expects.
 function WeaponStatsView._placeholder_item(weapon_template)
     local template_name = weapon_template.name
     local stats = {}
@@ -139,8 +134,8 @@ function WeaponStatsView:_setup_input_legend()
     end
 end
 
+-- Matches the in-game card: title = family, subtext = kind + pattern • mark.
 function WeaponStatsView:_format_entry_subtext(entry)
-    -- Matches the in-game card: title = family name, subtext = kind + pattern • mark.
     local kind = entry.is_ranged and mod:localize('kind_ranged') or mod:localize('kind_melee')
     if entry.sub_display_name and entry.sub_display_name ~= '' then
         return kind .. ' • ' .. entry.sub_display_name, Color.terminal_text_body_sub_header(255, true)
@@ -269,10 +264,6 @@ function WeaponStatsView:_select_entry(widget, entry)
 end
 
 -- Detail-pane renderer -----------------------------------------------------
--- The builder returns a flat list of typed records; each helper below turns one
--- record into a single grid widget. The pane is just a vertical stack of these,
--- so the layout (spacers, section rules, stat rows, armor bars) lives entirely
--- here, decoupled from the data-extraction logic in the builder.
 
 local COLOR_LABEL = Color.terminal_text_body_sub_header(255, true)
 local COLOR_VALUE = Color.terminal_text_body(255, true)
@@ -302,7 +293,6 @@ local function _make_text_widget(self, text, font_size, color, width, height, of
     return widget
 end
 
--- A full-width divider line. Sits just below the baseline of the section header.
 local function _make_rule(self, width)
     local h = 2
     local widget_def = UIWidget.create_definition({
@@ -335,7 +325,6 @@ local function _make_spacer(self, height, width)
     self._detail_widgets[#self._detail_widgets + 1] = widget
 end
 
--- Two-column row: muted label left, colored value right-aligned.
 local function _make_stat_row(self, label, value, label_color, width, indent, value_color)
     local h = STAT_ROW_HEIGHT
     local x = (indent or 0) * INDENT_PX
@@ -370,9 +359,6 @@ local function _make_stat_row(self, label, value, label_color, width, indent, va
                 offset = { label_w, 0, 2 },
                 size = { value_w, h },
                 text_overflow_mode = 'truncate',
-                offset = { label_w, 0, 2 },
-                size = { value_w, h },
-                text_overflow_mode = 'truncate',
             },
         },
     }, 'weapon_stats_detail_pivot', nil, { width, h })
@@ -381,9 +367,6 @@ local function _make_stat_row(self, label, value, label_color, width, indent, va
     self._detail_widgets[#self._detail_widgets + 1] = widget
 end
 
--- Armor row as a stat row: the NAME carries the per-armor-type color; the value
--- (e.g. "60% (C: 70%) → 48%") stays neutral so it reads cleanly.
--- Format one ADM figure, appending " (C: X%)" when crit differs from normal.
 local function _armor_value_text(normal, crit, has_crit)
     local text = string.format('%.0f%%', normal * 100)
     if has_crit then
@@ -393,10 +376,8 @@ local function _armor_value_text(normal, crit, has_crit)
 end
 
 local function _make_armor_row(self, row, width)
-    -- The armor NAME carries the per-armor-type color; the value stays neutral.
     local name_color = row.name_color or COLOR_LABEL
     if row.has_far then
-        -- Ranged: "Near% → Far%" with crit riding the near figure.
         local value = _armor_value_text(row.normal, row.crit, row.has_crit)
             .. ' → '
             .. _armor_value_text(row.normal_far, row.crit_far, row.has_crit)
@@ -406,7 +387,6 @@ local function _make_armor_row(self, row, width)
     end
 end
 
--- Dispatch a single builder record to the matching widget helper.
 local function _render_record(self, record, width)
     local rtype = record.type
     if rtype == 'spacer' then
@@ -447,7 +427,6 @@ function WeaponStatsView:_rebuild_detail_widgets(entry)
     local detail_scenegraph = self._ui_scenegraph.weapon_stats_detail_content
     local detail_width = detail_scenegraph and detail_scenegraph.size[1] or 600
 
-    -- Header: weapon name (bold, terminal orange) + kind subtext.
     _make_text_widget(self, entry.name, 26, Color.terminal_text_header(255, true), detail_width, 34)
     if entry.subtext then
         _make_text_widget(self, entry.subtext, 16, entry.subtext_color or COLOR_LABEL, detail_width, 22)
