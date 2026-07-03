@@ -1,3 +1,11 @@
+local mod = get_mod('WeaponStats')
+
+mod:add_global_localize_strings({
+    loc_weapon_stats_menu_button = {
+        en = 'Weapon Stats',
+    },
+})
+
 return {
     mod_name = {
         en = 'Weapon Stats',

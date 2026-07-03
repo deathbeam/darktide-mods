@@ -49,6 +49,36 @@ mod:register_view({
     },
 })
 
+-- Add a button to the ESC menu that opens the view
+local COMBAT_STATS_MENU_BUTTON = {
+    text = 'loc_combat_stats_menu_button',
+    type = 'button',
+    icon = 'content/ui/materials/icons/system/escape/settings',
+    trigger_function = function()
+        Managers.ui:open_view('combat_stats_view')
+    end,
+}
+
+mod:hook(CLASS.SystemView, '_setup_content_widgets', function(func, self, content, ...)
+    local patched = content
+    if content then
+        patched = {}
+        for state_key, list in pairs(content) do
+            local cloned = table.clone(list)
+            local insert_at = #cloned + 1
+            for i = 1, #cloned do
+                if cloned[i].type == 'spacing_vertical' then
+                    insert_at = i
+                    break
+                end
+            end
+            table.insert(cloned, insert_at, COMBAT_STATS_MENU_BUTTON)
+            patched[state_key] = cloned
+        end
+    end
+    return func(self, patched, ...)
+end)
+
 -- Initialize tracker and history
 mod.tracker = CombatStatsTracker:new()
 mod.history = CombatStatsHistory:new()

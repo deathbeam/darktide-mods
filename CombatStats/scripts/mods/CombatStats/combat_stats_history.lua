@@ -93,12 +93,6 @@ function CombatStatsHistory:load_index(on_loaded)
 
     safe_auto_load(self:_index_slot(), function(info)
         self._index_loading = false
-        mod:echo(
-            'history index load: done=%s error=%s data_type=%s',
-            tostring(info and info.done),
-            tostring(info and info.error),
-            type(info and info.data)
-        )
 
         local loaded = {}
         if info and info.done and not info.error and type(info.data) == 'table' then
@@ -110,7 +104,6 @@ function CombatStatsHistory:load_index(on_loaded)
 
         self._index = loaded
         self._entries_cache = nil
-        mod:echo('history index loaded with %d entries', #loaded)
 
         local waiters = self._index_waiters
         self._index_waiters = {}

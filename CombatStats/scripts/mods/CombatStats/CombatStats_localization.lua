@@ -1,6 +1,5 @@
 local mod = get_mod('CombatStats')
 
--- Register global localization strings (for input legend, etc.)
 mod:add_global_localize_strings({
     loc_combat_stats_reset_stats = {
         en = 'Reset Stats',
@@ -21,6 +20,10 @@ mod:add_global_localize_strings({
     loc_combat_stats_delete_entry = {
         en = 'Delete Entry',
         ['zh-cn'] = '删除条目', -- FIXME: confirm translation, translated via google translate
+    },
+    loc_combat_stats_menu_button = {
+        en = 'Combat Stats',
+        ['zh-cn'] = '战斗统计',
     },
 })
 
