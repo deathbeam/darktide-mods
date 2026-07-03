@@ -36,9 +36,13 @@ function WeaponStatsView:_build_weapon_list()
         local has_stats = weapon_template.base_stats ~= nil
         if has_stats then
             local is_ranged = WeaponTemplate.is_ranged(weapon_template)
+            local display_name, sub_name, family = Utils.weapon_display_name(name)
             list[#list + 1] = {
                 name = name,
-                display_name = Utils.friendly_action_label(name),
+                -- Fall back to the prettified template key if no master item resolves it.
+                display_name = display_name or Utils.friendly_action_label(name),
+                sub_display_name = sub_name,
+                family = family,
                 weapon_template = weapon_template,
                 is_ranged = is_ranged,
             }
@@ -136,7 +140,11 @@ function WeaponStatsView:_setup_input_legend()
 end
 
 function WeaponStatsView:_format_entry_subtext(entry)
+    -- Matches the in-game card: title = family name, subtext = kind + pattern • mark.
     local kind = entry.is_ranged and mod:localize('kind_ranged') or mod:localize('kind_melee')
+    if entry.sub_display_name and entry.sub_display_name ~= '' then
+        return kind .. ' • ' .. entry.sub_display_name, Color.terminal_text_body_sub_header(255, true)
+    end
     return kind, Color.terminal_text_body_sub_header(255, true)
 end
 
@@ -157,8 +165,10 @@ function WeaponStatsView:_setup_entries()
     for i = 1, #self._weapon_list do
         local weapon = self._weapon_list[i]
         local name = weapon.display_name
+        local sub_name = weapon.sub_display_name or ''
         local match = search_text == ''
             or name:lower():find(search_text, 1, true)
+            or sub_name:lower():find(search_text, 1, true)
             or weapon.name:lower():find(search_text, 1, true)
         if match then
             local entry = {
@@ -166,6 +176,7 @@ function WeaponStatsView:_setup_entries()
                 name = name,
                 weapon = weapon,
                 is_ranged = weapon.is_ranged,
+                sub_display_name = weapon.sub_display_name,
                 pressed_function = function(parent, widget, entry)
                     parent:_select_entry(widget, entry)
                 end,

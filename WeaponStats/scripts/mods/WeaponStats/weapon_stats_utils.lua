@@ -5,6 +5,7 @@ local DamageCalculation = mod:original_require('scripts/utilities/attack/damage_
 local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settings')
 local PowerLevelSettings = mod:original_require('scripts/settings/damage/power_level_settings')
 local Action = mod:original_require('scripts/utilities/action/action')
+local MasterItems = mod:original_require('scripts/backend/master_items')
 
 local FALLBACK_LERP = 0.5
 local DEFAULT_POWER_LEVEL = 500
@@ -112,6 +113,81 @@ function WeaponStatsUtils.friendly_action_label(action_name)
     end
     name = name:gsub('^light_', 'light '):gsub('^heavy_', 'heavy '):gsub('^special_', 'special ')
     return prettify_enum(name)
+end
+
+-- Localize a loc-id defensively (returns nil on failure / unlocalized passthrough).
+local function _safe_localize(text)
+    if not text or text == '' or text == 'n/a' then
+        return nil
+    end
+    local ok, localized = pcall(Localize, text)
+    if not ok then
+        return nil
+    end
+    return localized
+end
+
+-- Resolve the localized lore name held in an item's display_name descriptor table:
+-- item.weapon_family_display_name / weapon_pattern_display_name / weapon_mark_display_name,
+-- each shaped { loc_id = "..." }.
+local function _lore_name(item, field)
+    local desc = item and item[field]
+    local loc_id = desc and desc.loc_id
+    return loc_id and _safe_localize(loc_id) or nil
+end
+
+-- Build a template_name -> { family, pattern, mark } map from the master item cache.
+-- Cached on the module so repeated lookups (re-opening the view) are free.
+local _weapon_name_cache
+local function _weapon_name_map()
+    if _weapon_name_cache then
+        return _weapon_name_cache
+    end
+    local map = {}
+    local master_items = MasterItems and MasterItems.get_cached and MasterItems.get_cached()
+    if master_items then
+        for _id, item in pairs(master_items) do
+            local template_name = item.weapon_template
+            if template_name and not map[template_name] then
+                map[template_name] = {
+                    family = _lore_name(item, 'weapon_family_display_name'),
+                    pattern = _lore_name(item, 'weapon_pattern_display_name'),
+                    mark = _lore_name(item, 'weapon_mark_display_name'),
+                }
+            end
+        end
+    end
+    _weapon_name_cache = map
+    return map
+end
+
+-- Resolve a weapon template's display name and mark/pattern sub-line.
+-- Returns display_name, sub_display_name (either may be nil, in which case the
+-- caller should fall back to the prettified template key).
+function WeaponStatsUtils.weapon_display_name(template_name)
+    local map = _weapon_name_map()
+    local entry = map[template_name]
+    if not entry then
+        return nil, nil
+    end
+    local family = entry.family
+    local pattern = entry.pattern
+    local mark = entry.mark
+
+    -- Match the in-game weapon card: title = family, subtitle = pattern • mark
+    -- (Items.weapon_card_display_name / Items.weapon_card_sub_display_name).
+    local display_name = (family and family ~= 'n/a') and family or nil
+
+    local sub_parts = {}
+    if pattern and pattern ~= 'n/a' then
+        sub_parts[#sub_parts + 1] = pattern
+    end
+    if mark and mark ~= 'n/a' then
+        sub_parts[#sub_parts + 1] = mark
+    end
+    local sub_display_name = #sub_parts > 0 and table.concat(sub_parts, ' • ') or nil
+
+    return display_name, sub_display_name, family
 end
 
 -- Resolve a {min, max} entry at the given lerp value; non-table values pass through.
