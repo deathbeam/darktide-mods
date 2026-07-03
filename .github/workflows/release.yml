@@ -1,116 +1,61 @@
-name: Release Mods
+name: Release
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Release version (e.g., 1.0.0)'
-        required: true
-        type: string
-      changelog:
-        description: 'Changelog for this release'
-        required: false
-        type: string
+      mod:
+        description: 'Mod to release (leave empty to check all mods)'
+        type: choice
+        options:
+          - ''
+          - AutoAbilities
+          - CombatStats
+          - SimpleMinimap
+          - SimpleMovement
+          - WeaponStats
         default: ''
-      # upload_to_nexusmods:
-      #   description: 'Upload to NexusMods'
-      #   required: false
-      #   type: boolean
-      #   default: false
+      dry_run:
+        description: 'Dry run (check versions, no uploads)'
+        type: boolean
+        default: false
+      force:
+        description: 'Upload even if the version matches Nexus Mods'
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  create-release:
+  release:
+    name: Upload changed mods to Nexus Mods
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-    outputs:
-      changelog: ${{ steps.generate-notes.outputs.changelog }}
-
+      contents: read
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create and push tag
+      - name: Install zip
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${{ inputs.version }}" -m "Release v${{ inputs.version }}"
-          git push origin "v${{ inputs.version }}"
+          sudo apt-get update
+          sudo apt-get install -y zip
 
-      - name: Generate release notes
-        id: generate-notes
+      - name: Upload changed mods
+        env:
+          NEXUSMODS_APIKEY: ${{ secrets.NEXUSMODS_APIKEY }}
         run: |
-          if [ -n "${{ inputs.changelog }}" ]; then
-            echo "changelog=${{ inputs.changelog }}" >> $GITHUB_OUTPUT
-          else
-            # Use git log to generate changelog
-            CHANGELOG=$(git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD^)..HEAD 2>/dev/null || git log --pretty=format:"- %s" -10)
-            echo "changelog<<EOF" >> $GITHUB_OUTPUT
-            echo "$CHANGELOG" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+          ARGS=()
+          if [ -n "${{ inputs.mod }}" ]; then
+            ARGS+=("--mod" "${{ inputs.mod }}")
           fi
-
-      - name: Zip mod folders
-        run: |
-          VERSION="${{ inputs.version }}"
-
-          # Find all directories containing .mod files
-          for dir in */; do
-            dir_name="${dir%/}"
-            if [ -f "$dir_name/$dir_name.mod" ]; then
-              echo "Zipping $dir_name v$VERSION..."
-              zip -r "${dir_name}-${VERSION}.zip" "$dir_name/"
-            fi
-          done
-
-      - name: Upload AutoAbilities artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: AutoAbilities
-          path: AutoAbilities-${{ inputs.version }}.zip
-
-      - name: Upload CombatStats artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: CombatStats
-          path: CombatStats-${{ inputs.version }}.zip
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ inputs.version }}
-          files: '*.zip'
-          body: ${{ steps.generate-notes.outputs.changelog }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-
-  # upload-autoabilities:
-  #   needs: create-release
-  #   uses: BUTR/workflows/.github/workflows/release-nexusmods.yml@master
-  #   if: ${{ inputs.upload_to_nexusmods }}
-  #   with:
-  #     nexusmods_game_id: warhammer40kdarktide
-  #     nexusmods_mod_id: ${{ inputs.autoabilities_mod_id }}
-  #     mod_filename: AutoAbilities-${{ inputs.version }}.zip
-  #     mod_version: ${{ inputs.version }}
-  #     mod_description: ${{ needs.create-release.outputs.changelog }}
-  #     artifact_name: AutoAbilities
-  #   secrets:
-  #     NEXUSMODS_APIKEY: ${{ secrets.NEXUSMODS_APIKEY }}
-  #     NEXUSMODS_COOKIES: ${{ secrets.NEXUSMODS_COOKIES }}
-
-  # upload-combatstats:
-  #   needs: create-release
-  #   uses: BUTR/workflows/.github/workflows/release-nexusmods.yml@master
-  #   if: ${{ inputs.upload_to_nexusmods }}
-  #   with:
-  #     nexusmods_game_id: warhammer40kdarktide
-  #     nexusmods_mod_id: 661
-  #     mod_filename: CombatStats-${{ inputs.version }}.zip
-  #     mod_version: ${{ inputs.version }}
-  #     mod_description: ${{ needs.create-release.outputs.changelog }}
-  #     artifact_name: CombatStats
-  #   secrets:
-  #     NEXUSMODS_APIKEY: ${{ secrets.NEXUSMODS_APIKEY }}
-  #     NEXUSMODS_SESSION_COOKIE: ${{ secrets.NEXUSMODS_SESSION_COOKIE }}
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS+=("--dry-run")
+          fi
+          if [ "${{ inputs.force }}" = "true" ]; then
+            ARGS+=("--force")
+          fi
+          node scripts/ci/publish_mods.js "${ARGS[@]}"
