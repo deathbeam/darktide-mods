@@ -314,21 +314,50 @@ function WeaponStatsView:_rebuild_detail_widgets(entry)
     local lines = split_lines(stats_text)
     local renderer = self._ui_renderer
 
+    -- Build render records: header (weapon name + kind) then the stats lines. Each record carries
+    -- its own font size / color / height so the header stands out (mirrors CombatStats' detail).
+    local records = {}
+    records[#records + 1] = {
+        text = entry.name,
+        font_size = 26,
+        color = Color.terminal_text_header(255, true),
+        height = 34,
+    }
+    if entry.subtext then
+        records[#records + 1] = {
+            text = entry.subtext,
+            font_size = 18,
+            color = entry.subtext_color or Color.terminal_text_body_sub_header(255, true),
+            height = 24,
+        }
+    end
+    records[#records + 1] = { text = '', font_size = FONT_SIZE, color = nil, height = 10 }
+
     for idx = 1, #lines do
         local line = lines[idx]
-        local h = measure_line_height(renderer, line, text_width)
+        records[#records + 1] = {
+            text = line,
+            font_size = FONT_SIZE,
+            color = Color.terminal_text_body(255, true),
+            height = measure_line_height(renderer, line, text_width),
+        }
+    end
+
+    for idx = 1, #records do
+        local rec = records[idx]
+        local h = rec.height
 
         local widget_def = UIWidget.create_definition({
             {
                 pass_type = 'text',
                 value_id = 'text',
-                value = line,
+                value = rec.text,
                 style = {
                     font_type = 'proxima_nova_bold',
-                    font_size = FONT_SIZE,
+                    font_size = rec.font_size,
                     text_vertical_alignment = 'top',
                     text_horizontal_alignment = 'left',
-                    text_color = Color.terminal_text_body(255, true),
+                    text_color = rec.color or Color.terminal_text_body(255, true),
                     offset = { 0, 0, 2 },
                     size = { text_width, h },
                 },

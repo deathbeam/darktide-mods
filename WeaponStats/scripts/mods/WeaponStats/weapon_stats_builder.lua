@@ -150,12 +150,17 @@ local function extract_profiles(action)
                 end
             end
 
-            local special_active_profile, explosion_profile
+            local special_active_profile, explosion_profile, explosion_power_level
             if special_profile and special_profile ~= dmg_profile then
                 if has_direct_profile then
                     special_active_profile = special_profile
                 else
                     explosion_profile = special_profile
+                    -- Explosions may carry their own static power level (e.g. phosphor backblast = 500).
+                    local expl_ok, expl_template = pcall(Action.explosion_template, action, i)
+                    if expl_ok and expl_template and expl_template.static_power_level then
+                        explosion_power_level = expl_template.static_power_level
+                    end
                 end
             end
 
@@ -163,6 +168,7 @@ local function extract_profiles(action)
                 profile = dmg_profile,
                 special_active_profile = special_active_profile,
                 explosion_profile = explosion_profile,
+                explosion_power_level = explosion_power_level,
                 ranged_extra = ranged_extra,
                 template_index = i,
             }
@@ -277,27 +283,42 @@ local function render_profile(out, ctx)
     end
 
     local dropoff = is_ranged and 0 or nil
-    -- On-hit explosions (e.g. the phosphor pistol's backblast) deal impact-only damage with a
-    -- non-ranged armor_damage_modifier, so they use the impact power type and no range dropoff.
-    local armor_power_type = 'attack'
-    if ctx.is_explosion then
-        dropoff = nil
-        armor_power_type = 'impact'
-    end
 
     if is_active then
         out = out .. '    ' .. value(COLORS.SPECIAL, '> Special Active') .. '\n'
-    elseif ctx.is_explosion then
-        out = out .. '    ' .. value(COLORS.SPECIAL, '> On-Hit Explosion') .. '\n'
+    end
+
+    -- On-hit explosions (e.g. the phosphor pistol's backblast) are merged into the main profile's
+    -- per-armor damage by the game (attack[i] += explosion[i]), never shown separately. Compute
+    -- the explosion's impact power here so it can be folded into the armor table and base impact.
+    local explosion = nil
+    if ctx.explosion_profile then
+        local expl_target = Utils.target_settings(ctx.explosion_profile, is_ranged)
+        if expl_target then
+            local expl_lerp = ctx.explosion_lerp
+            local expl_power = ctx.explosion_power_level or power_level
+            local _, expl_base_impact =
+                Utils.base_powers(ctx.explosion_profile, expl_target, expl_power, expl_lerp, nil)
+            explosion = {
+                profile = ctx.explosion_profile,
+                target_settings = expl_target,
+                lerp = expl_lerp,
+                base_impact = expl_base_impact or 0,
+            }
+        end
     end
 
     -- Base resolved damage (matches the in-game card) and impact.
     local base_attack, base_impact = Utils.base_powers(profile, target_settings, power_level, action_lerp, dropoff)
-    if base_attack and not (ctx.is_explosion and math.abs(base_attack) < 0.01) then
+    if base_attack and math.abs(base_attack) > 0.01 then
         out = line(out, 'Damage:', fmt_num(base_attack), COLORS.DAMAGE)
     end
-    if base_impact and (ctx.is_explosion or math.abs(base_impact) > 0.01) then
-        out = line(out, 'Impact:', fmt_num(base_impact), COLORS.IMPACT)
+    local shown_impact = base_impact or 0
+    if explosion and explosion.base_impact then
+        shown_impact = shown_impact + explosion.base_impact
+    end
+    if math.abs(shown_impact) > 0.01 then
+        out = line(out, 'Impact:', fmt_num(shown_impact), COLORS.IMPACT)
     end
 
     -- Multipliers: weakspot (finesse), crit, and crit+weakspot.
@@ -429,38 +450,50 @@ local function render_profile(out, ctx)
     end
 
     -- Armor damage table (normal / crit).
-    out = render_armor(out, profile, target_settings, action_lerp, dropoff, armor_power_type)
+    out = render_armor(out, base_attack or 0, profile, target_settings, action_lerp, dropoff, explosion)
 
     return out
 end
 
-render_armor = function(out, profile, target_settings, action_lerp, dropoff, power_type)
+-- Per-armor damage table. The game merges on-hit explosions into the main profile's per-armor
+-- damage (attack[i] += explosion[i]), so we do the same: each row's damage is the main profile's
+-- attack damage plus the explosion's impact damage (explosions are impact-only). Shown as damage
+-- values, matching the in-game card's body/crit columns.
+render_armor = function(out, base_attack, profile, target_settings, action_lerp, dropoff, explosion)
     local armor_order = Utils.armor_order()
     local has_any = false
     local rows = {}
 
+    local expl_base = explosion and explosion.base_impact or 0
+    local expl_profile = explosion and explosion.profile
+    local expl_target = explosion and explosion.target_settings
+    local expl_lerp = explosion and explosion.lerp
+
     for _, armor_key in ipairs(armor_order) do
         local armor_type = ArmorSettings.types[armor_key]
         if armor_type then
-            local normal = Utils.armor_modifier(
-                profile,
-                target_settings,
-                action_lerp,
-                power_type or 'attack',
-                armor_type,
-                false,
-                dropoff
-            )
-            local crit = Utils.armor_modifier(
-                profile,
-                target_settings,
-                action_lerp,
-                power_type or 'attack',
-                armor_type,
-                true,
-                dropoff
-            )
-            if normal and (math.abs(normal - 1) > 0.005 or math.abs(crit - normal) > 0.005) then
+            local main_mod =
+                Utils.armor_modifier(profile, target_settings, action_lerp, 'attack', armor_type, false, dropoff)
+            local main_mod_crit =
+                Utils.armor_modifier(profile, target_settings, action_lerp, 'attack', armor_type, true, dropoff)
+
+            local normal = (main_mod and base_attack * main_mod) or 0
+            local crit = (main_mod_crit and base_attack * main_mod_crit) or 0
+
+            if expl_profile and expl_base > 0 then
+                local expl_mod =
+                    Utils.armor_modifier(expl_profile, expl_target, expl_lerp, 'impact', armor_type, false, nil)
+                local expl_mod_crit =
+                    Utils.armor_modifier(expl_profile, expl_target, expl_lerp, 'impact', armor_type, true, nil)
+                if expl_mod then
+                    normal = normal + expl_base * expl_mod
+                end
+                if expl_mod_crit then
+                    crit = crit + expl_base * expl_mod_crit
+                end
+            end
+
+            if normal > 0.01 or crit > 0.01 then
                 has_any = true
                 rows[#rows + 1] = { armor_key = armor_key, normal = normal, crit = crit }
             end
@@ -473,13 +506,10 @@ render_armor = function(out, profile, target_settings, action_lerp, dropoff, pow
 
     out = out .. '  ' .. label('Armor Damage:') .. '\n'
     for _, entry in ipairs(rows) do
-        local seg = string.format(
-            '    %s: %s',
-            Utils.armor_name(entry.armor_key),
-            value(COLORS.ARMOR, string.format('%.0f%%', entry.normal * 100))
-        )
-        if math.abs(entry.crit - entry.normal) > 0.005 then
-            seg = seg .. ' ' .. value(COLORS.CRIT, string.format('(C: %.0f%%)', entry.crit * 100))
+        local seg =
+            string.format('    %s: %s', Utils.armor_name(entry.armor_key), value(COLORS.ARMOR, fmt_num(entry.normal)))
+        if math.abs(entry.crit - entry.normal) > 0.01 then
+            seg = seg .. ' ' .. value(COLORS.CRIT, string.format('(C: %s)', fmt_num(entry.crit)))
         end
         out = out .. seg .. '\n'
     end
@@ -520,6 +550,16 @@ local function render_attack(out, attack_data, weapon_template, weapon_tweak_tem
             weapon_tweak_templates = weapon_tweak_templates,
             weapon_template = weapon_template,
         }
+        -- On-hit explosions merge into the main profile's per-armor damage (the game does
+        -- attack[i] += explosion[i]); set this BEFORE render_profile so it is actually applied.
+        if prof_info.explosion_profile then
+            ctx.explosion_profile = prof_info.explosion_profile
+            ctx.explosion_lerp =
+                Utils.lerp_for_action(damage_profile_lerp_values, action_name, prof_info.explosion_profile)
+            -- Explosions may carry their own static power level (e.g. phosphor backblast = 500).
+            ctx.explosion_power_level = prof_info.explosion_power_level or power_level
+        end
+
         out = render_profile(out, ctx)
 
         if prof_info.special_active_profile then
@@ -538,24 +578,6 @@ local function render_attack(out, attack_data, weapon_template, weapon_tweak_tem
                 weapon_template = weapon_template,
             }
             out = render_profile(out, active_ctx)
-        end
-
-        if prof_info.explosion_profile then
-            local expl_lerp =
-                Utils.lerp_for_action(damage_profile_lerp_values, action_name, prof_info.explosion_profile)
-            local expl_ctx = {
-                profile = prof_info.explosion_profile,
-                action = action,
-                action_name = action_name,
-                action_lerp = expl_lerp,
-                is_ranged = is_ranged,
-                is_explosion = true,
-                power_level = power_level,
-                ranged_extra = nil,
-                weapon_tweak_templates = weapon_tweak_templates,
-                weapon_template = weapon_template,
-            }
-            out = render_profile(out, expl_ctx)
         end
     end
 
