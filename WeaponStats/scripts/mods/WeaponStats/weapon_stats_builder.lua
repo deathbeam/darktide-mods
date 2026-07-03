@@ -57,10 +57,10 @@ local function add_stat(records, label, value, value_color, indent)
     })
 end
 
-local function add_armor(records, rows, is_ranged)
+local function add_armor(records, rows, is_ranged, header)
     add(records, {
         type = 'armor',
-        header = 'Armor Damage',
+        header = header or 'Armor Damage',
         color = COLORS.HEADER,
         rows = rows,
         is_ranged = is_ranged,
@@ -418,13 +418,16 @@ local function render_profile(records, ctx)
     end
 
     -- Armor damage table (normal / crit, with near/far falloff for ranged).
-    render_armor(records, profile, target_settings, action_lerp, is_ranged)
+    render_armor(records, profile, target_settings, action_lerp, is_ranged, 'attack', 'ADM')
+    -- Stagger impact follows the same per-armor model but uses the `impact` ADM
+    -- table (StaggerCalculation scales stagger_strength by impact ADM per armor).
+    render_armor(records, profile, target_settings, action_lerp, is_ranged, 'impact', 'Impact')
 end
 
--- Per-armor damage modifiers. Ranged profiles carry near/far ADM (point-blank vs
--- max-range falloff); melee has a single distance-independent value. Rows are
--- skipped when they're baseline 100% with no crit difference (nothing to convey).
-render_armor = function(records, profile, target_settings, action_lerp, is_ranged)
+-- Per-armor damage modifiers for a power_type. Ranged profiles carry near/far ADM
+-- (point-blank vs max-range falloff); melee has a single distance-independent
+-- value. Rows are skipped when they match the game's default with no crit diff.
+render_armor = function(records, profile, target_settings, action_lerp, is_ranged, power_type, header)
     local armor_order = Utils.armor_order()
     local rows = {}
 
@@ -443,13 +446,13 @@ render_armor = function(records, profile, target_settings, action_lerp, is_range
             -- (e.g. Carapace=0, Berserker=0.75), not a flat 1.0. Use it so a
             -- weapon with no explicit entry shows the game's real default, and
             -- rows only disappear when they match that default with no crit diff.
-            local default_adm = Utils.default_armor_modifier('attack', armor_type)
+            local default_adm = Utils.default_armor_modifier(power_type, armor_type)
 
             local normal_near = Utils.armor_modifier(
                 profile,
                 target_settings,
                 action_lerp,
-                'attack',
+                power_type,
                 armor_type,
                 false,
                 near_dropoff
@@ -458,7 +461,7 @@ render_armor = function(records, profile, target_settings, action_lerp, is_range
                 profile,
                 target_settings,
                 action_lerp,
-                'attack',
+                power_type,
                 armor_type,
                 true,
                 near_dropoff
@@ -470,7 +473,7 @@ render_armor = function(records, profile, target_settings, action_lerp, is_range
                     profile,
                     target_settings,
                     action_lerp,
-                    'attack',
+                    power_type,
                     armor_type,
                     false,
                     far_dropoff
@@ -479,7 +482,7 @@ render_armor = function(records, profile, target_settings, action_lerp, is_range
                     profile,
                     target_settings,
                     action_lerp,
-                    'attack',
+                    power_type,
                     armor_type,
                     true,
                     far_dropoff
@@ -505,7 +508,7 @@ render_armor = function(records, profile, target_settings, action_lerp, is_range
     end
 
     if #rows > 0 then
-        add_armor(records, rows, is_ranged)
+        add_armor(records, rows, is_ranged, header)
     end
 end
 
