@@ -200,10 +200,16 @@ async function resolveFileGroupId(modUuid, apiKey) {
 }
 
 async function putToPresignedUrl(url, data) {
+  // The presigned URL signs `content-disposition` and `content-type` (per the
+  // canonical request's SignedHeaders). The client MUST echo them exactly or R2
+  // rejects with 403 SignatureDoesNotMatch. Content-Disposition is signed as
+  // empty, so send it explicitly empty (fetch drops omitted headers, breaking
+  // the signature). Content-Length is required but not signed.
   const resp = await fetch(url, {
     method: "PUT",
     headers: {
       "Content-Type": "application/octet-stream",
+      "Content-Disposition": "",
       "Content-Length": String(data.byteLength ?? data.length),
     },
     body: data,
