@@ -33,7 +33,6 @@ const API_BASE = (
 ).replace(/\/$/, "");
 const V1_BASE = "https://api.nexusmods.com/v1";
 const GAME_DOMAIN = process.env.NEXUSMODS_GAME_DOMAIN || "warhammer40kdarktide";
-const MULTIPART_THRESHOLD = 100 * 1024 * 1024; // 100 MiB
 
 function execCmd(args) {
   const result = spawnSync(args[0], args.slice(1), { encoding: "utf8" });
@@ -200,16 +199,10 @@ async function resolveFileGroupId(modUuid, apiKey) {
 }
 
 async function putToPresignedUrl(url, data) {
-  // The presigned URL signs `content-disposition` and `content-type` (per the
-  // canonical request's SignedHeaders). The client MUST echo them exactly or R2
-  // rejects with 403 SignatureDoesNotMatch. Content-Disposition is signed as
-  // empty, so send it explicitly empty (fetch drops omitted headers, breaking
-  // the signature). Content-Length is required but not signed.
   const resp = await fetch(url, {
     method: "PUT",
     headers: {
       "Content-Type": "application/octet-stream",
-      "Content-Disposition": "",
       "Content-Length": String(data.byteLength ?? data.length),
     },
     body: data,
@@ -238,65 +231,57 @@ async function uploadMod(modName, zipPath, version, fileGroupId, apiKey) {
   const zipBasename = path.basename(zipPath);
   let uploadId;
 
-  if (fileSize <= MULTIPART_THRESHOLD) {
-    const uploadInfo = await v3Request("POST", "/uploads", apiKey, {
-      filename: zipBasename,
-      size_bytes: fileSize,
-    });
-    uploadId = uploadInfo.id;
-    console.log(`  uploading ${zipBasename} (${fileSize} bytes), id ${uploadId}`);
-    await putToPresignedUrl(uploadInfo.presigned_url, fs.readFileSync(zipPath));
-  } else {
-    const uploadInfo = await v3Request("POST", "/uploads/multipart", apiKey, {
-      filename: zipBasename,
-      size_bytes: fileSize,
-    });
-    uploadId = uploadInfo.id;
-    const partUrls = uploadInfo.parts_presigned_url;
-    const partSize = uploadInfo.parts_size;
-    const completeUrl = uploadInfo.complete_presigned_url;
-    console.log(
-      `  uploading ${zipBasename} (${fileSize} bytes), multipart, id ${uploadId} (${partUrls.length} parts)`,
+  // Multipart upload for all sizes; the single `/uploads` endpoint signs
+  // `content-disposition`, which R2 rejects unless echoed byte-for-byte.
+  const uploadInfo = await v3Request("POST", "/uploads/multipart", apiKey, {
+    filename: zipBasename,
+    size_bytes: fileSize,
+  });
+  uploadId = uploadInfo.id;
+  const partUrls = uploadInfo.part_presigned_urls || uploadInfo.parts_presigned_url;
+  const partSize = uploadInfo.part_size_bytes || uploadInfo.parts_size;
+  const completeUrl = uploadInfo.complete_presigned_url;
+  console.log(
+    `  Uploading ${zipBasename} (${fileSize} bytes), ${partUrls.length} part(s)`,
+  );
+
+  const fd = fs.openSync(zipPath, "r");
+  const parts = [];
+  for (let i = 0; i < partUrls.length; i++) {
+    const partNumber = i + 1;
+    const chunk = Buffer.alloc(
+      Math.max(0, Math.min(partSize, fileSize - i * partSize)),
     );
+    fs.readSync(fd, chunk, 0, chunk.length, i * partSize);
+    console.log(`  Part ${partNumber}/${partUrls.length} (${chunk.length} bytes)`);
+    const etag = await putToPresignedUrl(partUrls[i], chunk);
+    parts.push({ partNumber, etag });
+  }
+  fs.closeSync(fd);
 
-    const fd = fs.openSync(zipPath, "r");
-    const parts = [];
-    for (let i = 0; i < partUrls.length; i++) {
-      const partNumber = i + 1;
-      const chunk = Buffer.alloc(
-        Math.max(0, Math.min(partSize, fileSize - i * partSize)),
-      );
-      fs.readSync(fd, chunk, 0, chunk.length, i * partSize);
-      console.log(`  part ${partNumber}/${partUrls.length} (${chunk.length} bytes)`);
-      const etag = await putToPresignedUrl(partUrls[i], chunk);
-      parts.push({ partNumber, etag });
-    }
-    fs.closeSync(fd);
-
-    console.log("  completing multipart upload");
-    const xmlParts = parts
-      .map(
-        ({ partNumber, etag }) =>
-          `  <Part>\n    <PartNumber>${partNumber}</PartNumber>\n    <ETag>${etag}</ETag>\n  </Part>`,
-      )
-      .join("\n");
-    const xml = `<CompleteMultipartUpload>\n${xmlParts}\n</CompleteMultipartUpload>`;
-    const completeResp = await fetch(completeUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/xml" },
-      body: xml,
-    });
-    if (!completeResp.ok) {
-      const text = await completeResp.text();
-      throw new Error(`HTTP ${completeResp.status} completing multipart upload: ${text}`);
-    }
+  console.log("  Completing multipart upload");
+  const xmlParts = parts
+    .map(
+      ({ partNumber, etag }) =>
+        `  <Part>\n    <PartNumber>${partNumber}</PartNumber>\n    <ETag>${etag}</ETag>\n  </Part>`,
+    )
+    .join("\n");
+  const xml = `<CompleteMultipartUpload>\n${xmlParts}\n</CompleteMultipartUpload>`;
+  const completeResp = await fetch(completeUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/xml" },
+    body: xml,
+  });
+  if (!completeResp.ok) {
+    const text = await completeResp.text();
+    throw new Error(`HTTP ${completeResp.status} completing multipart upload: ${text}`);
   }
 
-  console.log("  finalising upload");
+  console.log("  Finalising upload");
   await v3Request("POST", `/uploads/${uploadId}/finalise`, apiKey);
-  console.log("  waiting for processing");
+  console.log("  Waiting for processing");
   await pollUntilAvailable(uploadId, apiKey);
-  console.log(`  creating version ${version} in file group ${fileGroupId}`);
+  console.log(`  Creating version ${version} in file group ${fileGroupId}`);
   const result = await v3Request(
     "POST",
     `/mod-file-update-groups/${fileGroupId}/versions`,
