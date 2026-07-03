@@ -13,7 +13,6 @@ local ARMOR_NAMES = {
     unarmored = 'Unarmored',
     armored = 'Flak',
     resistant = 'Unyielding',
-    player = 'Player',
     berserker = 'Maniac',
     super_armor = 'Carapace',
     disgustingly_resilient = 'Infested',
@@ -27,7 +26,6 @@ local ARMOR_ORDER = {
     'berserker',
     'super_armor',
     'disgustingly_resilient',
-    'player',
     'void_shield',
 }
 

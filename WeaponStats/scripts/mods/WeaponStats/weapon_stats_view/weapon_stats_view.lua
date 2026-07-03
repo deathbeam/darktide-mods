@@ -266,7 +266,6 @@ end
 local COLOR_LABEL = Color.terminal_text_body_sub_header(255, true)
 local COLOR_VALUE = Color.terminal_text_body(255, true)
 local COLOR_RULE = Color.terminal_corner(120, true)
-local COLOR_ARMOR_BONUS = Color.ui_orange_medium(255, true)
 
 local function _make_text_widget(self, text, font_size, color, width, height, offset_x)
     local h = height or (font_size + 6)
@@ -326,7 +325,7 @@ local function _make_spacer(self, height, width)
 end
 
 -- Two-column row: muted label left, colored value right-aligned.
-local function _make_stat_row(self, label, value, value_color, width, indent)
+local function _make_stat_row(self, label, value, label_color, width, indent, value_color)
     local h = STAT_ROW_HEIGHT
     local x = (indent or 0) * INDENT_PX
     local label_w = width * 0.55
@@ -341,7 +340,7 @@ local function _make_stat_row(self, label, value, value_color, width, indent)
                 font_size = 16,
                 text_vertical_alignment = 'center',
                 text_horizontal_alignment = 'left',
-                text_color = COLOR_LABEL,
+                text_color = label_color or COLOR_LABEL,
                 offset = { x, 0, 2 },
                 size = { label_w - x, h },
                 text_overflow_mode = 'truncate',
@@ -360,6 +359,9 @@ local function _make_stat_row(self, label, value, value_color, width, indent)
                 offset = { label_w, 0, 2 },
                 size = { value_w, h },
                 text_overflow_mode = 'truncate',
+                offset = { label_w, 0, 2 },
+                size = { value_w, h },
+                text_overflow_mode = 'truncate',
             },
         },
     }, 'weapon_stats_detail_pivot', nil, { width, h })
@@ -368,16 +370,8 @@ local function _make_stat_row(self, label, value, value_color, width, indent)
     self._detail_widgets[#self._detail_widgets + 1] = widget
 end
 
--- Armor row as a stat row: "Name" left, "100% (C: 90%)" right.
--- Color only highlights bonuses (>100%) in orange; penalties and baseline stay muted.
--- Most ADM is <100%, so coloring every penalty red drowns the real signal (bonuses).
-local function _armor_value_color(value)
-    if value > 1.005 then
-        return COLOR_ARMOR_BONUS
-    end
-    return COLOR_VALUE
-end
-
+-- Armor row as a stat row: the NAME carries the per-armor-type color; the value
+-- (e.g. "60% (C: 70%) → 48%") stays neutral so it reads cleanly.
 -- Format one ADM figure, appending " (C: X%)" when crit differs from normal.
 local function _armor_value_text(normal, crit, has_crit)
     local text = string.format('%.0f%%', normal * 100)
@@ -388,15 +382,16 @@ local function _armor_value_text(normal, crit, has_crit)
 end
 
 local function _make_armor_row(self, row, width)
-    local color = _armor_value_color(row.normal)
+    -- The armor NAME carries the per-armor-type color; the value stays neutral.
+    local name_color = row.name_color or COLOR_LABEL
     if row.has_far then
         -- Ranged: "Near% → Far%" with crit riding the near figure.
         local value = _armor_value_text(row.normal, row.crit, row.has_crit)
             .. ' → '
             .. _armor_value_text(row.normal_far, row.crit_far, row.has_crit)
-        _make_stat_row(self, row.name, value, color, width, 1)
+        _make_stat_row(self, row.name, value, name_color, width, 1)
     else
-        _make_stat_row(self, row.name, _armor_value_text(row.normal, row.crit, row.has_crit), color, width, 1)
+        _make_stat_row(self, row.name, _armor_value_text(row.normal, row.crit, row.has_crit), name_color, width, 1)
     end
 end
 
@@ -415,7 +410,7 @@ local function _render_record(self, record, width)
     elseif rtype == 'subheader' then
         _make_text_widget(self, record.text, 16, record.color, width, 22, (record.indent or 0) * INDENT_PX)
     elseif rtype == 'stat' then
-        _make_stat_row(self, record.label, record.value, record.value_color, width, record.indent or 0)
+        _make_stat_row(self, record.label, record.value, record.label_color, width, record.indent or 0)
     elseif rtype == 'armor' then
         _make_spacer(self, 2, width)
         _make_text_widget(self, record.header, 16, record.color, width, 22)

@@ -7,19 +7,38 @@ local WeaponTweakTemplates = mod:original_require('scripts/extension_systems/wea
 local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settings')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
 
--- Color philosophy: color encodes MEANING, not identity. A rainbow where every
--- stat has its own hue is noise. Two tiers:
---   VALUE  - the numbers that matter (damage, impact, cleave, multipliers, crit, armor)
---   MUTED  - descriptive metadata (type, stagger, range, pellets, flags)
--- Plus one accent for the section/attack headers. Crit-related figures reuse VALUE
--- so they don't feel like a separate category.
+-- Color philosophy: LABELS carry the semantic color (what kind of stat it is),
+-- values stay a neutral readable tone. This matches the game's own damage-number
+-- convention: crit=orange, weakspot=yellow, default=white/cream. Categories:
+--   CRIT     - crit-related labels (Crit, Crit Modifier, Crit Strings)
+--   WEAKSPOT - weakspot/finesse labels (Weakspot, Crit+Weak, Backstab)
+--   DAMAGE   - core damage labels (Damage, Impact, Cleave)
+--   TIMING   - attack-speed/fire-rate labels
+--   META     - descriptive metadata (Type, Stagger, Range, Pellets, Flags)
 local COLORS = {
     HEADER = Color.terminal_text_header(255, true),
     ATTACK = Color.ui_terminal(255, true),
     SPECIAL = Color.ui_orange_medium(255, true),
-    LABEL = Color.terminal_text_body_sub_header(255, true),
-    VALUE = Color.terminal_text_body(255, true),
-    ARMOR_BONUS = Color.ui_orange_medium(255, true),
+    CRIT = Color.ui_orange_light(255, true),
+    WEAKSPOT = Color.ui_hud_yellow_light(255, true),
+    DAMAGE = Color.terminal_text_body(255, true),
+    TIMING = Color.ui_hud_green_light(255, true),
+    META = Color.terminal_text_body_sub_header(255, true),
+}
+
+-- Per-armor-type label colors. No canonical in-game palette exists, so these
+-- group intuitively: flesh/pink for the unarmored-adjacent types, metallic blue
+-- for Flak, red for Unyielding, orange for Maniac, brown for Carapace, green for
+-- Infested, purple for Void Shield. Mirrors CombatStats'
+-- per-category enemy coloring approach.
+local ARMOR_COLORS = {
+    unarmored = Color.ui_hud_red_super_light(255, true),
+    armored = Color.ui_blue_light(255, true),
+    resistant = Color.ui_hud_red_light(255, true),
+    berserker = Color.ui_orange_light(255, true),
+    super_armor = Color.ui_brown_light(255, true),
+    disgustingly_resilient = Color.ui_hud_green_light(255, true),
+    void_shield = Color.ui_hud_warp_charge_low(255, true),
 }
 
 -- Record helpers -----------------------------------------------------------
@@ -44,15 +63,16 @@ local function add_subheader(records, text, indent)
 end
 
 local function add_special_active(records)
-    add(records, { type = 'subheader', text = '> Special Active', color = COLORS.SPECIAL, indent = 1 })
+    add(records, { type = 'attack', text = 'Special Active', color = COLORS.SPECIAL })
 end
 
-local function add_stat(records, label, value, value_color, indent)
+local function add_stat(records, label, value, label_color, indent)
     add(records, {
         type = 'stat',
         label = label,
         value = value,
-        value_color = value_color or COLORS.VALUE,
+        -- Labels carry the semantic color; values stay neutral & readable.
+        label_color = label_color or COLORS.META,
         indent = indent or 0,
     })
 end
@@ -247,7 +267,7 @@ local function render_timing(records, action, weapon_template, weapon_tweak_temp
         time_scale = tmpl.time_scale or 1
         local auto_fire_time = tmpl.fire_rate and tmpl.fire_rate.auto_fire_time
         if type(auto_fire_time) == 'number' and auto_fire_time > 0 then
-            add_stat(records, 'Fire Rate', string.format('%.2f/s', 1 / auto_fire_time), COLORS.VALUE)
+            add_stat(records, 'Fire Rate', string.format('%.2f/s', 1 / auto_fire_time), COLORS.TIMING)
             fire_rate_shown = true
         end
     end
@@ -272,7 +292,7 @@ local function render_timing(records, action, weapon_template, weapon_tweak_temp
         if chain_time and chain_time > 0 then
             local lbl = (action.kind == 'shoot_hit_scan' or action.kind == 'shoot_pellets') and 'Fire Rate'
                 or 'Attack Speed'
-            add_stat(records, lbl, string.format('%.2f/s', 1 / (chain_time / time_scale)), COLORS.VALUE)
+            add_stat(records, lbl, string.format('%.2f/s', 1 / (chain_time / time_scale)), COLORS.TIMING)
         end
     end
 end
@@ -300,10 +320,10 @@ local function render_profile(records, ctx)
     -- Base resolved damage (matches the in-game card) and impact.
     local base_attack, base_impact = Utils.base_powers(profile, target_settings, power_level, action_lerp, dropoff)
     if base_attack and math.abs(base_attack) > 0.01 then
-        add_stat(records, 'Damage', fmt_num(base_attack), COLORS.VALUE)
+        add_stat(records, 'Damage', fmt_num(base_attack), COLORS.DAMAGE)
     end
     if base_impact and math.abs(base_impact) > 0.01 then
-        add_stat(records, 'Impact', fmt_num(base_impact), COLORS.VALUE)
+        add_stat(records, 'Impact', fmt_num(base_impact), COLORS.DAMAGE)
     end
 
     -- Cleave (attack/impact distribution).
@@ -317,9 +337,9 @@ local function render_profile(records, ctx)
                 and impact_cleave > 0.01
                 and math.abs(impact_cleave - attack_cleave) > 0.01
             then
-                add_stat(records, 'Cleave', string.format('%.2f / %.2f', attack_cleave, impact_cleave), COLORS.VALUE)
+                add_stat(records, 'Cleave', string.format('%.2f / %.2f', attack_cleave, impact_cleave), COLORS.DAMAGE)
             else
-                add_stat(records, 'Cleave', string.format('%.2f', attack_cleave), COLORS.VALUE)
+                add_stat(records, 'Cleave', string.format('%.2f', attack_cleave), COLORS.DAMAGE)
             end
         end
     end
@@ -327,7 +347,7 @@ local function render_profile(records, ctx)
     -- Backstab bonus (extra damage on rear hits).
     if profile.backstab_bonus and profile.backstab_bonus ~= 0 then
         local bonus = Utils.lerp_entry(profile.backstab_bonus)
-        add_stat(records, 'Backstab', string.format('%.0f%%', bonus * 100), COLORS.VALUE)
+        add_stat(records, 'Backstab', string.format('%.0f%%', bonus * 100), COLORS.WEAKSPOT)
     end
 
     -- Finesse & crit multipliers: weakspot, crit, and crit+weakspot.
@@ -340,16 +360,16 @@ local function render_profile(records, ctx)
     if any_mult then
         add_subheader(records, 'Finesse & Crit')
         if weakspot_mult and math.abs(weakspot_mult - 1) > 0.005 then
-            add_stat(records, 'Weakspot', fmt_mult(weakspot_mult), COLORS.VALUE, 1)
+            add_stat(records, 'Weakspot', fmt_mult(weakspot_mult), COLORS.WEAKSPOT, 1)
         end
         if crit_mult and math.abs(crit_mult - 1) > 0.005 then
-            add_stat(records, 'Crit', fmt_mult(crit_mult), COLORS.VALUE, 1)
+            add_stat(records, 'Crit', fmt_mult(crit_mult), COLORS.CRIT, 1)
         end
         if
             crit_weakspot_mult
             and math.abs(crit_weakspot_mult - math.max(weakspot_mult or 1, crit_mult or 1)) > 0.005
         then
-            add_stat(records, 'Crit+Weak', fmt_mult(crit_weakspot_mult), COLORS.VALUE, 1)
+            add_stat(records, 'Crit+Weak', fmt_mult(crit_weakspot_mult), COLORS.WEAKSPOT, 1)
         end
     end
 
@@ -363,11 +383,11 @@ local function render_profile(records, ctx)
                 records,
                 'Crit Modifier',
                 string.format('%s%.1f%%', sign, crit_strike.chance_modifier * 100),
-                COLORS.VALUE
+                COLORS.CRIT
             )
         end
         if crit_strike.max_critical_shots and crit_strike.max_critical_shots ~= 0 then
-            add_stat(records, 'Crit Strings', tostring(crit_strike.max_critical_shots), COLORS.VALUE)
+            add_stat(records, 'Crit Strings', tostring(crit_strike.max_critical_shots), COLORS.CRIT)
         end
     end
 
@@ -375,34 +395,33 @@ local function render_profile(records, ctx)
     local ranged_extra = ctx.ranged_extra
     if ranged_extra then
         if ranged_extra.num_pellets then
-            add_stat(records, 'Pellets', string.format('x%d', ranged_extra.num_pellets), COLORS.LABEL)
+            add_stat(records, 'Pellets', string.format('x%d', ranged_extra.num_pellets), COLORS.META)
         end
         if ranged_extra.spread_pitch and ranged_extra.spread_yaw then
             add_stat(
                 records,
                 'Spread',
                 string.format('%.1f / %.1f', ranged_extra.spread_pitch, ranged_extra.spread_yaw),
-                COLORS.LABEL
+                COLORS.META
             )
         end
     end
 
     local min_r, max_r = Utils.ranges(profile, action_lerp)
     if min_r and max_r then
-        add_stat(records, 'Falloff Range', string.format('%.0f - %.0f m', min_r, max_r), COLORS.LABEL)
+        add_stat(records, 'Falloff Range', string.format('%.0f - %.0f m', min_r, max_r), COLORS.META)
     end
-
     if profile.suppression_value ~= nil then
         local sup = Utils.lerp_entry(profile.suppression_value, Utils.lerp_from_path(action_lerp, 'suppression_value'))
         if sup and math.abs(sup) > 0.01 then
-            add_stat(records, 'Suppression', fmt_num(sup), COLORS.LABEL)
+            add_stat(records, 'Suppression', fmt_num(sup), COLORS.META)
         end
     end
 
     -- Stagger category.
     local stagger = Utils.stagger_name(profile.stagger_category)
     if stagger then
-        add_stat(records, 'Stagger', stagger, COLORS.LABEL)
+        add_stat(records, 'Stagger', stagger, COLORS.META)
     end
 
     -- Flags.
@@ -414,7 +433,7 @@ local function render_profile(records, ctx)
         flags[#flags + 1] = 'Ignores Stagger Reduction'
     end
     if #flags > 0 then
-        add_stat(records, 'Flags', table.concat(flags, ', '), COLORS.LABEL)
+        add_stat(records, 'Flags', table.concat(flags, ', '), COLORS.META)
     end
 
     -- Armor damage table (normal / crit, with near/far falloff for ranged).
@@ -489,21 +508,19 @@ render_armor = function(records, profile, target_settings, action_lerp, is_range
                 ) or default_adm
             end
 
-            -- Skip rows that match the game's default ADM with no crit difference.
-            local has_near = math.abs(normal_near - default_adm) > 0.005 or math.abs(crit_near - normal_near) > 0.005
-            local has_far = is_ranged
-                and (math.abs(normal_far - default_adm) > 0.005 or math.abs(crit_far - normal_far) > 0.005)
-            if has_near or has_far then
-                rows[#rows + 1] = {
-                    name = Utils.armor_name(armor_key),
-                    normal = normal_near,
-                    crit = crit_near,
-                    has_crit = math.abs(crit_near - normal_near) > 0.005,
-                    normal_far = normal_far,
-                    crit_far = crit_far,
-                    has_far = is_ranged,
-                }
-            end
+            -- Always show every armor type. A missing explicit entry resolves to
+            -- the game's default (e.g. 0 for Carapace) via armor_modifier's `or`
+            -- fallback, so it's never silently hidden.
+            rows[#rows + 1] = {
+                name = Utils.armor_name(armor_key),
+                name_color = ARMOR_COLORS[armor_key],
+                normal = normal_near,
+                crit = crit_near,
+                has_crit = math.abs(crit_near - normal_near) > 0.005,
+                normal_far = normal_far,
+                crit_far = crit_far,
+                has_far = is_ranged,
+            }
         end
     end
 
@@ -525,7 +542,7 @@ local function render_attack(records, attack_data, weapon_template, weapon_tweak
     add_attack(records, table.concat(labels, ', '))
 
     if attack_data.profile.damage_type then
-        add_stat(records, 'Type', tostring(Utils.damage_type_name(attack_data.profile.damage_type)), COLORS.LABEL)
+        add_stat(records, 'Type', tostring(Utils.damage_type_name(attack_data.profile.damage_type)), COLORS.META)
     end
 
     render_timing(records, action, weapon_template, weapon_tweak_templates, action_name)
