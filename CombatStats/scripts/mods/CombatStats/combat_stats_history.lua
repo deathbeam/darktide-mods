@@ -174,7 +174,6 @@ function CombatStatsHistory:save_history_entry(tracker_data, mission_name, class
         if token then
             self._pending_saves[token] = nil
         end
-        mod:echo('history save done: %s error=%s', tostring(file_name), tostring(info and info.error))
         if info and info.error then
             mod:echo('Failed to save history entry: ' .. tostring(info.error))
         end
