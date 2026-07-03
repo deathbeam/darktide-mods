@@ -3,6 +3,7 @@ local mod = get_mod('WeaponStats')
 local DamageProfile = mod:original_require('scripts/utilities/attack/damage_profile')
 local DamageCalculation = mod:original_require('scripts/utilities/attack/damage_calculation')
 local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settings')
+local PowerLevelSettings = mod:original_require('scripts/settings/damage/power_level_settings')
 local Action = mod:original_require('scripts/utilities/action/action')
 
 local FALLBACK_LERP = 0.5
@@ -54,35 +55,6 @@ local STAGGER_NAMES = {
     special = 'Special',
 }
 
-local GIBBING_POWER_NAMES = {
-    always = 'Always',
-    light = 'Light',
-    medium = 'Medium',
-    heavy = 'Heavy',
-    impossible = 'None',
-    infinite = 'Infinite',
-}
-
-local GIBBING_TYPE_NAMES = {
-    sawing = 'Sawing',
-    crushing = 'Crushing',
-    explosive = 'Explosive',
-    arc = 'Arc',
-    ballistic = 'Ballistic',
-    boltshell = 'Bolt Shell',
-    explosion = 'Explosion',
-    fire = 'Fire',
-    implosion = 'Implosion',
-    laser = 'Laser',
-    phosphor = 'Phosphor',
-    plasma = 'Plasma',
-    toxin = 'Toxin',
-    warp_lightning = 'Warp Lightning',
-    warp_shard = 'Warp Shard',
-    warp = 'Warp',
-    default = 'Default',
-}
-
 local ACTION_LABEL_OVERRIDES = {
     shoot_hip = 'Hipfire',
     shoot_zoomed = 'ADS',
@@ -130,14 +102,6 @@ function WeaponStatsUtils.stagger_name(stagger_category)
         return nil
     end
     return STAGGER_NAMES[stagger_category] or prettify_enum(stagger_category)
-end
-
-function WeaponStatsUtils.gibbing_power_name(power)
-    return power and (GIBBING_POWER_NAMES[power] or prettify_enum(power)) or nil
-end
-
-function WeaponStatsUtils.gibbing_type_name(gib_type)
-    return gib_type and (GIBBING_TYPE_NAMES[gib_type] or prettify_enum(gib_type)) or nil
 end
 
 function WeaponStatsUtils.friendly_action_label(action_name)
@@ -312,6 +276,14 @@ function WeaponStatsUtils.armor_modifier(
     return mod
 end
 
+-- The game's fallback ADM for an armor type when a profile lacks an explicit entry.
+-- Matches DamageProfile.armor_damage_modifier's `else` branch (PowerLevelSettings.default_armor_damage_modifier).
+function WeaponStatsUtils.default_armor_modifier(power_type, armor_type)
+    local defaults = PowerLevelSettings.default_armor_damage_modifier
+    local by_type = defaults and defaults[power_type or 'attack']
+    return by_type and by_type[armor_type] or 1
+end
+
 -- Effective range min/max (near/far) for ranged profiles at the item's lerp.
 function WeaponStatsUtils.ranges(damage_profile, action_lerp)
     if not damage_profile or not damage_profile.ranges then
@@ -323,6 +295,18 @@ function WeaponStatsUtils.ranges(damage_profile, action_lerp)
         return nil, nil
     end
     return min_r, max_r
+end
+
+-- Falloff scalar (0..1) for a hit at `hit_distance`. 0 = point-blank (no falloff),
+-- 1 = at/inside max range (full falloff). false when the profile has no ranges
+-- (melee), meaning distance is irrelevant. Mirrors DamageProfile.dropoff_scalar.
+function WeaponStatsUtils.dropoff_scalar(hit_distance, damage_profile, action_lerp)
+    local cur_lerps = action_lerp or {}
+    local ok, scalar = pcall(DamageProfile.dropoff_scalar, hit_distance, damage_profile, cur_lerps)
+    if not ok then
+        return false
+    end
+    return scalar
 end
 
 function WeaponStatsUtils.armor_order()

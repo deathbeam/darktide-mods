@@ -267,7 +267,6 @@ local COLOR_LABEL = Color.terminal_text_body_sub_header(255, true)
 local COLOR_VALUE = Color.terminal_text_body(255, true)
 local COLOR_RULE = Color.terminal_corner(120, true)
 local COLOR_ARMOR_BONUS = Color.ui_orange_medium(255, true)
-local COLOR_ARMOR_PENALTY = Color.ui_hud_red_light(255, true)
 
 local function _make_text_widget(self, text, font_size, color, width, height, offset_x)
     local h = height or (font_size + 6)
@@ -356,7 +355,7 @@ local function _make_stat_row(self, label, value, value_color, width, indent)
                 font_type = 'proxima_nova_bold',
                 font_size = 16,
                 text_vertical_alignment = 'center',
-                text_horizontal_alignment = 'right',
+                text_horizontal_alignment = 'left',
                 text_color = value_color or COLOR_VALUE,
                 offset = { label_w, 0, 2 },
                 size = { value_w, h },
@@ -370,28 +369,35 @@ local function _make_stat_row(self, label, value, value_color, width, indent)
 end
 
 -- Armor row as a stat row: "Name" left, "100% (C: 90%)" right.
--- Color hints at the modifier: bonus (orange), penalty (red), baseline (muted).
-local function _armor_value_text(row)
-    local normal = string.format('%.0f%%', row.normal * 100)
-    if row.has_crit then
-        return normal .. string.format(' (C: %.0f%%)', row.crit * 100)
-    end
-    return normal
-end
-
+-- Color only highlights bonuses (>100%) in orange; penalties and baseline stay muted.
+-- Most ADM is <100%, so coloring every penalty red drowns the real signal (bonuses).
 local function _armor_value_color(value)
     if value > 1.005 then
         return COLOR_ARMOR_BONUS
-    elseif value < 0.995 then
-        return COLOR_ARMOR_PENALTY
     end
     return COLOR_VALUE
 end
 
+-- Format one ADM figure, appending " (C: X%)" when crit differs from normal.
+local function _armor_value_text(normal, crit, has_crit)
+    local text = string.format('%.0f%%', normal * 100)
+    if has_crit then
+        text = text .. string.format(' (C: %.0f%%)', crit * 100)
+    end
+    return text
+end
+
 local function _make_armor_row(self, row, width)
-    -- When crit differs, color by the normal value; the crit figure rides along.
     local color = _armor_value_color(row.normal)
-    _make_stat_row(self, row.name, _armor_value_text(row), color, width, 1)
+    if row.has_far then
+        -- Ranged: "Near% → Far%" with crit riding the near figure.
+        local value = _armor_value_text(row.normal, row.crit, row.has_crit)
+            .. ' → '
+            .. _armor_value_text(row.normal_far, row.crit_far, row.has_crit)
+        _make_stat_row(self, row.name, value, color, width, 1)
+    else
+        _make_stat_row(self, row.name, _armor_value_text(row.normal, row.crit, row.has_crit), color, width, 1)
+    end
 end
 
 -- Dispatch a single builder record to the matching widget helper.

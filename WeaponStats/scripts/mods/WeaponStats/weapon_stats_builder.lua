@@ -7,21 +7,19 @@ local WeaponTweakTemplates = mod:original_require('scripts/extension_systems/wea
 local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settings')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
 
--- Semantic colors, resolved to the game's terminal palette so the view matches native UI.
+-- Color philosophy: color encodes MEANING, not identity. A rainbow where every
+-- stat has its own hue is noise. Two tiers:
+--   VALUE  - the numbers that matter (damage, impact, cleave, multipliers, crit, armor)
+--   MUTED  - descriptive metadata (type, stagger, range, pellets, flags)
+-- Plus one accent for the section/attack headers. Crit-related figures reuse VALUE
+-- so they don't feel like a separate category.
 local COLORS = {
     HEADER = Color.terminal_text_header(255, true),
     ATTACK = Color.ui_terminal(255, true),
-    LABEL = Color.terminal_text_body_sub_header(255, true),
-    DAMAGE = Color.ui_orange_light(255, true),
-    ARMOR = Color.ui_hud_red_light(255, true),
-    CRIT = Color.ui_hud_yellow_light(255, true),
-    IMPACT = Color.ui_blue_light(255, true),
-    WEAKSPOT = Color.ui_orange_light(255, true),
-    TIMING = Color.ui_hud_green_light(255, true),
-    FALLOFF = Color.ui_blue_light(255, true),
-    PELLET = Color.ui_hud_warp_charge_low(255, true),
-    ADVANCED = Color.ui_grey_light(255, true),
     SPECIAL = Color.ui_orange_medium(255, true),
+    LABEL = Color.terminal_text_body_sub_header(255, true),
+    VALUE = Color.terminal_text_body(255, true),
+    ARMOR_BONUS = Color.ui_orange_medium(255, true),
 }
 
 -- Record helpers -----------------------------------------------------------
@@ -54,13 +52,19 @@ local function add_stat(records, label, value, value_color, indent)
         type = 'stat',
         label = label,
         value = value,
-        value_color = value_color or COLORS.DAMAGE,
+        value_color = value_color or COLORS.VALUE,
         indent = indent or 0,
     })
 end
 
-local function add_armor(records, rows)
-    add(records, { type = 'armor', header = 'Armor Damage', color = COLORS.HEADER, rows = rows })
+local function add_armor(records, rows, is_ranged)
+    add(records, {
+        type = 'armor',
+        header = 'Armor Damage',
+        color = COLORS.HEADER,
+        rows = rows,
+        is_ranged = is_ranged,
+    })
 end
 
 local function add_spacer(records, height)
@@ -243,7 +247,7 @@ local function render_timing(records, action, weapon_template, weapon_tweak_temp
         time_scale = tmpl.time_scale or 1
         local auto_fire_time = tmpl.fire_rate and tmpl.fire_rate.auto_fire_time
         if type(auto_fire_time) == 'number' and auto_fire_time > 0 then
-            add_stat(records, 'Fire Rate', string.format('%.2f/s', 1 / auto_fire_time), COLORS.TIMING)
+            add_stat(records, 'Fire Rate', string.format('%.2f/s', 1 / auto_fire_time), COLORS.VALUE)
             fire_rate_shown = true
         end
     end
@@ -268,7 +272,7 @@ local function render_timing(records, action, weapon_template, weapon_tweak_temp
         if chain_time and chain_time > 0 then
             local lbl = (action.kind == 'shoot_hit_scan' or action.kind == 'shoot_pellets') and 'Fire Rate'
                 or 'Attack Speed'
-            add_stat(records, lbl, string.format('%.2f/s', 1 / (chain_time / time_scale)), COLORS.TIMING)
+            add_stat(records, lbl, string.format('%.2f/s', 1 / (chain_time / time_scale)), COLORS.VALUE)
         end
     end
 end
@@ -296,85 +300,10 @@ local function render_profile(records, ctx)
     -- Base resolved damage (matches the in-game card) and impact.
     local base_attack, base_impact = Utils.base_powers(profile, target_settings, power_level, action_lerp, dropoff)
     if base_attack and math.abs(base_attack) > 0.01 then
-        add_stat(records, 'Damage', fmt_num(base_attack), COLORS.DAMAGE)
+        add_stat(records, 'Damage', fmt_num(base_attack), COLORS.VALUE)
     end
     if base_impact and math.abs(base_impact) > 0.01 then
-        add_stat(records, 'Impact', fmt_num(base_impact), COLORS.IMPACT)
-    end
-
-    -- Multipliers: weakspot (finesse), crit, and crit+weakspot.
-    local weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, false)
-    local crit_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, false, true)
-    local crit_weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, true)
-
-    local any_mult = (weakspot_mult and math.abs(weakspot_mult - 1) > 0.005)
-        or (crit_mult and math.abs(crit_mult - 1) > 0.005)
-    if any_mult then
-        add_subheader(records, 'Multipliers')
-        if weakspot_mult and math.abs(weakspot_mult - 1) > 0.005 then
-            add_stat(records, 'Weakspot', fmt_mult(weakspot_mult), COLORS.WEAKSPOT, 1)
-        end
-        if crit_mult and math.abs(crit_mult - 1) > 0.005 then
-            add_stat(records, 'Crit', fmt_mult(crit_mult), COLORS.CRIT, 1)
-        end
-        if
-            crit_weakspot_mult
-            and math.abs(crit_weakspot_mult - math.max(weakspot_mult or 1, crit_mult or 1)) > 0.005
-        then
-            add_stat(records, 'Crit+Weak', fmt_mult(crit_weakspot_mult), COLORS.CRIT, 1)
-        end
-    end
-
-    -- Ranged-specific: pellets, range, effective range, spread, suppression.
-    local ranged_extra = ctx.ranged_extra
-    if ranged_extra then
-        if ranged_extra.num_pellets then
-            add_stat(records, 'Pellets', string.format('x%d', ranged_extra.num_pellets), COLORS.PELLET)
-        end
-        if ranged_extra.spread_pitch and ranged_extra.spread_yaw then
-            add_stat(
-                records,
-                'Spread',
-                string.format('%.1f / %.1f', ranged_extra.spread_pitch, ranged_extra.spread_yaw),
-                COLORS.PELLET
-            )
-        end
-    end
-
-    local min_r, max_r = Utils.ranges(profile, action_lerp)
-    if min_r and max_r then
-        add_stat(records, 'Falloff', string.format('%.0f - %.0f m', min_r, max_r), COLORS.FALLOFF)
-    end
-
-    if profile.suppression_value ~= nil then
-        local sup = Utils.lerp_entry(profile.suppression_value, Utils.lerp_from_path(action_lerp, 'suppression_value'))
-        if sup and math.abs(sup) > 0.01 then
-            add_stat(records, 'Suppression', fmt_num(sup), COLORS.ADVANCED)
-        end
-    end
-
-    -- Crit modifier (weapon handling) and crit strings.
-    local tmpl = handling_template_for_action(ctx.weapon_template, ctx.weapon_tweak_templates, ctx.action_name)
-    local crit_strike = tmpl and tmpl.critical_strike
-    if crit_strike then
-        if crit_strike.chance_modifier and crit_strike.chance_modifier ~= 0 then
-            local sign = crit_strike.chance_modifier >= 0 and '+' or ''
-            add_stat(
-                records,
-                'Crit Modifier',
-                string.format('%s%.1f%%', sign, crit_strike.chance_modifier * 100),
-                COLORS.CRIT
-            )
-        end
-        if crit_strike.max_critical_shots and crit_strike.max_critical_shots ~= 0 then
-            add_stat(records, 'Crit Strings', tostring(crit_strike.max_critical_shots), COLORS.CRIT)
-        end
-    end
-
-    -- Backstab bonus (extra damage on rear hits).
-    if profile.backstab_bonus and profile.backstab_bonus ~= 0 then
-        local bonus = Utils.lerp_entry(profile.backstab_bonus)
-        add_stat(records, 'Backstab', string.format('%.0f%%', bonus * 100), COLORS.WEAKSPOT)
+        add_stat(records, 'Impact', fmt_num(base_impact), COLORS.VALUE)
     end
 
     -- Cleave (attack/impact distribution).
@@ -388,10 +317,85 @@ local function render_profile(records, ctx)
                 and impact_cleave > 0.01
                 and math.abs(impact_cleave - attack_cleave) > 0.01
             then
-                add_stat(records, 'Cleave', string.format('%.2f / %.2f', attack_cleave, impact_cleave), COLORS.DAMAGE)
+                add_stat(records, 'Cleave', string.format('%.2f / %.2f', attack_cleave, impact_cleave), COLORS.VALUE)
             else
-                add_stat(records, 'Cleave', string.format('%.2f', attack_cleave), COLORS.DAMAGE)
+                add_stat(records, 'Cleave', string.format('%.2f', attack_cleave), COLORS.VALUE)
             end
+        end
+    end
+
+    -- Backstab bonus (extra damage on rear hits).
+    if profile.backstab_bonus and profile.backstab_bonus ~= 0 then
+        local bonus = Utils.lerp_entry(profile.backstab_bonus)
+        add_stat(records, 'Backstab', string.format('%.0f%%', bonus * 100), COLORS.VALUE)
+    end
+
+    -- Finesse & crit multipliers: weakspot, crit, and crit+weakspot.
+    local weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, false)
+    local crit_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, false, true)
+    local crit_weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, true)
+
+    local any_mult = (weakspot_mult and math.abs(weakspot_mult - 1) > 0.005)
+        or (crit_mult and math.abs(crit_mult - 1) > 0.005)
+    if any_mult then
+        add_subheader(records, 'Finesse & Crit')
+        if weakspot_mult and math.abs(weakspot_mult - 1) > 0.005 then
+            add_stat(records, 'Weakspot', fmt_mult(weakspot_mult), COLORS.VALUE, 1)
+        end
+        if crit_mult and math.abs(crit_mult - 1) > 0.005 then
+            add_stat(records, 'Crit', fmt_mult(crit_mult), COLORS.VALUE, 1)
+        end
+        if
+            crit_weakspot_mult
+            and math.abs(crit_weakspot_mult - math.max(weakspot_mult or 1, crit_mult or 1)) > 0.005
+        then
+            add_stat(records, 'Crit+Weak', fmt_mult(crit_weakspot_mult), COLORS.VALUE, 1)
+        end
+    end
+
+    -- Crit modifier (weapon handling) and crit strings.
+    local tmpl = handling_template_for_action(ctx.weapon_template, ctx.weapon_tweak_templates, ctx.action_name)
+    local crit_strike = tmpl and tmpl.critical_strike
+    if crit_strike then
+        if crit_strike.chance_modifier and crit_strike.chance_modifier ~= 0 then
+            local sign = crit_strike.chance_modifier >= 0 and '+' or ''
+            add_stat(
+                records,
+                'Crit Modifier',
+                string.format('%s%.1f%%', sign, crit_strike.chance_modifier * 100),
+                COLORS.VALUE
+            )
+        end
+        if crit_strike.max_critical_shots and crit_strike.max_critical_shots ~= 0 then
+            add_stat(records, 'Crit Strings', tostring(crit_strike.max_critical_shots), COLORS.VALUE)
+        end
+    end
+
+    -- Ranged-specific: pellets, spread, range, suppression.
+    local ranged_extra = ctx.ranged_extra
+    if ranged_extra then
+        if ranged_extra.num_pellets then
+            add_stat(records, 'Pellets', string.format('x%d', ranged_extra.num_pellets), COLORS.LABEL)
+        end
+        if ranged_extra.spread_pitch and ranged_extra.spread_yaw then
+            add_stat(
+                records,
+                'Spread',
+                string.format('%.1f / %.1f', ranged_extra.spread_pitch, ranged_extra.spread_yaw),
+                COLORS.LABEL
+            )
+        end
+    end
+
+    local min_r, max_r = Utils.ranges(profile, action_lerp)
+    if min_r and max_r then
+        add_stat(records, 'Falloff Range', string.format('%.0f - %.0f m', min_r, max_r), COLORS.LABEL)
+    end
+
+    if profile.suppression_value ~= nil then
+        local sup = Utils.lerp_entry(profile.suppression_value, Utils.lerp_from_path(action_lerp, 'suppression_value'))
+        if sup and math.abs(sup) > 0.01 then
+            add_stat(records, 'Suppression', fmt_num(sup), COLORS.LABEL)
         end
     end
 
@@ -399,20 +403,6 @@ local function render_profile(records, ctx)
     local stagger = Utils.stagger_name(profile.stagger_category)
     if stagger then
         add_stat(records, 'Stagger', stagger, COLORS.LABEL)
-    end
-
-    -- Gibbing.
-    local gib_power = Utils.gibbing_power_name(profile.gibbing_power)
-    local gib_type = Utils.gibbing_type_name(profile.gibbing_type)
-    local gib_parts = {}
-    if gib_power then
-        gib_parts[#gib_parts + 1] = gib_power
-    end
-    if gib_type then
-        gib_parts[#gib_parts + 1] = gib_type
-    end
-    if #gib_parts > 0 then
-        add_stat(records, 'Gibbing', table.concat(gib_parts, ' / '), COLORS.ADVANCED)
     end
 
     -- Flags.
@@ -424,55 +414,98 @@ local function render_profile(records, ctx)
         flags[#flags + 1] = 'Ignores Stagger Reduction'
     end
     if #flags > 0 then
-        add_stat(records, 'Flags', table.concat(flags, ', '), COLORS.ADVANCED)
+        add_stat(records, 'Flags', table.concat(flags, ', '), COLORS.LABEL)
     end
 
-    -- Armor damage table (normal / crit).
-    render_armor(records, profile, target_settings, action_lerp, dropoff)
+    -- Armor damage table (normal / crit, with near/far falloff for ranged).
+    render_armor(records, profile, target_settings, action_lerp, is_ranged)
 end
 
--- Per-armor damage modifiers as a compact table of rows.
-render_armor = function(records, profile, target_settings, action_lerp, dropoff)
+-- Per-armor damage modifiers. Ranged profiles carry near/far ADM (point-blank vs
+-- max-range falloff); melee has a single distance-independent value. Rows are
+-- skipped when they're baseline 100% with no crit difference (nothing to convey).
+render_armor = function(records, profile, target_settings, action_lerp, is_ranged)
     local armor_order = Utils.armor_order()
     local rows = {}
+
+    -- dropoff scalars: 0 = point-blank (near), 1 = at/inside max range (far).
+    -- For melee (no ranges) both are nil -> single-value rows.
+    local near_dropoff, far_dropoff
+    if is_ranged then
+        near_dropoff = 0
+        far_dropoff = 1
+    end
 
     for _, armor_key in ipairs(armor_order) do
         local armor_type = ArmorSettings.types[armor_key]
         if armor_type then
-            -- A nil modifier means "no special handling" = baseline 100% damage.
-            -- Default both to 1.0 so the row logic below treats absence as 100%.
-            local normal = Utils.armor_modifier(
+            -- The game's fallback ADM for a missing entry varies per armor type
+            -- (e.g. Carapace=0, Berserker=0.75), not a flat 1.0. Use it so a
+            -- weapon with no explicit entry shows the game's real default, and
+            -- rows only disappear when they match that default with no crit diff.
+            local default_adm = Utils.default_armor_modifier('attack', armor_type)
+
+            local normal_near = Utils.armor_modifier(
                 profile,
                 target_settings,
                 action_lerp,
                 'attack',
                 armor_type,
                 false,
-                dropoff
-            ) or 1
-            local crit = Utils.armor_modifier(
+                near_dropoff
+            ) or default_adm
+            local crit_near = Utils.armor_modifier(
                 profile,
                 target_settings,
                 action_lerp,
                 'attack',
                 armor_type,
                 true,
-                dropoff
-            ) or 1
-            -- Skip rows that are baseline 100% with no crit difference (no info to convey).
-            if math.abs(normal - 1) > 0.005 or math.abs(crit - normal) > 0.005 then
+                near_dropoff
+            ) or default_adm
+
+            local normal_far, crit_far
+            if is_ranged then
+                normal_far = Utils.armor_modifier(
+                    profile,
+                    target_settings,
+                    action_lerp,
+                    'attack',
+                    armor_type,
+                    false,
+                    far_dropoff
+                ) or default_adm
+                crit_far = Utils.armor_modifier(
+                    profile,
+                    target_settings,
+                    action_lerp,
+                    'attack',
+                    armor_type,
+                    true,
+                    far_dropoff
+                ) or default_adm
+            end
+
+            -- Skip rows that match the game's default ADM with no crit difference.
+            local has_near = math.abs(normal_near - default_adm) > 0.005 or math.abs(crit_near - normal_near) > 0.005
+            local has_far = is_ranged
+                and (math.abs(normal_far - default_adm) > 0.005 or math.abs(crit_far - normal_far) > 0.005)
+            if has_near or has_far then
                 rows[#rows + 1] = {
                     name = Utils.armor_name(armor_key),
-                    normal = normal,
-                    crit = crit,
-                    has_crit = math.abs(crit - normal) > 0.005,
+                    normal = normal_near,
+                    crit = crit_near,
+                    has_crit = math.abs(crit_near - normal_near) > 0.005,
+                    normal_far = normal_far,
+                    crit_far = crit_far,
+                    has_far = is_ranged,
                 }
             end
         end
     end
 
     if #rows > 0 then
-        add_armor(records, rows)
+        add_armor(records, rows, is_ranged)
     end
 end
 
