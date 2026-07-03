@@ -281,19 +281,21 @@ async function uploadMod(modName, zipPath, version, fileGroupId, apiKey) {
   await v3Request("POST", `/uploads/${uploadId}/finalise`, apiKey);
   console.log("  Waiting for processing");
   await pollUntilAvailable(uploadId, apiKey);
-  console.log(`  Creating version ${version} in file group ${fileGroupId}`);
+  console.log(`  Creating version ${version} for mod file ${fileGroupId}`);
   const result = await v3Request(
     "POST",
-    `/mod-file-update-groups/${fileGroupId}/versions`,
+    `/mod-files/${fileGroupId}/versions`,
     apiKey,
     {
       upload_id: uploadId,
       name: modName,
       version,
       file_category: "main",
+      archive_existing_file: true,
     },
   );
-  console.log(`  uploaded, file id ${result.id}`);
+  const versionId = result.version && result.version.id;
+  console.log(`  uploaded, version id ${versionId || result.id || "?"}`);
 }
 
 // ---------------------------------------------------------------------------
