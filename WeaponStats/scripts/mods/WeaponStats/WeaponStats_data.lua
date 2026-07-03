@@ -5,6 +5,15 @@ return {
     description = mod:localize('mod_description'),
     is_togglable = true,
     options = {
-        widgets = {},
+        widgets = {
+            {
+                setting_id = 'toggle_view_keybind',
+                type = 'keybind',
+                default_value = {},
+                keybind_trigger = 'pressed',
+                keybind_type = 'view_toggle',
+                view_name = 'weapon_stats_view',
+            },
+        },
     },
 }
