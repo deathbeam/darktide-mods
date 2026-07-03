@@ -8,12 +8,6 @@ local Action = mod:original_require('scripts/utilities/action/action')
 local FALLBACK_LERP = 0.5
 local DEFAULT_POWER_LEVEL = 500
 
--- Damage output range used by the game to convert attack power into raw hit damage.
-local DAMAGE_OUTPUT = {
-    min = 0,
-    max = 20,
-}
-
 local ARMOR_NAMES = {
     unarmored = 'Unarmored',
     armored = 'Flak',
