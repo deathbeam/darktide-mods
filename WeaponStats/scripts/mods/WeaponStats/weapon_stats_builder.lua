@@ -134,7 +134,6 @@ local function extract_profiles(action)
                         if type(tmpl) == 'table' then
                             ranged_extra = ranged_extra or {}
                             ranged_extra.num_pellets = tmpl.num_pellets
-                            ranged_extra.range = tmpl.range
                             ranged_extra.spread_pitch = tmpl.spread_pitch
                             ranged_extra.spread_yaw = tmpl.spread_yaw
                         end
@@ -309,9 +308,6 @@ local function render_profile(out, ctx)
         if ranged_extra.num_pellets then
             out = line(out, 'Pellets:', string.format('x%d', ranged_extra.num_pellets), COLORS.PELLET)
         end
-        if ranged_extra.range then
-            out = line(out, 'Max Range:', tostring(ranged_extra.range), COLORS.PELLET)
-        end
         if ranged_extra.spread_pitch and ranged_extra.spread_yaw then
             out = line(
                 out,
@@ -324,7 +320,7 @@ local function render_profile(out, ctx)
 
     local min_r, max_r = Utils.ranges(profile, action_lerp)
     if min_r and max_r then
-        out = line(out, 'Effective Range:', string.format('%.0f - %.0f m', min_r, max_r), COLORS.FALLOFF)
+        out = line(out, 'Falloff:', string.format('%.0f - %.0f m', min_r, max_r), COLORS.FALLOFF)
     end
 
     if profile.suppression_value ~= nil then
