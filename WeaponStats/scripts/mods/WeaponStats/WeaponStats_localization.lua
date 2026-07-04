@@ -5,7 +5,6 @@ mod:add_global_localize_strings({
         en = 'Weapon Stats',
     },
 })
-
 return {
     mod_name = {
         en = 'Weapon Stats',

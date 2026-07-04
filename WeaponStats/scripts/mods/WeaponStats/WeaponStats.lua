@@ -66,6 +66,58 @@ mod:hook(CLASS.SystemView, '_setup_content_widgets', function(func, self, conten
     return func(self, patched, ...)
 end)
 
+mod:hook(CLASS.InventoryWeaponsView, '_setup_weapon_options', function(func, self, ...)
+    -- The grid was sized for 3 buttons; grow it (grid + mask) to fit the 4th.
+    if self._definitions and self._definitions.blueprints and self._definitions.blueprints.button then
+        local button_size = self._definitions.blueprints.button.size
+        local top_padding = 30
+        local grid_height = (button_size[2] + 20) * 4 + top_padding
+        -- mask_size mirrors the original +40 padding around grid_size.
+        self._weapon_stats_grid_size = { grid_height, grid_height + 40 }
+    end
+
+    func(self, ...)
+
+    local element = self._weapon_options_element
+    if not element then
+        return
+    end
+
+    if self._weapon_stats_grid_size then
+        element:update_grid_height(self._weapon_stats_grid_size[1], self._weapon_stats_grid_size[2])
+        self._weapon_stats_grid_size = nil
+    end
+
+    -- Append the Weapon Stats button to the existing options layout.
+    local layout = element:grid_layout()
+    if layout then
+        local already_added = false
+        for i = 1, #layout do
+            if layout[i]._is_weapon_stats_button then
+                already_added = true
+                break
+            end
+        end
+        if not already_added then
+            local new_entry = {
+                _is_weapon_stats_button = true,
+                widget_type = 'button',
+                display_icon = "",
+                display_name = mod:localize('mod_name'),
+                callback = function()
+                    local previewed_item = self._previewed_item
+                    local weapon_template_name = previewed_item and previewed_item.weapon_template
+                    Managers.ui:open_view('weapon_stats_view', nil, nil, nil, nil, {
+                        weapon_template_name = weapon_template_name,
+                    })
+                end,
+            }
+            table.insert(layout, new_entry)
+            element:present_grid_layout(layout, self._definitions.blueprints)
+        end
+    end
+end)
+
 function mod.on_all_mods_loaded()
     local function load_package(package_name)
         if not Managers.package:has_loaded(package_name) then

@@ -90,6 +90,7 @@ function WeaponStatsView:init(settings, context)
     self._filtered_list = self._weapon_list
     self._selected_weapon = nil
     self._last_search_text = ''
+    self._initial_weapon_template = context and context.weapon_template_name or nil
 end
 
 function WeaponStatsView:on_enter()
@@ -194,9 +195,36 @@ function WeaponStatsView:_setup_entries()
     self._entry_grid:set_scrollbar_progress(0)
 
     if #self._entry_widgets > 0 then
-        self:_select_entry(self._entry_widgets[1], entries[1])
+        local initial_template = self._initial_weapon_template
+        local match_index = nil
+        if initial_template then
+            for i = 1, #entries do
+                if entries[i].weapon.name == initial_template then
+                    match_index = i
+                    break
+                end
+            end
+        end
+        match_index = match_index or 1
+        local widget = self._entry_widgets[match_index]
+        local entry = entries[match_index]
+        self:_select_entry(widget, entry)
+        self:_scroll_entries_to_widget(widget)
     else
         self:_rebuild_detail_widgets(nil)
+    end
+    self._initial_weapon_template = nil
+end
+
+-- Scroll the entry grid so the given widget is visible (top-aligned when possible).
+function WeaponStatsView:_scroll_entries_to_widget(widget)
+    local grid = self._entry_grid
+    if not grid or not widget then
+        return
+    end
+    local progress = grid:get_scrollbar_percentage_by_index(grid:index_by_widget(widget))
+    if progress then
+        grid:set_scrollbar_progress(progress, true)
     end
 end
 
