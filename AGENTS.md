@@ -294,12 +294,19 @@ return {
 - `mod:echo()` is fine for transient dev visibility but spams the chat window; prefer `mod:info()` for anything copyable.
 - Tag temporary diagnostic logs with a unique prefix (e.g. `[DEBUG-adm]`) and `grep` them out at cleanup.
 
+### Comment Style
+
+- Comments should explain **why**, not **what** the code obviously does. If a comment just restates the line below it, delete it.
+- Prefer one short line. Never write multi-line comments that restate a function's behavior, restate parameter shapes already evident from the call, or narrate straightforward control flow (`-- loop over marks`, `-- return the value`, etc.).
+- Section headers (`-- Constants`, `-- Hooks`, `-- State variables`) are welcome and stay one line.
+- Never add `// NOTE:` / `// FIXME:` walls of text. If something genuinely needs a warning, one line max.
+- **Localization helpers and data-derived lookups do not need comments** explaining how `mod:localize` works or how the fallback prettifies. The code is the source of truth.
 ## Best Practices
 
 1. **Performance:** Cache extensions and components to reduce repeated lookups
 2. **State Management:** Use explicit state variables and reset functions
 3. **Separation of Concerns:** Split large mods into multiple modules (tracker, utils, view, HUD)
-4. **Documentation:** Use comments for complex logic and simple section headers for organization
+4. **Documentation:** Use comments for complex logic and simple section headers for organization — don't over-explain
 5. **Compatibility:** Use safe access patterns to avoid crashes with other mods or game updates
 6. **Testing:** Test in-game after any changes, especially with different classes and missions
 

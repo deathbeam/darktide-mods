@@ -28,6 +28,18 @@ local ARMOR_COLORS = {
     void_shield = Color.ui_hud_warp_charge_low(255, true),
 }
 
+-- Armor type display order (matches ArmorSettings.types minus 'player', which
+-- isn't a minion armor type shown in the stats grid).
+local ARMOR_ORDER = {
+    'unarmored',
+    'armored',
+    'resistant',
+    'berserker',
+    'super_armor',
+    'disgustingly_resilient',
+    'void_shield',
+}
+
 -- Records ----------------------------------------------------------------
 
 local function add(records, rec)
@@ -47,7 +59,7 @@ local function add_subheader(records, text, indent)
 end
 
 local function add_special_active(records)
-    add(records, { type = 'attack', text = 'Special Active', color = COLORS.SPECIAL })
+    add(records, { type = 'attack', text = mod:localize('stat_special_active'), color = COLORS.SPECIAL })
 end
 
 local function add_stat(records, label, value, label_color, indent)
@@ -63,7 +75,7 @@ end
 local function add_armor(records, rows, is_ranged, header)
     add(records, {
         type = 'armor',
-        header = header or 'Armor Damage',
+        header = header,
         color = COLORS.HEADER,
         rows = rows,
         is_ranged = is_ranged,
@@ -237,7 +249,12 @@ local function render_timing(records, action, weapon_template, weapon_tweak_temp
         time_scale = tmpl.time_scale or 1
         local auto_fire_time = tmpl.fire_rate and tmpl.fire_rate.auto_fire_time
         if type(auto_fire_time) == 'number' and auto_fire_time > 0 then
-            add_stat(records, 'Fire Rate', string.format('%.2f/s', 1 / auto_fire_time), COLORS.TIMING)
+            add_stat(
+                records,
+                mod:localize('stat_fire_rate'),
+                string.format('%.2f/s', 1 / auto_fire_time),
+                COLORS.TIMING
+            )
             fire_rate_shown = true
         end
     end
@@ -260,8 +277,9 @@ local function render_timing(records, action, weapon_template, weapon_tweak_temp
             chain_time = total_time
         end
         if chain_time and chain_time > 0 then
-            local lbl = (action.kind == 'shoot_hit_scan' or action.kind == 'shoot_pellets') and 'Fire Rate'
-                or 'Attack Speed'
+            local lbl = (action.kind == 'shoot_hit_scan' or action.kind == 'shoot_pellets')
+                    and mod:localize('stat_fire_rate')
+                or mod:localize('stat_attack_speed')
             add_stat(records, lbl, string.format('%.2f/s', 1 / (chain_time / time_scale)), COLORS.TIMING)
         end
     end
@@ -288,10 +306,10 @@ local function render_profile(records, ctx)
 
     local base_attack, base_impact = Utils.base_powers(profile, target_settings, power_level, action_lerp, dropoff)
     if base_attack and math.abs(base_attack) > 0.01 then
-        add_stat(records, 'Damage', fmt_num(base_attack), COLORS.DAMAGE)
+        add_stat(records, mod:localize('stat_damage'), fmt_num(base_attack), COLORS.DAMAGE)
     end
     if base_impact and math.abs(base_impact) > 0.01 then
-        add_stat(records, 'Impact', fmt_num(base_impact), COLORS.DAMAGE)
+        add_stat(records, mod:localize('stat_impact'), fmt_num(base_impact), COLORS.DAMAGE)
     end
 
     if profile.cleave_distribution and type(profile.cleave_distribution) == 'table' then
@@ -304,16 +322,21 @@ local function render_profile(records, ctx)
                 and impact_cleave > 0.01
                 and math.abs(impact_cleave - attack_cleave) > 0.01
             then
-                add_stat(records, 'Cleave', string.format('%.2f / %.2f', attack_cleave, impact_cleave), COLORS.DAMAGE)
+                add_stat(
+                    records,
+                    mod:localize('stat_cleave'),
+                    string.format('%.2f / %.2f', attack_cleave, impact_cleave),
+                    COLORS.DAMAGE
+                )
             else
-                add_stat(records, 'Cleave', string.format('%.2f', attack_cleave), COLORS.DAMAGE)
+                add_stat(records, mod:localize('stat_cleave'), string.format('%.2f', attack_cleave), COLORS.DAMAGE)
             end
         end
     end
 
     if profile.backstab_bonus and profile.backstab_bonus ~= 0 then
         local bonus = Utils.lerp_entry(profile.backstab_bonus)
-        add_stat(records, 'Backstab', string.format('%.0f%%', bonus * 100), COLORS.WEAKSPOT)
+        add_stat(records, mod:localize('stat_backstab'), string.format('%.0f%%', bonus * 100), COLORS.WEAKSPOT)
     end
 
     local weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, false)
@@ -323,18 +346,18 @@ local function render_profile(records, ctx)
     local any_mult = (weakspot_mult and math.abs(weakspot_mult - 1) > 0.005)
         or (crit_mult and math.abs(crit_mult - 1) > 0.005)
     if any_mult then
-        add_subheader(records, 'Finesse & Crit')
+        add_subheader(records, mod:localize('stat_finesse_and_crit'))
         if weakspot_mult and math.abs(weakspot_mult - 1) > 0.005 then
-            add_stat(records, 'Weakspot', fmt_mult(weakspot_mult), COLORS.WEAKSPOT, 1)
+            add_stat(records, mod:localize('stat_weakspot'), fmt_mult(weakspot_mult), COLORS.WEAKSPOT, 1)
         end
         if crit_mult and math.abs(crit_mult - 1) > 0.005 then
-            add_stat(records, 'Crit', fmt_mult(crit_mult), COLORS.CRIT, 1)
+            add_stat(records, mod:localize('stat_crit'), fmt_mult(crit_mult), COLORS.CRIT, 1)
         end
         if
             crit_weakspot_mult
             and math.abs(crit_weakspot_mult - math.max(weakspot_mult or 1, crit_mult or 1)) > 0.005
         then
-            add_stat(records, 'Crit+Weak', fmt_mult(crit_weakspot_mult), COLORS.WEAKSPOT, 1)
+            add_stat(records, mod:localize('stat_crit_plus_weakspot'), fmt_mult(crit_weakspot_mult), COLORS.WEAKSPOT, 1)
         end
     end
 
@@ -345,25 +368,25 @@ local function render_profile(records, ctx)
             local sign = crit_strike.chance_modifier >= 0 and '+' or ''
             add_stat(
                 records,
-                'Crit Modifier',
+                mod:localize('stat_crit_modifier'),
                 string.format('%s%.1f%%', sign, crit_strike.chance_modifier * 100),
                 COLORS.CRIT
             )
         end
         if crit_strike.max_critical_shots and crit_strike.max_critical_shots ~= 0 then
-            add_stat(records, 'Crit Strings', tostring(crit_strike.max_critical_shots), COLORS.CRIT)
+            add_stat(records, mod:localize('stat_crit_strings'), tostring(crit_strike.max_critical_shots), COLORS.CRIT)
         end
     end
 
     local ranged_extra = ctx.ranged_extra
     if ranged_extra then
         if ranged_extra.num_pellets then
-            add_stat(records, 'Pellets', string.format('x%d', ranged_extra.num_pellets), COLORS.META)
+            add_stat(records, mod:localize('stat_pellets'), string.format('x%d', ranged_extra.num_pellets), COLORS.META)
         end
         if ranged_extra.spread_pitch and ranged_extra.spread_yaw then
             add_stat(
                 records,
-                'Spread',
+                mod:localize('stat_spread'),
                 string.format('%.1f / %.1f', ranged_extra.spread_pitch, ranged_extra.spread_yaw),
                 COLORS.META
             )
@@ -372,40 +395,47 @@ local function render_profile(records, ctx)
 
     local min_r, max_r = Utils.ranges(profile, action_lerp)
     if min_r and max_r then
-        add_stat(records, 'Falloff Range', string.format('%.0f - %.0f m', min_r, max_r), COLORS.META)
+        add_stat(records, mod:localize('stat_falloff_range'), string.format('%.0f - %.0f m', min_r, max_r), COLORS.META)
     end
 
     if profile.suppression_value ~= nil then
         local sup = Utils.lerp_entry(profile.suppression_value, Utils.lerp_from_path(action_lerp, 'suppression_value'))
         if sup and math.abs(sup) > 0.01 then
-            add_stat(records, 'Suppression', fmt_num(sup), COLORS.META)
+            add_stat(records, mod:localize('stat_suppression'), fmt_num(sup), COLORS.META)
         end
     end
 
     local stagger = Utils.stagger_name(profile.stagger_category)
     if stagger then
-        add_stat(records, 'Stagger', stagger, COLORS.META)
+        add_stat(records, mod:localize('stat_stagger'), stagger, COLORS.META)
     end
 
     local flags = {}
     if profile.weapon_special then
-        flags[#flags + 1] = 'Weapon Special'
+        flags[#flags + 1] = mod:localize('flag_weapon_special')
     end
     if profile.ignore_stagger_reduction then
-        flags[#flags + 1] = 'Ignores Stagger Reduction'
+        flags[#flags + 1] = mod:localize('flag_ignores_stagger_reduction')
+    end
+    if profile.ignore_shield then
+        flags[#flags + 1] = mod:localize('flag_ignores_shield')
+    end
+    if profile.ignore_hitzone_multiplier then
+        flags[#flags + 1] = mod:localize('flag_ignores_hitzone_multiplier')
+    end
+    if profile.is_push then
+        flags[#flags + 1] = mod:localize('flag_is_push')
     end
     if #flags > 0 then
-        add_stat(records, 'Flags', table.concat(flags, ', '), COLORS.META)
+        add_stat(records, mod:localize('stat_flags'), table.concat(flags, ', '), COLORS.META)
     end
 
-    render_armor(records, profile, target_settings, action_lerp, is_ranged, 'attack', 'ADM')
-    render_armor(records, profile, target_settings, action_lerp, is_ranged, 'impact', 'Impact')
+    render_armor(records, profile, target_settings, action_lerp, is_ranged, 'attack', mod:localize('stat_adm'))
 end
 
--- Ranged profiles carry near/far ADM (point-blank vs max-range falloff);
--- melee has a single distance-independent value.
+-- Ranged profiles carry near/far ADM (point-blank vs max-range falloff); melee has a single value.
 render_armor = function(records, profile, target_settings, action_lerp, is_ranged, power_type, header)
-    local armor_order = Utils.armor_order()
+    local armor_order = ARMOR_ORDER
     local rows = {}
 
     local near_dropoff, far_dropoff
@@ -490,7 +520,12 @@ local function render_attack(records, attack_data, weapon_template, weapon_tweak
     add_attack(records, table.concat(labels, ', '))
 
     if attack_data.profile.damage_type then
-        add_stat(records, 'Type', tostring(Utils.damage_type_name(attack_data.profile.damage_type)), COLORS.META)
+        add_stat(
+            records,
+            mod:localize('stat_type'),
+            tostring(Utils.damage_type_name(attack_data.profile.damage_type)),
+            COLORS.META
+        )
     end
 
     render_timing(records, action, weapon_template, weapon_tweak_templates, action_name)
@@ -602,13 +637,17 @@ local function build_stats(item)
     for _, category in ipairs({ 'ranged', 'light', 'heavy', 'special' }) do
         local category_attacks = attacks[category]
         if #category_attacks > 0 then
-            local header = string.upper(category)
-            if category == 'ranged' and not is_ranged_weapon then
-                header = 'RANGED (ALT)'
-            elseif category == 'special' then
-                header = 'WEAPON SPECIAL'
+            local header
+            if category == 'ranged' then
+                header = mod:localize('header_ranged_attacks')
+            elseif category == 'light' then
+                header = mod:localize('header_light_attacks')
+            elseif category == 'heavy' then
+                header = mod:localize('header_heavy_attacks')
+            else
+                header = mod:localize('header_weapon_special_attacks')
             end
-            add_section(records, header .. ' ATTACKS')
+            add_section(records, header)
             add_spacer(records, 4)
             for _, attack_data in ipairs(category_attacks) do
                 render_attack(records, attack_data, weapon_template, weapon_tweak_templates, damage_profile_lerp_values)

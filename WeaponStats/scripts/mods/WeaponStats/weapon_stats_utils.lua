@@ -11,109 +11,63 @@ local UISettings = mod:original_require('scripts/settings/ui/ui_settings')
 local FALLBACK_LERP = 0.5
 local DEFAULT_POWER_LEVEL = 500
 
-local ARMOR_NAMES = {
-    unarmored = 'Unarmored',
-    armored = 'Flak',
-    resistant = 'Unyielding',
-    berserker = 'Maniac',
-    super_armor = 'Carapace',
-    disgustingly_resilient = 'Infested',
-    void_shield = 'Void Shield',
-}
-
-local ARMOR_ORDER = {
-    'unarmored',
-    'armored',
-    'resistant',
-    'berserker',
-    'super_armor',
-    'disgustingly_resilient',
-    'void_shield',
-}
-
-local DAMAGE_TYPE_NAMES = {
-    auto_bullet = 'Auto Bullet',
-    bullet = 'Bullet',
-    laser = 'Laser',
-    plasma = 'Plasma',
-    bolt = 'Bolt Shell',
-    shotgun = 'Shotgun',
-    fire = 'Fire',
-    toxin = 'Toxin',
-    warp = 'Warp',
-    physical = 'Physical',
-    electrocution = 'Electrocution',
-    grenade_frag = 'Frag Grenade',
-}
-
-local STAGGER_NAMES = {
-    melee = 'Melee',
-    uppercut = 'Uppercut',
-    killshot = 'Knockback',
-    heavy = 'Heavy',
-    light = 'Light',
-    special = 'Special',
-}
-
-local ACTION_LABEL_OVERRIDES = {
-    shoot_hip = 'Hipfire',
-    shoot_zoomed = 'ADS',
-    zoom_shoot = 'ADS Fire',
-    shoot = 'Shoot',
-    zoom = 'Aim',
-    reload = 'Reload',
-    wield = 'Wield',
-    unwield = 'Unwield',
-    weapon_special = 'Weapon Special',
-    special = 'Special',
-    pushfollowup = 'Push Follow-up',
-    parry_special = 'Parry Special',
-}
-
-local function prettify_enum(s)
-    if type(s) ~= 'string' then
-        return tostring(s)
+local function _localize_or_prettify(loc_id, key)
+    local localized = mod:localize(loc_id)
+    if localized and not localized:find('^<') then
+        return localized
     end
-    return (
-        s:gsub('_', ' '):gsub('(%a)([%w]*)', function(first, rest)
-            return first:upper() .. rest:lower()
-        end)
-    )
+    if type(key) ~= 'string' then
+        return tostring(key)
+    end
+    local prettified = key:gsub('_', ' ')
+    prettified = prettified:gsub('(%a)(%a+)', function(first, rest)
+        return first:upper() .. rest
+    end)
+    return prettified
+end
+
+local function _label(prefix, key)
+    if key == nil then
+        return nil
+    end
+    return _localize_or_prettify(prefix .. tostring(key), key)
 end
 
 local WeaponStatsUtils = {}
 
 function WeaponStatsUtils.armor_name(armor_key)
-    return ARMOR_NAMES[armor_key] or prettify_enum(armor_key)
+    return _label('armor_', armor_key)
 end
 
 function WeaponStatsUtils.damage_type_name(damage_type)
     if damage_type == nil then
         return nil
     end
-    if type(damage_type) == 'string' then
-        return DAMAGE_TYPE_NAMES[damage_type] or prettify_enum(damage_type)
+    if type(damage_type) ~= 'string' then
+        return tostring(damage_type)
     end
-    return tostring(damage_type)
+    return _label('damage_type_', damage_type)
 end
 
 function WeaponStatsUtils.stagger_name(stagger_category)
-    if stagger_category == nil then
-        return nil
-    end
-    return STAGGER_NAMES[stagger_category] or prettify_enum(stagger_category)
+    return _label('stagger_', stagger_category)
 end
 
 function WeaponStatsUtils.friendly_action_label(action_name)
     if type(action_name) ~= 'string' then
         return tostring(action_name)
     end
-    local name = action_name:gsub('^action_', '')
-    if ACTION_LABEL_OVERRIDES[name] then
-        return ACTION_LABEL_OVERRIDES[name]
+    local key = action_name:gsub('^action_', '')
+    local localized = mod:localize('action_' .. key)
+    if localized and not localized:find('^<') then
+        return localized
     end
-    name = name:gsub('^light_', 'light '):gsub('^heavy_', 'heavy '):gsub('^special_', 'special ')
-    return prettify_enum(name)
+    key = key:gsub('^light_', 'light '):gsub('^heavy_', 'heavy '):gsub('^special_', 'special ')
+    local prettified = key:gsub('_', ' ')
+    prettified = prettified:gsub('(%a)(%a+)', function(first, rest)
+        return first:upper() .. rest
+    end)
+    return prettified
 end
 
 -- Weapon display names ----------------------------------------------------
@@ -166,8 +120,7 @@ local function _weapon_name_map()
         end
     end
 
-    -- Fallback for templates not listed in weapon_patterns (e.g. bot/exotic
-    -- weapons): best-effort names from the first master item that references them.
+    -- Fallback for templates not in weapon_patterns (bot/exotic weapons).
     local master_items = MasterItems and MasterItems.get_cached and MasterItems.get_cached()
     if master_items then
         for _id, item in pairs(master_items) do
@@ -397,11 +350,6 @@ function WeaponStatsUtils.dropoff_scalar(hit_distance, damage_profile, action_le
     end
     return scalar
 end
-
-function WeaponStatsUtils.armor_order()
-    return ARMOR_ORDER
-end
-
 function WeaponStatsUtils.fallback_lerp()
     return FALLBACK_LERP
 end
