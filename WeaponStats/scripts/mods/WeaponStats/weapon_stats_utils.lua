@@ -6,6 +6,7 @@ local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settin
 local PowerLevelSettings = mod:original_require('scripts/settings/damage/power_level_settings')
 local Action = mod:original_require('scripts/utilities/action/action')
 local MasterItems = mod:original_require('scripts/backend/master_items')
+local UISettings = mod:original_require('scripts/settings/ui/ui_settings')
 
 local FALLBACK_LERP = 0.5
 local DEFAULT_POWER_LEVEL = 500
@@ -142,6 +143,31 @@ local function _weapon_name_map()
         return _weapon_name_cache
     end
     local map = {}
+
+    local weapon_patterns = UISettings and UISettings.weapon_patterns
+    if weapon_patterns then
+        for _pattern_key, pattern_data in pairs(weapon_patterns) do
+            local family = _safe_localize(pattern_data.display_name)
+            local marks = pattern_data.marks
+            if marks then
+                for i = 1, #marks do
+                    local mark = marks[i]
+                    local template_name = mark.name
+                    if template_name then
+                        local item = MasterItems and MasterItems.get_item and MasterItems.get_item(mark.item)
+                        map[template_name] = {
+                            family = family,
+                            pattern = _lore_name(item, 'weapon_pattern_display_name'),
+                            mark = _lore_name(item, 'weapon_mark_display_name'),
+                        }
+                    end
+                end
+            end
+        end
+    end
+
+    -- Fallback for templates not listed in weapon_patterns (e.g. bot/exotic
+    -- weapons): best-effort names from the first master item that references them.
     local master_items = MasterItems and MasterItems.get_cached and MasterItems.get_cached()
     if master_items then
         for _id, item in pairs(master_items) do
@@ -155,6 +181,7 @@ local function _weapon_name_map()
             end
         end
     end
+
     _weapon_name_cache = map
     return map
 end
