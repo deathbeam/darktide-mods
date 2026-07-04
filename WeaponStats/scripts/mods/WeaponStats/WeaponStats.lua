@@ -102,7 +102,7 @@ mod:hook(CLASS.InventoryWeaponsView, '_setup_weapon_options', function(func, sel
             local new_entry = {
                 _is_weapon_stats_button = true,
                 widget_type = 'button',
-                display_icon = "",
+                display_icon = '',
                 display_name = mod:localize('mod_name'),
                 callback = function()
                     local previewed_item = self._previewed_item
