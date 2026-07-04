@@ -75,10 +75,11 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
         widget.content.dps_text = string.format('0 %s', mod:localize('dps'))
     end
 
-    if self._last_stats == stats then
+    if self._last_total_damage == stats.total_damage and self._last_total_hits == stats.total_hits then
         return
     end
-    self._last_stats = stats
+    self._last_total_damage = stats.total_damage
+    self._last_total_hits = stats.total_hits
 
     widget.content.damage_text =
         string.format('%s: %d (%d)', mod:localize('damage'), stats.total_damage, stats.total_hits)
