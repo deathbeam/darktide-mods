@@ -28,8 +28,6 @@ local ARMOR_COLORS = {
     void_shield = Color.ui_hud_warp_charge_low(255, true),
 }
 
--- Armor type display order (matches ArmorSettings.types minus 'player', which
--- isn't a minion armor type shown in the stats grid).
 local ARMOR_ORDER = {
     'unarmored',
     'armored',
@@ -285,7 +283,65 @@ local function render_timing(records, action, weapon_template, weapon_tweak_temp
     end
 end
 
-local render_armor
+-- Ranged profiles carry near/far ADM (point-blank vs max-range falloff); melee has a single value.
+local function render_armor(records, profile, target_settings, action_lerp, is_ranged, power_type, header)
+    local armor_order = ARMOR_ORDER
+    local rows = {}
+
+    local near_dropoff, far_dropoff
+    if is_ranged then
+        near_dropoff = 0
+        far_dropoff = 1
+    end
+
+    for _, armor_key in ipairs(armor_order) do
+        local armor_type = ArmorSettings.types[armor_key]
+        if armor_type then
+            local normal_near =
+                Utils.armor_modifier(profile, target_settings, action_lerp, power_type, armor_type, false, near_dropoff)
+            local crit_near =
+                Utils.armor_modifier(profile, target_settings, action_lerp, power_type, armor_type, true, near_dropoff)
+
+            local normal_far, crit_far
+            if is_ranged then
+                normal_far = Utils.armor_modifier(
+                    profile,
+                    target_settings,
+                    action_lerp,
+                    power_type,
+                    armor_type,
+                    false,
+                    far_dropoff
+                )
+                crit_far = Utils.armor_modifier(
+                    profile,
+                    target_settings,
+                    action_lerp,
+                    power_type,
+                    armor_type,
+                    true,
+                    far_dropoff
+                )
+            end
+
+            rows[#rows + 1] = {
+                name = Utils.armor_name(armor_key),
+                name_color = ARMOR_COLORS[armor_key],
+                normal = normal_near,
+                crit = crit_near,
+                has_crit = math.abs(crit_near - normal_near) > 0.005,
+                normal_far = normal_far,
+                crit_far = crit_far,
+                has_far = is_ranged,
+            }
+        end
+    end
+
+    if #rows > 0 then
+        add_armor(records, rows, is_ranged, header)
+    end
+end
+
 local function render_profile(records, ctx)
     local profile = ctx.profile
     local action_lerp = ctx.action_lerp
@@ -431,81 +487,6 @@ local function render_profile(records, ctx)
     end
 
     render_armor(records, profile, target_settings, action_lerp, is_ranged, 'attack', mod:localize('stat_adm'))
-end
-
--- Ranged profiles carry near/far ADM (point-blank vs max-range falloff); melee has a single value.
-render_armor = function(records, profile, target_settings, action_lerp, is_ranged, power_type, header)
-    local armor_order = ARMOR_ORDER
-    local rows = {}
-
-    local near_dropoff, far_dropoff
-    if is_ranged then
-        near_dropoff = 0
-        far_dropoff = 1
-    end
-
-    for _, armor_key in ipairs(armor_order) do
-        local armor_type = ArmorSettings.types[armor_key]
-        if armor_type then
-            local default_adm = Utils.default_armor_modifier(power_type, armor_type)
-
-            local normal_near = Utils.armor_modifier(
-                profile,
-                target_settings,
-                action_lerp,
-                power_type,
-                armor_type,
-                false,
-                near_dropoff
-            ) or default_adm
-            local crit_near = Utils.armor_modifier(
-                profile,
-                target_settings,
-                action_lerp,
-                power_type,
-                armor_type,
-                true,
-                near_dropoff
-            ) or default_adm
-
-            local normal_far, crit_far
-            if is_ranged then
-                normal_far = Utils.armor_modifier(
-                    profile,
-                    target_settings,
-                    action_lerp,
-                    power_type,
-                    armor_type,
-                    false,
-                    far_dropoff
-                ) or default_adm
-                crit_far = Utils.armor_modifier(
-                    profile,
-                    target_settings,
-                    action_lerp,
-                    power_type,
-                    armor_type,
-                    true,
-                    far_dropoff
-                ) or default_adm
-            end
-
-            rows[#rows + 1] = {
-                name = Utils.armor_name(armor_key),
-                name_color = ARMOR_COLORS[armor_key],
-                normal = normal_near,
-                crit = crit_near,
-                has_crit = math.abs(crit_near - normal_near) > 0.005,
-                normal_far = normal_far,
-                crit_far = crit_far,
-                has_far = is_ranged,
-            }
-        end
-    end
-
-    if #rows > 0 then
-        add_armor(records, rows, is_ranged, header)
-    end
 end
 
 local function render_attack(records, attack_data, weapon_template, weapon_tweak_templates, damage_profile_lerp_values)

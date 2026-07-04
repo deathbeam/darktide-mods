@@ -314,18 +314,12 @@ function WeaponStatsUtils.armor_modifier(
         false -- armor_penetrating
     )
     _restore_lerps(action_lerp, prev)
-    if not ok then
-        return nil
+    if not ok or not mod then
+        local defaults = PowerLevelSettings.default_armor_damage_modifier
+        local by_type = defaults and defaults[power_type or 'attack']
+        return by_type and by_type[armor_type] or 1
     end
     return mod
-end
-
--- The game's fallback ADM for an armor type when a profile lacks an explicit entry
--- (PowerLevelSettings.default_armor_damage_modifier).
-function WeaponStatsUtils.default_armor_modifier(power_type, armor_type)
-    local defaults = PowerLevelSettings.default_armor_damage_modifier
-    local by_type = defaults and defaults[power_type or 'attack']
-    return by_type and by_type[armor_type] or 1
 end
 
 function WeaponStatsUtils.ranges(damage_profile, action_lerp)
@@ -350,6 +344,7 @@ function WeaponStatsUtils.dropoff_scalar(hit_distance, damage_profile, action_le
     end
     return scalar
 end
+
 function WeaponStatsUtils.fallback_lerp()
     return FALLBACK_LERP
 end

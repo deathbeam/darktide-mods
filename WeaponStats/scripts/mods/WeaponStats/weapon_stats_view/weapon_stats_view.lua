@@ -8,7 +8,6 @@ local ViewElementInputLegend =
 
 local WeaponTemplates = mod:original_require('scripts/settings/equipment/weapon_templates/weapon_templates')
 local WeaponTemplate = mod:original_require('scripts/utilities/weapon/weapon_template')
-local UIFontSettings = mod:original_require('scripts/managers/ui/ui_font_settings')
 
 local Builder = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_builder')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')

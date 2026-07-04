@@ -5,7 +5,7 @@ mod:add_require_path('WeaponStats/scripts/mods/WeaponStats/weapon_stats_view/wea
 mod:register_view({
     view_name = 'weapon_stats_view',
     view_settings = {
-        init_view_function = function(ingame_ui_context)
+        init_view_function = function()
             return true
         end,
         class = 'WeaponStatsView',
