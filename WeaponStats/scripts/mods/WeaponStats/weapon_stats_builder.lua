@@ -489,7 +489,14 @@ local function render_profile(records, ctx)
     render_armor(records, profile, target_settings, action_lerp, is_ranged, 'attack', mod:localize('stat_adm'))
 end
 
-local function render_attack(records, attack_data, weapon_template, weapon_tweak_templates, damage_profile_lerp_values)
+local function render_attack(
+    records,
+    attack_data,
+    category,
+    weapon_template,
+    weapon_tweak_templates,
+    damage_profile_lerp_values
+)
     local action = attack_data.action
     local action_name = attack_data.names[1]
     local is_ranged = attack_data.is_ranged
@@ -499,6 +506,12 @@ local function render_attack(records, attack_data, weapon_template, weapon_tweak
         labels[#labels + 1] = Utils.friendly_action_label(name)
     end
     add_attack(records, table.concat(labels, ', '))
+
+    local slot_key = category == 'heavy' and 'secondary' or (category == 'special' and 'special') or 'primary'
+    local attack_type = Utils.attack_type_name(weapon_template, slot_key)
+    if attack_type then
+        add_stat(records, mod:localize('stat_attack_type'), attack_type, COLORS.META)
+    end
 
     if attack_data.profile.damage_type then
         add_stat(
@@ -631,7 +644,14 @@ local function build_stats(item)
             add_section(records, header)
             add_spacer(records, 4)
             for _, attack_data in ipairs(category_attacks) do
-                render_attack(records, attack_data, weapon_template, weapon_tweak_templates, damage_profile_lerp_values)
+                render_attack(
+                    records,
+                    attack_data,
+                    category,
+                    weapon_template,
+                    weapon_tweak_templates,
+                    damage_profile_lerp_values
+                )
             end
         end
     end

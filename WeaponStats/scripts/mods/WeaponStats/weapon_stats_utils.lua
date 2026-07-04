@@ -139,6 +139,16 @@ local function _weapon_name_map()
     return map
 end
 
+-- Localized attack-style name (Linesman / Smiter / Ninja Fencer / Tank / Hipfire / ...)
+function WeaponStatsUtils.attack_type_name(weapon_template, slot_key)
+    local displayed = weapon_template and weapon_template.displayed_attacks
+    local entry = displayed and displayed[slot_key]
+    if not entry then
+        return nil
+    end
+    return _safe_localize(entry.display_name) or _label('gestalt_', entry.type)
+end
+
 -- Matches the in-game card: title = family, subtitle = pattern • mark.
 function WeaponStatsUtils.weapon_display_name(template_name)
     local map = _weapon_name_map()

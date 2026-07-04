@@ -15,6 +15,9 @@ return {
     search_placeholder = {
         en = 'Search weapons...',
     },
+    stat_attack_type = {
+        en = 'Attack Type',
+    },
     kind_ranged = {
         en = 'Ranged',
     },
