@@ -487,6 +487,7 @@ local function render_profile(records, ctx)
     end
 
     render_armor(records, profile, target_settings, action_lerp, is_ranged, 'attack', mod:localize('stat_adm'))
+    render_armor(records, profile, target_settings, action_lerp, is_ranged, 'impact', mod:localize('stat_impact'))
 end
 
 local function render_attack(
