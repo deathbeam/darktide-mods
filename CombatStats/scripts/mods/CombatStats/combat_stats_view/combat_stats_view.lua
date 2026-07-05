@@ -374,7 +374,11 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     local duration = entry.duration
     local buffs = entry.buffs or {}
 
-    local detail_scenegraph = self._ui_scenegraph.combat_stats_detail_content
+    local detail_scenegraph = self._ui_scenegraph and self._ui_scenegraph.combat_stats_detail_content
+    if not detail_scenegraph or not detail_scenegraph.size then
+        -- View is tearing down (on_exit ran) or scenegraph isn't ready yet
+        return
+    end
     local detail_content_width = detail_scenegraph.size[1]
     local text_width = detail_content_width
 
@@ -829,6 +833,10 @@ function CombatStatsView:cb_on_history_pressed()
         self:_setup_entries()
 
         mod.history:load_index(function()
+            -- View may have been closed (ESC / mission transition) while the load was in flight
+            if self._destroyed then
+                return
+            end
             self._history_loading = false
             if self._viewing_history and not self._viewing_history_entry then
                 self:_setup_entries()
@@ -901,6 +909,10 @@ function CombatStatsView:_load_history_entry(entry)
     self:_setup_entries()
 
     mod.history:load_history_entry(file_name, function(full_data)
+        -- Bail out if the view was closed while the load was in flight
+        if self._destroyed then
+            return
+        end
         self._history_entry_loading = false
 
         -- Bail out if the user navigated away or selected a different entry.
