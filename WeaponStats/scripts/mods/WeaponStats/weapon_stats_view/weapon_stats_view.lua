@@ -295,6 +295,11 @@ end
 local COLOR_LABEL = Color.terminal_text_body_sub_header(255, true)
 local COLOR_VALUE = Color.terminal_text_body(255, true)
 local COLOR_RULE = Color.terminal_corner(120, true)
+local STRIPE_BLEED_LEFT = 20
+local STRIPE_BLEED_RIGHT = 30
+
+-- Darktide's terminal-background greenish-gray, a touch brighter than the pane background.
+local COLOR_STRIPE = { 120, 49, 56, 49 }
 
 local function _make_text_widget(self, text, font_size, color, width, height, offset_x)
     local h = height or (font_size + 6)
@@ -352,43 +357,53 @@ local function _make_spacer(self, height, width)
     self._detail_widgets[#self._detail_widgets + 1] = widget
 end
 
-local function _make_stat_row(self, label, value, label_color, width, indent, value_color)
+local function _make_stat_row(self, label, value, label_color, width, indent, value_color, stripe)
     local h = STAT_ROW_HEIGHT
     local x = (indent or 0) * INDENT_PX
     local label_w = width * 0.55
     local value_w = width - label_w
-    local widget_def = UIWidget.create_definition({
-        {
-            pass_type = 'text',
-            value_id = 'label',
-            value = label,
+    local passes = {}
+    if stripe then
+        passes[#passes + 1] = {
+            pass_type = 'rect',
             style = {
-                font_type = 'proxima_nova_bold',
-                font_size = 16,
-                text_vertical_alignment = 'center',
-                text_horizontal_alignment = 'left',
-                text_color = label_color or COLOR_LABEL,
-                offset = { x, 0, 2 },
-                size = { label_w - x, h },
-                text_overflow_mode = 'truncate',
+                color = COLOR_STRIPE,
+                offset = { -STRIPE_BLEED_LEFT, 0, 0 },
+                size = { width + STRIPE_BLEED_LEFT + STRIPE_BLEED_RIGHT, h },
             },
+        }
+    end
+    passes[#passes + 1] = {
+        pass_type = 'text',
+        value_id = 'label',
+        value = label,
+        style = {
+            font_type = 'proxima_nova_bold',
+            font_size = 16,
+            text_vertical_alignment = 'center',
+            text_horizontal_alignment = 'left',
+            text_color = label_color or COLOR_LABEL,
+            offset = { x, 0, 2 },
+            size = { label_w - x, h },
+            text_overflow_mode = 'truncate',
         },
-        {
-            pass_type = 'text',
-            value_id = 'value',
-            value = value,
-            style = {
-                font_type = 'proxima_nova_bold',
-                font_size = 16,
-                text_vertical_alignment = 'center',
-                text_horizontal_alignment = 'left',
-                text_color = value_color or COLOR_VALUE,
-                offset = { label_w, 0, 2 },
-                size = { value_w, h },
-                text_overflow_mode = 'truncate',
-            },
+    }
+    passes[#passes + 1] = {
+        pass_type = 'text',
+        value_id = 'value',
+        value = value,
+        style = {
+            font_type = 'proxima_nova_bold',
+            font_size = 16,
+            text_vertical_alignment = 'center',
+            text_horizontal_alignment = 'left',
+            text_color = value_color or COLOR_VALUE,
+            offset = { label_w, 0, 2 },
+            size = { value_w, h },
+            text_overflow_mode = 'truncate',
         },
-    }, 'weapon_stats_detail_pivot', nil, { width, h })
+    }
+    local widget_def = UIWidget.create_definition(passes, 'weapon_stats_detail_pivot', nil, { width, h })
 
     local widget = self:_create_widget('detail_stat_' .. #self._detail_widgets, widget_def)
     self._detail_widgets[#self._detail_widgets + 1] = widget
@@ -402,19 +417,28 @@ local function _armor_value_text(normal, crit, has_crit)
     return text
 end
 
-local function _make_armor_row(self, row, width)
+local function _make_armor_row(self, row, width, stripe)
     local name_color = row.name_color or COLOR_LABEL
     if row.has_far then
         local value = _armor_value_text(row.normal, row.crit, row.has_crit)
             .. ' → '
             .. _armor_value_text(row.normal_far, row.crit_far, row.has_crit)
-        _make_stat_row(self, row.name, value, name_color, width, 1)
+        _make_stat_row(self, row.name, value, name_color, width, 1, nil, stripe)
     else
-        _make_stat_row(self, row.name, _armor_value_text(row.normal, row.crit, row.has_crit), name_color, width, 1)
+        _make_stat_row(
+            self,
+            row.name,
+            _armor_value_text(row.normal, row.crit, row.has_crit),
+            name_color,
+            width,
+            1,
+            nil,
+            stripe
+        )
     end
 end
 
-local function _render_record(self, record, width)
+local function _render_record(self, record, width, stripe_state)
     local rtype = record.type
     if rtype == 'spacer' then
         _make_spacer(self, record.height, width)
@@ -423,17 +447,22 @@ local function _render_record(self, record, width)
         _make_rule(self, width)
         _make_spacer(self, 4, width)
     elseif rtype == 'attack' then
+        stripe_state.count = 0
         _make_spacer(self, 2, width)
         _make_text_widget(self, record.text, 19, record.color, width, 26)
     elseif rtype == 'subheader' then
         _make_text_widget(self, record.text, 16, record.color, width, 22, (record.indent or 0) * INDENT_PX)
     elseif rtype == 'stat' then
-        _make_stat_row(self, record.label, record.value, record.label_color, width, record.indent or 0)
+        local stripe = stripe_state.count % 2 == 1
+        stripe_state.count = stripe_state.count + 1
+        _make_stat_row(self, record.label, record.value, record.label_color, width, record.indent or 0, nil, stripe)
     elseif rtype == 'armor' then
         _make_spacer(self, 2, width)
         _make_text_widget(self, record.header, 16, record.color, width, 22)
         for _, row in ipairs(record.rows) do
-            _make_armor_row(self, row, width)
+            local stripe = stripe_state.count % 2 == 1
+            stripe_state.count = stripe_state.count + 1
+            _make_armor_row(self, row, width, stripe)
         end
     end
 end
@@ -464,8 +493,9 @@ function WeaponStatsView:_rebuild_detail_widgets(entry)
     local item = WeaponStatsView._placeholder_item(weapon.weapon_template)
     local records = Builder.build_stats(item)
 
+    local stripe_state = { count = 0 }
     for i = 1, #records do
-        _render_record(self, records[i], detail_width)
+        _render_record(self, records[i], detail_width, stripe_state)
     end
 
     local detail_grid_scenegraph_id = 'weapon_stats_detail_content'

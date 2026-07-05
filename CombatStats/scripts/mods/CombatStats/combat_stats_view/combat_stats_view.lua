@@ -22,6 +22,13 @@ local DETAIL_ICON_SPACING = 5
 local DETAIL_TEXT_FONT_SIZE = 18
 local DETAIL_TEXT_PADDING = 10
 
+-- Stripe bleed so the row background reaches the pane edges (grid doesn't clip).
+local STRIPE_BLEED_LEFT = 20
+local STRIPE_BLEED_RIGHT = 30
+
+-- Darktide's terminal-background greenish-gray, a touch brighter than the pane background.
+local COLOR_STRIPE = { 120, 49, 56, 49 }
+
 local CombatStatsView = class('CombatStatsView', 'BaseView')
 
 function CombatStatsView:init(settings, context)
@@ -371,28 +378,50 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     local detail_content_width = detail_scenegraph.size[1]
     local text_width = detail_content_width
 
+    -- Alternating-row stripe state. Data rows auto-stripe; headers skip and reset
+    -- the counter so each section reads as its own striped table.
+    local stripe_state = { count = 0 }
+
     -- Helper to create text widget
-    local function create_text(text, color, font_size)
+    local function create_text(text, color, font_size, is_header)
         font_size = font_size or DETAIL_TEXT_FONT_SIZE
         -- Calculate height based on font size with some padding
         local height = font_size + DETAIL_TEXT_PADDING
 
-        local widget_def = UIWidget.create_definition({
-            {
-                pass_type = 'text',
-                value_id = 'text',
-                value = text,
+        local passes = {}
+        local stripe = false
+        if is_header then
+            stripe_state.count = 0
+        else
+            stripe = stripe_state.count % 2 == 1
+            stripe_state.count = stripe_state.count + 1
+        end
+        if stripe then
+            passes[#passes + 1] = {
+                pass_type = 'rect',
                 style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = font_size,
-                    text_horizontal_alignment = 'left',
-                    text_vertical_alignment = 'top',
-                    text_color = color or Color.terminal_text_body(255, true),
-                    offset = { 0, 0, 2 },
-                    size = { text_width, height },
+                    color = COLOR_STRIPE,
+                    offset = { -STRIPE_BLEED_LEFT, 0, 0 },
+                    size = { text_width + STRIPE_BLEED_LEFT + STRIPE_BLEED_RIGHT, height },
                 },
+            }
+        end
+        passes[#passes + 1] = {
+            pass_type = 'text',
+            value_id = 'text',
+            value = text,
+            style = {
+                font_type = 'proxima_nova_bold',
+                font_size = font_size,
+                text_horizontal_alignment = 'left',
+                text_vertical_alignment = 'top',
+                text_color = color or Color.terminal_text_body(255, true),
+                offset = { 0, 0, 2 },
+                size = { text_width, height },
             },
-        }, 'combat_stats_detail_pivot', nil, { text_width, height })
+        }
+
+        local widget_def = UIWidget.create_definition(passes, 'combat_stats_detail_pivot', nil, { text_width, height })
 
         local widget = self:_create_widget('detail_text_' .. #self._detail_widgets, widget_def)
         self._detail_widgets[#self._detail_widgets + 1] = widget
@@ -413,6 +442,18 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
 
         local passes = {}
 
+        local stripe = stripe_state.count % 2 == 1
+        stripe_state.count = stripe_state.count + 1
+        if stripe then
+            passes[#passes + 1] = {
+                pass_type = 'rect',
+                style = {
+                    color = COLOR_STRIPE,
+                    offset = { -STRIPE_BLEED_LEFT, 0, 0 },
+                    size = { text_width + STRIPE_BLEED_LEFT + STRIPE_BLEED_RIGHT, widget_height },
+                },
+            }
+        end
         -- Icon pass (if icon exists)
         if icon then
             passes[#passes + 1] = {
@@ -516,20 +557,20 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
         for _, substat in ipairs(substats) do
             if substat.value and substat.value > 0 then
                 local pct = (substat.value / total * 100)
-                create_text(string.format('  %s: %d (%.1f%%)', mod:localize(substat.key), substat.value, pct))
+                create_text(string.format('  %s: %d (%.1f%%)', mod:localize(substat.key), substat.value, pct), nil, nil)
             end
         end
     end
 
-    -- Title
+    -- Title (skips striping, resets the counter for the data rows below)
     create_spacer(10)
-    create_text(entry.name, Color.terminal_text_header(255, true), 26)
-    create_text(entry.subtext, entry.subtext_color, 18)
+    create_text(entry.name, Color.terminal_text_header(255, true), 26, true)
+    create_text(entry.subtext, entry.subtext_color, 18, true)
 
     -- Enemy Stats (only for session stats)
     if entry.is_session and stats.damage_by_type and next(stats.damage_by_type) then
         create_spacer(10)
-        create_text(mod:localize('enemy_stats'), Color.terminal_text_header(255, true), 20)
+        create_text(mod:localize('enemy_stats'), Color.terminal_text_header(255, true), 20, true)
 
         -- Sort by damage (highest first)
         local sorted_types = {}
@@ -575,7 +616,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     -- Damage Stats Header
     if stats.total_damage > 0 then
         create_spacer(10)
-        create_text(mod:localize('damage_stats'), Color.terminal_text_header(255, true), 20)
+        create_text(mod:localize('damage_stats'), Color.terminal_text_header(255, true), 20, true)
 
         if stats.total_damage > 0 then
             create_text(string.format('%s: %d', mod:localize('total'), stats.total_damage))
@@ -662,7 +703,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     -- Hit Stats Header
     if stats.total_hits > 0 then
         create_spacer(10)
-        create_text(mod:localize('hit_stats'), Color.terminal_text_header(255, true), 20)
+        create_text(mod:localize('hit_stats'), Color.terminal_text_header(255, true), 20, true)
         create_text(string.format('%s: %d', mod:localize('total'), stats.total_hits))
 
         -- Melee hits
@@ -720,7 +761,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
 
         if #buff_array > 0 then
             create_spacer(10)
-            create_text(mod:localize('buff_uptime'), Color.terminal_text_header(255, true), 20)
+            create_text(mod:localize('buff_uptime'), Color.terminal_text_header(255, true), 20, true)
 
             for i = 1, #buff_array do
                 local buff = buff_array[i]
