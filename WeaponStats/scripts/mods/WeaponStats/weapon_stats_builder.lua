@@ -508,7 +508,8 @@ local function render_attack(
     add_attack(records, table.concat(labels, ', '))
 
     local slot_key = category == 'heavy' and 'secondary' or (category == 'special' and 'special') or 'primary'
-    local attack_type = Utils.attack_type_name(weapon_template, slot_key)
+    local attack_type =
+        Utils.attack_type_name(weapon_template, slot_key, attack_data.profile and attack_data.profile.name)
     if attack_type then
         add_stat(records, mod:localize('stat_attack_type'), attack_type, COLORS.META)
     end

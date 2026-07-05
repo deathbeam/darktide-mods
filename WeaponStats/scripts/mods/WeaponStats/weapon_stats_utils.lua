@@ -10,6 +10,7 @@ local UISettings = mod:original_require('scripts/settings/ui/ui_settings')
 
 local FALLBACK_LERP = 0.5
 local DEFAULT_POWER_LEVEL = 500
+local GESTALT_TOKENS = { 'smiter', 'linesman', 'tank', 'ninja_fencer' }
 
 local function _localize_or_prettify(loc_id, key)
     local localized = mod:localize(loc_id)
@@ -139,14 +140,38 @@ local function _weapon_name_map()
     return map
 end
 
--- Localized attack-style name (Linesman / Smiter / Ninja Fencer / Tank / Hipfire / ...)
-function WeaponStatsUtils.attack_type_name(weapon_template, slot_key)
-    local displayed = weapon_template and weapon_template.displayed_attacks
-    local entry = displayed and displayed[slot_key]
-    if not entry then
-        return nil
+function WeaponStatsUtils.attack_type_name(weapon_template, slot_key, damage_profile_name)
+    local gestalt = nil
+
+    if type(damage_profile_name) == 'string' then
+        for i = 1, #GESTALT_TOKENS do
+            local token = GESTALT_TOKENS[i]
+            local token_len = #token
+            -- Match the gestalt as a whole underscore-delimited token in any position
+            -- (start / middle / end / whole name), never as a substring of another word.
+            if
+                damage_profile_name == token
+                or damage_profile_name:sub(1, token_len + 1) == token .. '_'
+                or damage_profile_name:sub(-(token_len + 1)) == '_' .. token
+                or damage_profile_name:find('_' .. token .. '_', 1, true)
+            then
+                gestalt = token
+                break
+            end
+        end
     end
-    return _safe_localize(entry.display_name) or _label('gestalt_', entry.type)
+
+    -- No gestalt token => the slot's default gestalt.
+    if not gestalt then
+        local displayed = weapon_template and weapon_template.displayed_attacks
+        local entry = displayed and displayed[slot_key]
+        if not entry then
+            return nil
+        end
+        return _safe_localize(entry.display_name) or _label('gestalt_', entry.type)
+    end
+
+    return _safe_localize('loc_gestalt_' .. gestalt) or _label('gestalt_', gestalt)
 end
 
 -- Matches the in-game card: title = family, subtitle = pattern • mark.
