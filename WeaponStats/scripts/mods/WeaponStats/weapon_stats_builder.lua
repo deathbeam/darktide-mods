@@ -175,27 +175,18 @@ local function extract_profiles(action)
                 end
             end
 
-            -- Inner explosion applies separately with its own power level.
-            local explosion_profile, explosion_power_level = Utils.explosion_profile(action, i)
-            local extra_profile
-            if explosion_profile and explosion_profile ~= dmg_profile then
-                extra_profile = {
-                    profile = explosion_profile,
-                    power_level = explosion_power_level,
-                }
-            end
-
-            -- Sticky ticks: instances-1 normal + 1 last, weighted by tick count.
-            local sticky_entries = Utils.sticky_damage_entries(action, false)
-            local sticky_entries_special = Utils.sticky_damage_entries(action, true)
+            -- Extra damage applied alongside the main profile: the inner explosion
+            -- (bolter/plasma, weight 1) and sticky ticks (chainswords, weighted by
+            -- instances-1 normal + 1 last). Both use their own power level.
+            local extra_entries = Utils.extra_damage_entries(action, dmg_profile, i, false)
+            local extra_entries_special = Utils.extra_damage_entries(action, dmg_profile, i, true)
 
             profiles[#profiles + 1] = {
                 profile = dmg_profile,
                 special_active_profile = special_active_profile,
-                extra_profile = extra_profile,
+                extra_entries = extra_entries,
+                extra_entries_special = extra_entries_special,
                 ranged_extra = ranged_extra,
-                sticky_entries = sticky_entries,
-                sticky_entries_special = sticky_entries_special,
                 template_index = i,
             }
         end
@@ -247,29 +238,25 @@ local function profiles_equivalent(a, b)
         return false
     end
 
-    -- Explosion/sticky change totals, so they join dedup identity.
-    local function extra_name(p)
-        return p and p.profile and p.profile.name
-    end
-    if extra_name(a.extra_profile) ~= extra_name(b.extra_profile) then
-        return false
-    end
-
-    local function sticky_count(entries)
+    -- Extra damage profiles (explosion + sticky) change totals, so they join dedup
+    -- identity: same set of profile names and same total tick weight.
+    local function extra_identity(entries)
         if not entries then
-            return 0
+            return ''
         end
-        local n = 0
+        local names = {}
+        local weight = 0
         for i = 1, #entries do
-            n = n + entries[i].weight
+            names[#names + 1] = entries[i].profile and entries[i].profile.name or ''
+            weight = weight + (entries[i].weight or 0)
         end
-        return n
+        table.sort(names)
+        return table.concat(names, ',') .. ':' .. weight
     end
 
-    return sticky_count(a.sticky_entries) == sticky_count(b.sticky_entries)
-        and sticky_count(a.sticky_entries_special) == sticky_count(b.sticky_entries_special)
+    return extra_identity(a.extra_entries) == extra_identity(b.extra_entries)
+        and extra_identity(a.extra_entries_special) == extra_identity(b.extra_entries_special)
 end
-
 -- Render -----------------------------------------------------------------
 
 -- damage_window_end for attacks, total_time for kinds with no damage window.
@@ -458,24 +445,14 @@ local function render_profile(records, ctx)
     local base_attack, base_impact =
         Utils.base_powers(profile, target_settings, power_level, action_lerp, dropoff, target_index)
     local extra_attack, extra_impact = 0, 0
-    if ctx.extra_profile then
-        local ep = ctx.extra_profile
-        local e_ts, e_idx = Utils.target_settings(ep.profile)
+    -- Extra damage profiles (inner explosion + sticky ticks) folded into the hit total.
+    for _, entry in ipairs(ctx.extra_entries or {}) do
+        local e_ts, e_idx = Utils.target_settings(entry.profile)
         if e_ts then
-            local e_a, e_i =
-                Utils.base_powers(ep.profile, e_ts, ep.power_level or power_level, action_lerp, dropoff, e_idx)
-            extra_attack = e_a or 0
-            extra_impact = e_i or 0
-        end
-    end
-    -- Sticky ticks weighted by instances for the full hit total.
-    for _, entry in ipairs(ctx.sticky_entries or {}) do
-        local s_ts, s_idx = Utils.target_settings(entry.profile)
-        if s_ts then
-            local s_pl = entry.power_level or power_level
-            local s_a, s_i = Utils.base_powers(entry.profile, s_ts, s_pl, action_lerp, dropoff, s_idx)
-            extra_attack = extra_attack + (s_a or 0) * entry.weight
-            extra_impact = extra_impact + (s_i or 0) * entry.weight
+            local e_pl = entry.power_level or power_level
+            local e_a, e_i = Utils.base_powers(entry.profile, e_ts, e_pl, action_lerp, dropoff, e_idx)
+            extra_attack = extra_attack + (e_a or 0) * entry.weight
+            extra_impact = extra_impact + (e_i or 0) * entry.weight
         end
     end
 
@@ -678,8 +655,7 @@ local function render_attack(
             is_active = false,
             power_level = power_level,
             ranged_extra = prof_info.ranged_extra,
-            extra_profile = prof_info.extra_profile,
-            sticky_entries = prof_info.sticky_entries,
+            extra_entries = prof_info.extra_entries,
             weapon_tweak_templates = weapon_tweak_templates,
             weapon_template = weapon_template,
         }
@@ -697,8 +673,7 @@ local function render_attack(
                 is_active = true,
                 power_level = power_level,
                 ranged_extra = prof_info.ranged_extra,
-                extra_profile = prof_info.extra_profile,
-                sticky_entries = prof_info.sticky_entries_special or prof_info.sticky_entries,
+                extra_entries = prof_info.extra_entries_special or prof_info.extra_entries,
                 weapon_tweak_templates = weapon_tweak_templates,
                 weapon_template = weapon_template,
             }

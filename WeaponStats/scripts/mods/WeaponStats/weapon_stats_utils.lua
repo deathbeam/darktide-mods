@@ -459,71 +459,54 @@ function WeaponStatsUtils.cleave_values(profile, power_level, action_lerp)
     return attack, impact
 end
 
--- Sticky damage entries for hit_stickyness_settings.always_sticky (or special-active) actions.
-function WeaponStatsUtils.sticky_damage_entries(action, use_special_active)
-    if type(action) ~= 'table' then
-        return nil
-    end
-
-    local settings = action.hit_stickyness_settings
-    if use_special_active then
-        settings = action.hit_stickyness_settings_special_active or settings
-    end
-
-    if not settings or not (use_special_active or settings.always_sticky) then
-        return nil
-    end
-
-    local damage = settings.damage
-    if type(damage) ~= 'table' then
-        return nil
-    end
-
-    local instances = damage.instances or 1
-    if type(instances) ~= 'number' or instances <= 0 then
-        return nil
-    end
-
-    local normal_profile = damage.damage_profile
-    local last_profile = damage.last_damage_profile or normal_profile
-    local power_level = damage.stat_power_level
-        or damage.power_level
-        or settings.stat_power_level
-        or settings.power_level
-        or DEFAULT_POWER_LEVEL
-
+-- Extra damage applied alongside the main profile: the inner explosion (bolter/plasma,
+-- weight 1) plus sticky ticks (chainswords, instances-1 normal + 1 last). Each entry
+-- carries its own power level; the builder sums them weighted into the hit total.
+function WeaponStatsUtils.extra_damage_entries(action, main_profile, template_index, use_special_active)
     local entries = {}
 
-    local normal_ticks = instances - 1
-    if normal_ticks > 0 and normal_profile then
-        entries[#entries + 1] = { profile = normal_profile, weight = normal_ticks, power_level = power_level }
+    if type(action) == 'table' then
+        local ok, explosion_template = pcall(Action.explosion_template, action, template_index)
+        local inner = ok and explosion_template and explosion_template.close_damage_profile
+        if inner and inner ~= main_profile then
+            entries[#entries + 1] = {
+                profile = inner,
+                weight = 1,
+                power_level = explosion_template.static_power_level,
+            }
+        end
     end
 
-    if last_profile then
-        entries[#entries + 1] = { profile = last_profile, weight = 1, power_level = power_level }
+    local settings = action and action.hit_stickyness_settings
+    if use_special_active and action then
+        settings = action.hit_stickyness_settings_special_active or settings
+    end
+    if settings and (use_special_active or settings.always_sticky) then
+        local damage = settings.damage
+        if type(damage) == 'table' then
+            local instances = damage.instances or 1
+            if type(instances) == 'number' and instances > 0 then
+                local normal_profile = damage.damage_profile
+                local last_profile = damage.last_damage_profile or normal_profile
+                local power_level = damage.stat_power_level
+                    or damage.power_level
+                    or settings.stat_power_level
+                    or settings.power_level
+                    or DEFAULT_POWER_LEVEL
+
+                local normal_ticks = instances - 1
+                if normal_ticks > 0 and normal_profile then
+                    entries[#entries + 1] =
+                        { profile = normal_profile, weight = normal_ticks, power_level = power_level }
+                end
+                if last_profile then
+                    entries[#entries + 1] = { profile = last_profile, weight = 1, power_level = power_level }
+                end
+            end
+        end
     end
 
     return #entries > 0 and entries or nil
-end
-
--- Inner explosion close_damage_profile (bolter/plasma), separate from the impact profile
-function WeaponStatsUtils.explosion_profile(action, template_index)
-    if type(action) ~= 'table' then
-        return nil
-    end
-
-    local ok, explosion_template = pcall(Action.explosion_template, action, template_index)
-    if not ok or not explosion_template then
-        return nil
-    end
-
-    local inner = explosion_template.close_damage_profile
-    if not inner then
-        return nil
-    end
-
-    local power_level = explosion_template.static_power_level
-    return inner, power_level
 end
 
 -- critical_strike.chance_modifier from weapon_handling
