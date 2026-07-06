@@ -249,7 +249,7 @@ function WeaponStatsUtils.action_power_level(action, template_index)
 end
 
 -- Damage profile target index: targets[1] for melee, targets.default_target for ranged.
-function WeaponStatsUtils.target_settings(damage_profile, is_ranged)
+function WeaponStatsUtils.target_settings(damage_profile)
     if not damage_profile or not damage_profile.targets then
         return damage_profile, nil
     end
@@ -412,11 +412,6 @@ function WeaponStatsUtils.dropoff_scalar(hit_distance, damage_profile, action_le
     end
     return scalar
 end
-
-function WeaponStatsUtils.fallback_lerp()
-    return FALLBACK_LERP
-end
-
 -- Cleave target count from the power-curve pipeline (PowerLevel.scale_power_level_to_power_type_curve
 -- then cleave_distribution), mapped onto PowerLevelSettings.cleave_output min/max.
 local function _cleave_value(cleave_min, cleave_range, scaled_cleave_power_level, distribution, power_type, action_lerp)
@@ -440,7 +435,7 @@ local function _cleave_value(cleave_min, cleave_range, scaled_cleave_power_level
     return cleave_min + cleave_range * percentage
 end
 
-function WeaponStatsUtils.cleave_values(profile, target_settings, power_level, action_lerp)
+function WeaponStatsUtils.cleave_values(profile, power_level, action_lerp)
     if not profile then
         return nil, nil
     end

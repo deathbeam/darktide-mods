@@ -443,7 +443,7 @@ local function render_profile(records, ctx)
     local is_active = ctx.is_active
     local power_level = ctx.power_level
 
-    local target_settings, target_index = Utils.target_settings(profile, is_ranged)
+    local target_settings, target_index = Utils.target_settings(profile)
     if not target_settings then
         return
     end
@@ -460,7 +460,7 @@ local function render_profile(records, ctx)
     local extra_attack, extra_impact = 0, 0
     if ctx.extra_profile then
         local ep = ctx.extra_profile
-        local e_ts, e_idx = Utils.target_settings(ep.profile, is_ranged)
+        local e_ts, e_idx = Utils.target_settings(ep.profile)
         if e_ts then
             local e_a, e_i =
                 Utils.base_powers(ep.profile, e_ts, ep.power_level or power_level, action_lerp, dropoff, e_idx)
@@ -470,7 +470,7 @@ local function render_profile(records, ctx)
     end
     -- Sticky ticks weighted by instances for the full hit total.
     for _, entry in ipairs(ctx.sticky_entries or {}) do
-        local s_ts, s_idx = Utils.target_settings(entry.profile, is_ranged)
+        local s_ts, s_idx = Utils.target_settings(entry.profile)
         if s_ts then
             local s_pl = entry.power_level or power_level
             local s_a, s_i = Utils.base_powers(entry.profile, s_ts, s_pl, action_lerp, dropoff, s_idx)
@@ -493,7 +493,7 @@ local function render_profile(records, ctx)
     end
 
     -- Cleave target count from the power-curve pipeline.
-    local cleave_attack, cleave_impact = Utils.cleave_values(profile, target_settings, power_level, action_lerp)
+    local cleave_attack, cleave_impact = Utils.cleave_values(profile, power_level, action_lerp)
     local has_attack_cleave = cleave_attack and math.abs(cleave_attack) > 0.01
     local has_impact_cleave = cleave_impact and math.abs(cleave_impact) > 0.01
     if has_attack_cleave then
