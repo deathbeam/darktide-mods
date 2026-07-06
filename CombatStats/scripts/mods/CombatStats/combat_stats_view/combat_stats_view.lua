@@ -22,13 +22,6 @@ local DETAIL_ICON_SPACING = 5
 local DETAIL_TEXT_FONT_SIZE = 18
 local DETAIL_TEXT_PADDING = 10
 
--- Stripe bleed so the row background reaches the pane edges (grid doesn't clip).
-local STRIPE_BLEED_LEFT = 20
-local STRIPE_BLEED_RIGHT = 30
-
--- Darktide's terminal-background greenish-gray, a touch brighter than the pane background.
-local COLOR_STRIPE = { 120, 49, 56, 49 }
-
 local CombatStatsView = class('CombatStatsView', 'BaseView')
 
 function CombatStatsView:init(settings, context)
@@ -130,6 +123,7 @@ function CombatStatsView:_setup_entries()
             self:_unregister_widget_name(widget.name)
         end
         self._entry_widgets = {}
+        self._selected_widget = nil
     end
 
     local entries = {}
@@ -351,6 +345,7 @@ end
 
 function CombatStatsView:_select_entry(widget, entry)
     self._selected_entry = entry
+    self._selected_widget = widget
     self:_rebuild_detail_widgets(entry)
 end
 
@@ -382,10 +377,6 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     local detail_content_width = detail_scenegraph.size[1]
     local text_width = detail_content_width
 
-    -- Alternating-row stripe state. Data rows auto-stripe; headers skip and reset
-    -- the counter so each section reads as its own striped table.
-    local stripe_state = { count = 0 }
-
     -- Helper to create text widget
     local function create_text(text, color, font_size, is_header)
         font_size = font_size or DETAIL_TEXT_FONT_SIZE
@@ -393,23 +384,6 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
         local height = font_size + DETAIL_TEXT_PADDING
 
         local passes = {}
-        local stripe = false
-        if is_header then
-            stripe_state.count = 0
-        else
-            stripe = stripe_state.count % 2 == 1
-            stripe_state.count = stripe_state.count + 1
-        end
-        if stripe then
-            passes[#passes + 1] = {
-                pass_type = 'rect',
-                style = {
-                    color = COLOR_STRIPE,
-                    offset = { -STRIPE_BLEED_LEFT, 0, 0 },
-                    size = { text_width + STRIPE_BLEED_LEFT + STRIPE_BLEED_RIGHT, height },
-                },
-            }
-        end
         passes[#passes + 1] = {
             pass_type = 'text',
             value_id = 'text',
@@ -446,19 +420,6 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
 
         local passes = {}
 
-        local stripe = stripe_state.count % 2 == 1
-        stripe_state.count = stripe_state.count + 1
-        if stripe then
-            passes[#passes + 1] = {
-                pass_type = 'rect',
-                style = {
-                    color = COLOR_STRIPE,
-                    offset = { -STRIPE_BLEED_LEFT, 0, 0 },
-                    size = { text_width + STRIPE_BLEED_LEFT + STRIPE_BLEED_RIGHT, widget_height },
-                },
-            }
-        end
-        -- Icon pass (if icon exists)
         if icon then
             passes[#passes + 1] = {
                 pass_type = 'texture',
@@ -976,6 +937,7 @@ function CombatStatsView:_draw_grid(grid, widgets, interaction_widget, ui_render
             local hotspot = widget.content.hotspot
             if hotspot then
                 hotspot.force_disabled = not is_grid_hovered
+                hotspot.is_selected = widget == self._selected_widget or nil
             end
             UIWidget.draw(widget, ui_renderer)
         end

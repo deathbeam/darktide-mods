@@ -150,6 +150,7 @@ function WeaponStatsView:_setup_entries()
             self:_unregister_widget_name(widget.name)
         end
         self._entry_widgets = {}
+        self._selected_widget = nil
     end
 
     local search_widget = self._widgets_by_name.weapon_stats_search
@@ -287,6 +288,7 @@ end
 
 function WeaponStatsView:_select_entry(widget, entry)
     self._selected_entry = entry
+    self._selected_widget = widget
     self:_rebuild_detail_widgets(entry)
 end
 
@@ -560,6 +562,7 @@ function WeaponStatsView:_draw_grid(grid, widgets, interaction_widget, ui_render
             local hotspot = widget.content.hotspot
             if hotspot then
                 hotspot.force_disabled = not is_grid_hovered
+                hotspot.is_selected = widget == self._selected_widget or nil
             end
             UIWidget.draw(widget, ui_renderer)
         end

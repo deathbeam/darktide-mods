@@ -43,7 +43,7 @@ local blueprints = {
                 style_id = 'background_selected',
                 value = 'content/ui/materials/backgrounds/default_square',
                 style = {
-                    color = Color.ui_terminal(0, true),
+                    color = { 255, 49, 56, 49 },
                     offset = { 0, 0, 0 },
                 },
                 change_function = function(content, style)
