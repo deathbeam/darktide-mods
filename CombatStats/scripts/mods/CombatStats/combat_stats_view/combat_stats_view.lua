@@ -39,40 +39,22 @@ local function _package_is_available(package_name)
     return ok and exists or false
 end
 
-local function _package_is_loaded(package_name)
-    local package_manager = Managers and Managers.package
-    if not package_manager or not package_manager.has_loaded then
-        return false
-    end
-    local ok, is_loaded = pcall(package_manager.has_loaded, package_manager, package_name)
-    return ok and is_loaded or false
-end
-
 local function _load_icon_packages()
-    local package_manager = Managers and Managers.package
-    if not package_manager then
-        return {}
-    end
-
-    local load_ids = {}
+    local loaded = {}
     for _, pkg in ipairs(ICON_PACKAGES) do
-        if _package_is_available(pkg) and not _package_is_loaded(pkg) then
-            local ok, id = pcall(package_manager.load, package_manager, pkg, 'CombatStatsIcons', nil, true)
-            if ok and id then
-                load_ids[#load_ids + 1] = id
-            end
+        if _package_is_available(pkg) and mod:package_status(pkg) ~= 'loaded' then
+            mod:load_package(pkg, nil, true)
+            loaded[#loaded + 1] = pkg
         end
     end
-    return load_ids
+    return loaded
 end
 
-local function _release_icon_packages(load_ids)
-    local package_manager = Managers and Managers.package
-    if not package_manager or not package_manager.release then
-        return
-    end
-    for i = 1, #load_ids do
-        pcall(package_manager.release, package_manager, load_ids[i])
+local function _release_icon_packages(loaded)
+    for i = 1, #loaded do
+        if mod:package_status(loaded[i]) == 'loaded' then
+            mod:unload_package(loaded[i])
+        end
     end
 end
 
@@ -97,7 +79,7 @@ end
 
 function CombatStatsView:on_enter()
     CombatStatsView.super.on_enter(self)
-    self._icon_package_ids = _load_icon_packages()
+    self._loaded_icon_packages = _load_icon_packages()
 
     self:_setup_input_legend()
     self:_setup_search()
@@ -1049,8 +1031,8 @@ function CombatStatsView:on_exit()
         self:_remove_element('input_legend')
     end
 
-    _release_icon_packages(self._icon_package_ids)
-    self._icon_package_ids = nil
+    _release_icon_packages(self._loaded_icon_packages)
+    self._loaded_icon_packages = nil
 
     CombatStatsView.super.on_exit(self)
 end

@@ -9,6 +9,6 @@ return {
 		})
 	end,
 	packages = {},
-	version = "0.4.9",
+	version = "0.4.10",
     mod_id = "661"
 }
