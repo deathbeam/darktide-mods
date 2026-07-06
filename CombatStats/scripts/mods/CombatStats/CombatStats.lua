@@ -91,16 +91,6 @@ function mod.update(dt)
 end
 
 function mod.on_all_mods_loaded()
-    -- Preload icon packages
-    local function load_package(package_name)
-        if not Managers.package:has_loaded(package_name) then
-            Managers.package:load(package_name, 'CombatStats')
-        end
-    end
-
-    load_package('packages/ui/views/inventory_view/inventory_view')
-    load_package('packages/ui/views/inventory_weapons_view/inventory_weapons_view')
-    load_package('packages/ui/hud/player_weapon/player_weapon')
     -- Warm the history index so the stats view opens instantly
     if mod.history then
         mod.history:load_index()
