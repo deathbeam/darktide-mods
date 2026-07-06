@@ -129,6 +129,10 @@ end
 -- Check if player's move input can dodge (diagonal movement)
 local function is_dodge_direction()
     local move = Vector3(move_right - move_left, move_forward - move_backward, 0)
+    if move.x == 0 and move.y == 0 then
+        return always_dodge
+    end
+
     local normalized_move = Vector3.normalize(move)
     local y = normalized_move.y
     local x = normalized_move.x
@@ -183,6 +187,23 @@ local function can_hold_dodge_slide()
     local distance_left = movement_components.dodge_character_state.distance_left
     local gameplay_time = Managers.time:time('gameplay')
     return gameplay_time - start_time >= 0.2 or distance_left <= 0.24
+end
+
+local function can_keep_dodging()
+    local dodge_state = movement_components.dodge_character_state
+    if not dodge_state or not playerWeaponExtension or not playerBuffExtension then
+        return true
+    end
+
+    local weapon_dodge_template = playerWeaponExtension:dodge_template()
+    local dr_start = (weapon_dodge_template and weapon_dodge_template.diminishing_return_start or 2)
+    local extra = math.round(playerBuffExtension:stat_buffs().extra_consecutive_dodges or 0)
+    local consecutive = dodge_state.consecutive_dodges
+    if Managers.time:time('gameplay') > dodge_state.consecutive_dodges_cooldown then
+        consecutive = 0
+    end
+
+    return consecutive < dr_start + extra
 end
 
 -- Build abort_sprint table from core game settings
@@ -280,8 +301,8 @@ local function input_service_hook(func, self, action_name)
                     attempt_sprint_dodge = false
                 end
             end
-            -- Keep dodging: hold dodge key to continuously dodge
-            if dodge_hold then
+            -- Keep dodging: hold dodge key to continuously dodge (stops before diminishing returns)
+            if dodge_hold and can_keep_dodging() then
                 return true
             end
         end
@@ -308,18 +329,19 @@ local function input_service_hook(func, self, action_name)
             end
         end
     elseif action_name == 'crouch' then
-        if not hold_to_crouch then
+        if not hold_to_crouch and movement_components.movement_state then
+            local is_crouching = movement_components.movement_state.is_crouching
             -- Dodge slide
             if
                 current_state_name == 'dodging'
                 and (attempt_dodge_slide or can_hold_dodge_slide())
-                and not movement_components.movement_state.is_crouching
+                and not is_crouching
                 and can_dodge_slide()
             then
                 return true
             end
             -- Sprint slide
-            if is_sprint_jumping() and attempt_sprint_slide and not movement_components.movement_state.is_crouching then
+            if is_sprint_jumping() and attempt_sprint_slide and not is_crouching then
                 return true
             end
         end
