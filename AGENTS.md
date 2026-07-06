@@ -298,6 +298,7 @@ return {
 
 - Comments should explain **why**, not **what** the code obviously does. If a comment just restates the line below it, delete it.
 - Prefer one short line. Never write multi-line comments that restate a function's behavior, restate parameter shapes already evident from the call, or narrate straightforward control flow (`-- loop over marks`, `-- return the value`, etc.).
+- Comments describe **what the code is**, never what it is **not**. Don't reference removed/alternate approaches (`-- not the raw weight`, `-- rather than dropping them`, `-- or X is wrong`). Say what the line does or returns; if that's obvious from the code, delete the comment. No `→`/ASCII arrows in prose — use the real function/field names.
 - Section headers (`-- Constants`, `-- Hooks`, `-- State variables`) are welcome and stay one line.
 - Never add `// NOTE:` / `// FIXME:` walls of text. If something genuinely needs a warning, one line max.
 - **Localization helpers and data-derived lookups do not need comments** explaining how `mod:localize` works or how the fallback prettifies. The code is the source of truth.

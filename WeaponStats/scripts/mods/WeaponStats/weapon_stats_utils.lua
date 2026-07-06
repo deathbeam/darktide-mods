@@ -4,10 +4,13 @@ local DamageProfile = mod:original_require('scripts/utilities/attack/damage_prof
 local DamageCalculation = mod:original_require('scripts/utilities/attack/damage_calculation')
 local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settings')
 local PowerLevelSettings = mod:original_require('scripts/settings/damage/power_level_settings')
+local PowerLevel = mod:original_require('scripts/utilities/attack/power_level')
 local Action = mod:original_require('scripts/utilities/action/action')
 local MasterItems = mod:original_require('scripts/backend/master_items')
 local UISettings = mod:original_require('scripts/settings/ui/ui_settings')
-
+local WeaponHandlingTemplates =
+    mod:original_require('scripts/settings/equipment/weapon_handling_templates/weapon_handling_templates')
+local WeaponTweakTemplates = mod:original_require('scripts/extension_systems/weapon/utilities/weapon_tweak_templates')
 local FALLBACK_LERP = 0.5
 local DEFAULT_POWER_LEVEL = 500
 local GESTALT_TOKENS = { 'smiter', 'linesman', 'tank', 'ninja_fencer' }
@@ -245,18 +248,33 @@ function WeaponStatsUtils.action_power_level(action, template_index)
     return action.power_level or DEFAULT_POWER_LEVEL
 end
 
--- first target for melee, default for ranged.
+-- Damage profile target index: targets[1] for melee, targets.default_target for ranged.
 function WeaponStatsUtils.target_settings(damage_profile, is_ranged)
     if not damage_profile or not damage_profile.targets then
-        return damage_profile
+        return damage_profile, nil
     end
-    local idx = is_ranged and 'default_target' or 1
-    return DamageProfile.target_settings(damage_profile, idx)
+
+    local target_index = damage_profile.targets[1] and 1 or 'default_target'
+    return DamageProfile.target_settings(damage_profile, target_index), target_index
 end
 
--- The game's damage helpers read `current_target_settings_lerp_values` off the lerp
--- table; set it from the per-target sub-table for UI calls (no real attacker),
--- restoring the previous value after.
+-- Lerpable {lerp_basic, lerp_perfect} -> midpoint; scalars pass through.
+function WeaponStatsUtils.resolve_lerpable(value)
+    if type(value) ~= 'table' then
+        return value
+    end
+    local lo = value.lerp_basic
+    local hi = value.lerp_perfect
+    if type(lo) == 'number' and type(hi) == 'number' then
+        return math.lerp(lo, hi, 0.5)
+    end
+    return nil
+end
+
+-- DamageProfile helpers read current_target_settings_lerp_values off the lerp table (set by
+-- DamageProfile.lerp_values when an attacker exists). With no attacker we patch it onto
+-- action_lerp for the call then restore; mirrors damage_profile.lua lerp_values().
+-- Shared empty table so current_target_settings_lerp_values is never nil (lerp_value_from_path indexes it).
 local _TARGET_SETTINGS_NO_LERP_VALUES = {}
 
 local function _with_target_lerps(action_lerp, target_index)
@@ -284,11 +302,22 @@ function WeaponStatsUtils.base_powers(
     target_index
 )
     local cur_lerps, prev = _with_target_lerps(action_lerp, target_index)
+
+    -- power_level_multiplier is applied by DamageCalculation.calculate, not base_ui_damage.
+    local resolved_power_level = power_level or DEFAULT_POWER_LEVEL
+    if target_settings.power_level_multiplier then
+        local pl_lerp = WeaponStatsUtils.lerp_from_path(cur_lerps, 'targets', target_index, 'power_level_multiplier')
+        local mult = WeaponStatsUtils.lerp_entry(target_settings.power_level_multiplier, pl_lerp)
+        if type(mult) == 'number' then
+            resolved_power_level = resolved_power_level * mult
+        end
+    end
+
     local ok, attack, impact = pcall(
         DamageCalculation.base_ui_damage,
         damage_profile,
         target_settings,
-        power_level or DEFAULT_POWER_LEVEL,
+        resolved_power_level,
         1, -- charge_level (full)
         dropoff_scalar,
         cur_lerps
@@ -307,14 +336,17 @@ function WeaponStatsUtils.finesse_multiplier(
     action_lerp,
     hit_weakspot,
     is_crit,
-    target_index
+    target_index,
+    armor_type
 )
+    -- armor_type selects the per-armor finesse_boost entry.
+    armor_type = armor_type or ArmorSettings.types.unarmored
     local cur_lerps, prev = _with_target_lerps(action_lerp, target_index)
     local ok, mult = pcall(
         DamageCalculation.ui_finesse_multiplier,
         damage_profile,
         target_settings,
-        ArmorSettings.types.unarmored,
+        armor_type,
         hit_weakspot,
         is_crit,
         cur_lerps
@@ -346,7 +378,8 @@ function WeaponStatsUtils.armor_modifier(
         armor_type,
         is_crit,
         dropoff_scalar,
-        false -- armor_penetrating
+        false, -- armor_penetrating
+        1 -- charge_level (full)
     )
     _restore_lerps(action_lerp, prev)
     if not ok or not mod then
@@ -382,6 +415,157 @@ end
 
 function WeaponStatsUtils.fallback_lerp()
     return FALLBACK_LERP
+end
+
+-- Cleave target count from the power-curve pipeline (PowerLevel.scale_power_level_to_power_type_curve
+-- then cleave_distribution), mapped onto PowerLevelSettings.cleave_output min/max.
+local function _cleave_value(cleave_min, cleave_range, scaled_cleave_power_level, distribution, power_type, action_lerp)
+    local dist = distribution and distribution[power_type]
+
+    if type(dist) == 'table' then
+        local lerp_value = WeaponStatsUtils.lerp_from_path(action_lerp, 'cleave_distribution', power_type)
+            or FALLBACK_LERP
+        local ok, resolved = pcall(DamageProfile.lerp_damage_profile_entry, dist, lerp_value)
+        if ok and type(resolved) == 'number' then
+            dist = resolved
+        end
+    end
+
+    if type(dist) ~= 'number' then
+        return 0
+    end
+
+    local cleave_power_level = scaled_cleave_power_level * dist
+    local percentage = PowerLevel.power_level_percentage(cleave_power_level)
+    return cleave_min + cleave_range * percentage
+end
+
+function WeaponStatsUtils.cleave_values(profile, target_settings, power_level, action_lerp)
+    if not profile then
+        return nil, nil
+    end
+
+    local cleave_distribution = profile.cleave_distribution or PowerLevelSettings.default_cleave_distribution
+
+    local scaled_power_level, _ =
+        PowerLevel.scale_by_charge_level(power_level or DEFAULT_POWER_LEVEL, 1, profile.charge_level_scaler)
+    local scaled_cleave_power_level =
+        PowerLevel.scale_power_level_to_power_type_curve(scaled_power_level, 'cleave', nil, nil, nil, nil, nil, profile)
+
+    local cleave_output = PowerLevelSettings.cleave_output
+    local cleave_min, cleave_max = cleave_output.min, cleave_output.max
+    local cleave_range = cleave_max - cleave_min
+
+    local attack =
+        _cleave_value(cleave_min, cleave_range, scaled_cleave_power_level, cleave_distribution, 'attack', action_lerp)
+    local impact =
+        _cleave_value(cleave_min, cleave_range, scaled_cleave_power_level, cleave_distribution, 'impact', action_lerp)
+
+    return attack, impact
+end
+
+-- Sticky damage entries for hit_stickyness_settings.always_sticky (or special-active) actions.
+function WeaponStatsUtils.sticky_damage_entries(action, use_special_active)
+    if type(action) ~= 'table' then
+        return nil
+    end
+
+    local settings = action.hit_stickyness_settings
+    if use_special_active then
+        settings = action.hit_stickyness_settings_special_active or settings
+    end
+
+    if not settings or not (use_special_active or settings.always_sticky) then
+        return nil
+    end
+
+    local damage = settings.damage
+    if type(damage) ~= 'table' then
+        return nil
+    end
+
+    local instances = damage.instances or 1
+    if type(instances) ~= 'number' or instances <= 0 then
+        return nil
+    end
+
+    local normal_profile = damage.damage_profile
+    local last_profile = damage.last_damage_profile or normal_profile
+    local power_level = damage.stat_power_level
+        or damage.power_level
+        or settings.stat_power_level
+        or settings.power_level
+        or DEFAULT_POWER_LEVEL
+
+    local entries = {}
+
+    local normal_ticks = instances - 1
+    if normal_ticks > 0 and normal_profile then
+        entries[#entries + 1] = { profile = normal_profile, weight = normal_ticks, power_level = power_level }
+    end
+
+    if last_profile then
+        entries[#entries + 1] = { profile = last_profile, weight = 1, power_level = power_level }
+    end
+
+    return #entries > 0 and entries or nil
+end
+
+-- Inner explosion close_damage_profile (bolter/plasma), separate from the impact profile
+function WeaponStatsUtils.explosion_profile(action, template_index)
+    if type(action) ~= 'table' then
+        return nil
+    end
+
+    local ok, explosion_template = pcall(Action.explosion_template, action, template_index)
+    if not ok or not explosion_template then
+        return nil
+    end
+
+    local inner = explosion_template.close_damage_profile
+    if not inner then
+        return nil
+    end
+
+    local power_level = explosion_template.static_power_level
+    return inner, power_level
+end
+
+-- critical_strike.chance_modifier from weapon_handling
+function WeaponStatsUtils.crit_chance_modifier(action, weapon_template, weapon_tweak_templates, action_name)
+    if type(action) ~= 'table' then
+        return nil
+    end
+
+    local chance_modifier
+
+    if weapon_tweak_templates and weapon_template and action_name then
+        local handling = weapon_tweak_templates['weapon_handling']
+        if handling then
+            local ok, _, identifier =
+                pcall(WeaponTweakTemplates.get_template_identifiers, weapon_template, 'weapon_handling', action_name)
+            if ok and identifier then
+                local action_stats = handling[identifier]
+                local critical_strike = action_stats and action_stats.critical_strike
+                chance_modifier = critical_strike and critical_strike.chance_modifier
+            end
+        end
+    end
+
+    if chance_modifier == nil then
+        local template_name = action.weapon_handling_template or 'none'
+        local handling_template = WeaponHandlingTemplates[template_name]
+        local critical_strike = handling_template and handling_template.critical_strike
+        chance_modifier = critical_strike and critical_strike.chance_modifier
+    end
+
+    chance_modifier = WeaponStatsUtils.resolve_lerpable(chance_modifier)
+
+    if type(chance_modifier) ~= 'number' or chance_modifier <= 0 then
+        return nil
+    end
+
+    return chance_modifier
 end
 
 return WeaponStatsUtils

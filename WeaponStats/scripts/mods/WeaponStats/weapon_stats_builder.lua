@@ -5,6 +5,7 @@ local Weapon = mod:original_require('scripts/extension_systems/weapon/weapon')
 local Action = mod:original_require('scripts/utilities/action/action')
 local WeaponTweakTemplates = mod:original_require('scripts/extension_systems/weapon/utilities/weapon_tweak_templates')
 local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settings')
+local WeaponActionData = mod:original_require('scripts/settings/equipment/weapon_action_handler_data')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
 
 local COLORS = {
@@ -143,8 +144,7 @@ local function extract_profiles(action)
         num_templates = n
     end
 
-    -- A secondary profile is a special-active mode; on-hit explosions are skipped
-    -- (the main profile already carries their crit/weakspot data).
+    -- Gather main, inner-explosion, and sticky profiles for render_profile to fold together.
     local has_direct_profile = action.damage_profile ~= nil
         or action.inner_damage_profile ~= nil
         or action.sweeps ~= nil
@@ -175,20 +175,31 @@ local function extract_profiles(action)
                 end
             end
 
-            local special_active_profile
-            if special_profile and special_profile ~= dmg_profile and has_direct_profile then
-                special_active_profile = special_profile
+            -- Inner explosion applies separately with its own power level.
+            local explosion_profile, explosion_power_level = Utils.explosion_profile(action, i)
+            local extra_profile
+            if explosion_profile and explosion_profile ~= dmg_profile then
+                extra_profile = {
+                    profile = explosion_profile,
+                    power_level = explosion_power_level,
+                }
             end
+
+            -- Sticky ticks: instances-1 normal + 1 last, weighted by tick count.
+            local sticky_entries = Utils.sticky_damage_entries(action, false)
+            local sticky_entries_special = Utils.sticky_damage_entries(action, true)
 
             profiles[#profiles + 1] = {
                 profile = dmg_profile,
                 special_active_profile = special_active_profile,
+                extra_profile = extra_profile,
                 ranged_extra = ranged_extra,
+                sticky_entries = sticky_entries,
+                sticky_entries_special = sticky_entries_special,
                 template_index = i,
             }
         end
     end
-
     return profiles
 end
 
@@ -232,19 +243,61 @@ local function profiles_equivalent(a, b)
     end
     local ra, rb = a.ranged_extra, b.ranged_extra
     local pa, pb = ra and ra.num_pellets or 0, rb and rb.num_pellets or 0
-    return pa == pb
+    if pa ~= pb then
+        return false
+    end
+
+    -- Explosion/sticky change totals, so they join dedup identity.
+    local function extra_name(p)
+        return p and p.profile and p.profile.name
+    end
+    if extra_name(a.extra_profile) ~= extra_name(b.extra_profile) then
+        return false
+    end
+
+    local function sticky_count(entries)
+        if not entries then
+            return 0
+        end
+        local n = 0
+        for i = 1, #entries do
+            n = n + entries[i].weight
+        end
+        return n
+    end
+
+    return sticky_count(a.sticky_entries) == sticky_count(b.sticky_entries)
+        and sticky_count(a.sticky_entries_special) == sticky_count(b.sticky_entries_special)
 end
 
 -- Render -----------------------------------------------------------------
 
+-- damage_window_end for attacks, total_time for kinds with no damage window.
+local function _action_total_time(action)
+    if not action then
+        return nil
+    end
+
+    local t = action.damage_window_end or action.total_time
+
+    if type(t) ~= 'number' or t == math.huge or t == -math.huge then
+        return nil
+    end
+    return t
+end
+
 local function render_timing(records, action, weapon_template, weapon_tweak_templates, action_name)
-    local time_scale = 1
-    local total_time = action.total_time or 0
     local fire_rate_shown = false
 
+    -- Lerpable time_scale resolves to its midpoint.
     local tmpl = handling_template_for_action(weapon_template, weapon_tweak_templates, action_name)
+    local raw_time_scale = tmpl and tmpl.time_scale
+    local time_scale = Utils.resolve_lerpable(raw_time_scale)
+    if type(time_scale) ~= 'number' or time_scale <= 0 then
+        time_scale = 1
+    end
+
     if tmpl then
-        time_scale = tmpl.time_scale or 1
         local auto_fire_time = tmpl.fire_rate and tmpl.fire_rate.auto_fire_time
         if type(auto_fire_time) == 'number' and auto_fire_time > 0 then
             add_stat(
@@ -257,11 +310,16 @@ local function render_timing(records, action, weapon_template, weapon_tweak_temp
         end
     end
 
-    if not fire_rate_shown and action.allowed_chain_actions then
-        local chain_time
-        local chains = action.allowed_chain_actions
+    if fire_rate_shown then
+        return
+    end
+
+    -- Chain time from the action's self-loop or start_attack/shoot chain.
+    local chain_time
+    local chains = action.allowed_chain_actions
+    if chains then
         for _, chain_data in pairs(chains) do
-            if chain_data.action_name == action_name and chain_data.chain_time then
+            if type(chain_data) == 'table' and chain_data.action_name == action_name and chain_data.chain_time then
                 chain_time = chain_data.chain_time
                 break
             end
@@ -271,20 +329,38 @@ local function render_timing(records, action, weapon_template, weapon_tweak_temp
                 or (chains.start_attack and chains.start_attack.chain_time)
                 or (chains.shoot and chains.shoot.chain_time)
         end
-        if not chain_time and total_time > 0 and total_time < 1000 then
+    end
+
+    -- Fall back to the action's own duration when no chain time is declared.
+    if not chain_time then
+        local total_time = _action_total_time(action)
+        if total_time and total_time > 0 and total_time < 1000 then
             chain_time = total_time
         end
-        if chain_time and chain_time > 0 then
-            local lbl = (action.kind == 'shoot_hit_scan' or action.kind == 'shoot_pellets')
-                    and mod:localize('stat_fire_rate')
-                or mod:localize('stat_attack_speed')
-            add_stat(records, lbl, string.format('%.2f/s', 1 / (chain_time / time_scale)), COLORS.TIMING)
-        end
     end
+
+    if not chain_time or chain_time <= 0 then
+        return
+    end
+
+    local scaled_time
+    if time_scale < 1 and WeaponActionData.action_kinds_with_inverted_timescale[action.kind] then
+        scaled_time = chain_time * time_scale
+    else
+        scaled_time = chain_time / time_scale
+    end
+
+    if scaled_time <= 0 then
+        return
+    end
+
+    local lbl = (action.kind == 'shoot_hit_scan' or action.kind == 'shoot_pellets') and mod:localize('stat_fire_rate')
+        or mod:localize('stat_attack_speed')
+    add_stat(records, lbl, string.format('%.2f/s', 1 / scaled_time), COLORS.TIMING)
 end
 
 -- Ranged profiles carry near/far ADM (point-blank vs max-range falloff); melee has a single value.
-local function render_armor(records, profile, target_settings, action_lerp, is_ranged, power_type, header)
+local function render_armor(records, profile, target_settings, action_lerp, is_ranged, power_type, header, target_index)
     local armor_order = ARMOR_ORDER
     local rows = {}
 
@@ -297,10 +373,26 @@ local function render_armor(records, profile, target_settings, action_lerp, is_r
     for _, armor_key in ipairs(armor_order) do
         local armor_type = ArmorSettings.types[armor_key]
         if armor_type then
-            local normal_near =
-                Utils.armor_modifier(profile, target_settings, action_lerp, power_type, armor_type, false, near_dropoff)
-            local crit_near =
-                Utils.armor_modifier(profile, target_settings, action_lerp, power_type, armor_type, true, near_dropoff)
+            local normal_near = Utils.armor_modifier(
+                profile,
+                target_settings,
+                action_lerp,
+                power_type,
+                armor_type,
+                false,
+                near_dropoff,
+                target_index
+            )
+            local crit_near = Utils.armor_modifier(
+                profile,
+                target_settings,
+                action_lerp,
+                power_type,
+                armor_type,
+                true,
+                near_dropoff,
+                target_index
+            )
 
             local normal_far, crit_far
             if is_ranged then
@@ -311,7 +403,8 @@ local function render_armor(records, profile, target_settings, action_lerp, is_r
                     power_type,
                     armor_type,
                     false,
-                    far_dropoff
+                    far_dropoff,
+                    target_index
                 )
                 crit_far = Utils.armor_modifier(
                     profile,
@@ -320,7 +413,8 @@ local function render_armor(records, profile, target_settings, action_lerp, is_r
                     power_type,
                     armor_type,
                     true,
-                    far_dropoff
+                    far_dropoff,
+                    target_index
                 )
             end
 
@@ -349,7 +443,7 @@ local function render_profile(records, ctx)
     local is_active = ctx.is_active
     local power_level = ctx.power_level
 
-    local target_settings = Utils.target_settings(profile, is_ranged)
+    local target_settings, target_index = Utils.target_settings(profile, is_ranged)
     if not target_settings then
         return
     end
@@ -360,33 +454,58 @@ local function render_profile(records, ctx)
         add_special_active(records)
     end
 
-    local base_attack, base_impact = Utils.base_powers(profile, target_settings, power_level, action_lerp, dropoff)
-    if base_attack and math.abs(base_attack) > 0.01 then
-        add_stat(records, mod:localize('stat_damage'), fmt_num(base_attack), COLORS.DAMAGE)
+    -- Base damage plus inner-explosion/sticky-tick totals per hit.
+    local base_attack, base_impact =
+        Utils.base_powers(profile, target_settings, power_level, action_lerp, dropoff, target_index)
+    local extra_attack, extra_impact = 0, 0
+    if ctx.extra_profile then
+        local ep = ctx.extra_profile
+        local e_ts, e_idx = Utils.target_settings(ep.profile, is_ranged)
+        if e_ts then
+            local e_a, e_i =
+                Utils.base_powers(ep.profile, e_ts, ep.power_level or power_level, action_lerp, dropoff, e_idx)
+            extra_attack = e_a or 0
+            extra_impact = e_i or 0
+        end
     end
-    if base_impact and math.abs(base_impact) > 0.01 then
-        add_stat(records, mod:localize('stat_impact'), fmt_num(base_impact), COLORS.DAMAGE)
+    -- Sticky ticks weighted by instances for the full hit total.
+    for _, entry in ipairs(ctx.sticky_entries or {}) do
+        local s_ts, s_idx = Utils.target_settings(entry.profile, is_ranged)
+        if s_ts then
+            local s_pl = entry.power_level or power_level
+            local s_a, s_i = Utils.base_powers(entry.profile, s_ts, s_pl, action_lerp, dropoff, s_idx)
+            extra_attack = extra_attack + (s_a or 0) * entry.weight
+            extra_impact = extra_impact + (s_i or 0) * entry.weight
+        end
     end
 
-    if profile.cleave_distribution and type(profile.cleave_distribution) == 'table' then
-        local cleave_lerp = Utils.lerp_from_path(action_lerp, 'cleave_distribution', 'attack') or Utils.fallback_lerp()
-        local attack_cleave = Utils.lerp_entry(profile.cleave_distribution.attack, cleave_lerp)
-        local impact_cleave = Utils.lerp_entry(profile.cleave_distribution.impact, cleave_lerp)
-        if type(attack_cleave) == 'number' and attack_cleave > 0.01 then
-            if
-                type(impact_cleave) == 'number'
-                and impact_cleave > 0.01
-                and math.abs(impact_cleave - attack_cleave) > 0.01
-            then
-                add_stat(
-                    records,
-                    mod:localize('stat_cleave'),
-                    string.format('%.2f / %.2f', attack_cleave, impact_cleave),
-                    COLORS.DAMAGE
-                )
-            else
-                add_stat(records, mod:localize('stat_cleave'), string.format('%.2f', attack_cleave), COLORS.DAMAGE)
-            end
+    if base_attack and (math.abs(base_attack) > 0.01 or extra_attack > 0.01) then
+        local total = (base_attack or 0) + extra_attack
+        if math.abs(total) > 0.01 then
+            add_stat(records, mod:localize('stat_damage'), fmt_num(total), COLORS.DAMAGE)
+        end
+    end
+    if base_impact and (math.abs(base_impact) > 0.01 or extra_impact > 0.01) then
+        local total = (base_impact or 0) + extra_impact
+        if math.abs(total) > 0.01 then
+            add_stat(records, mod:localize('stat_impact'), fmt_num(total), COLORS.DAMAGE)
+        end
+    end
+
+    -- Cleave target count from the power-curve pipeline.
+    local cleave_attack, cleave_impact = Utils.cleave_values(profile, target_settings, power_level, action_lerp)
+    local has_attack_cleave = cleave_attack and math.abs(cleave_attack) > 0.01
+    local has_impact_cleave = cleave_impact and math.abs(cleave_impact) > 0.01
+    if has_attack_cleave then
+        if has_impact_cleave and math.abs(cleave_impact - cleave_attack) > 0.01 then
+            add_stat(
+                records,
+                mod:localize('stat_cleave'),
+                string.format('%.2f / %.2f', cleave_attack, cleave_impact),
+                COLORS.DAMAGE
+            )
+        else
+            add_stat(records, mod:localize('stat_cleave'), string.format('%.2f', cleave_attack), COLORS.DAMAGE)
         end
     end
 
@@ -395,9 +514,9 @@ local function render_profile(records, ctx)
         add_stat(records, mod:localize('stat_backstab'), string.format('%.0f%%', bonus * 100), COLORS.WEAKSPOT)
     end
 
-    local weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, false)
-    local crit_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, false, true)
-    local crit_weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, true)
+    local weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, false, target_index)
+    local crit_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, false, true, target_index)
+    local crit_weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, true, target_index)
 
     local any_mult = (weakspot_mult and math.abs(weakspot_mult - 1) > 0.005)
         or (crit_mult and math.abs(crit_mult - 1) > 0.005)
@@ -417,21 +536,23 @@ local function render_profile(records, ctx)
         end
     end
 
+    -- Crit modifier: weapon_handling (per-action) then legacy weapon_handling_template.
+    local chance_modifier =
+        Utils.crit_chance_modifier(ctx.action, ctx.weapon_template, ctx.weapon_tweak_templates, ctx.action_name)
+    if chance_modifier then
+        local sign = chance_modifier >= 0 and '+' or ''
+        add_stat(
+            records,
+            mod:localize('stat_crit_modifier'),
+            string.format('%s%.1f%%', sign, chance_modifier * 100),
+            COLORS.CRIT
+        )
+    end
+
     local tmpl = handling_template_for_action(ctx.weapon_template, ctx.weapon_tweak_templates, ctx.action_name)
     local crit_strike = tmpl and tmpl.critical_strike
-    if crit_strike then
-        if crit_strike.chance_modifier and crit_strike.chance_modifier ~= 0 then
-            local sign = crit_strike.chance_modifier >= 0 and '+' or ''
-            add_stat(
-                records,
-                mod:localize('stat_crit_modifier'),
-                string.format('%s%.1f%%', sign, crit_strike.chance_modifier * 100),
-                COLORS.CRIT
-            )
-        end
-        if crit_strike.max_critical_shots and crit_strike.max_critical_shots ~= 0 then
-            add_stat(records, mod:localize('stat_crit_strings'), tostring(crit_strike.max_critical_shots), COLORS.CRIT)
-        end
+    if crit_strike and crit_strike.max_critical_shots and crit_strike.max_critical_shots ~= 0 then
+        add_stat(records, mod:localize('stat_crit_strings'), tostring(crit_strike.max_critical_shots), COLORS.CRIT)
     end
 
     local ranged_extra = ctx.ranged_extra
@@ -486,8 +607,26 @@ local function render_profile(records, ctx)
         add_stat(records, mod:localize('stat_flags'), table.concat(flags, ', '), COLORS.META)
     end
 
-    render_armor(records, profile, target_settings, action_lerp, is_ranged, 'attack', mod:localize('stat_adm'))
-    render_armor(records, profile, target_settings, action_lerp, is_ranged, 'impact', mod:localize('stat_impact'))
+    render_armor(
+        records,
+        profile,
+        target_settings,
+        action_lerp,
+        is_ranged,
+        'attack',
+        mod:localize('stat_adm'),
+        target_index
+    )
+    render_armor(
+        records,
+        profile,
+        target_settings,
+        action_lerp,
+        is_ranged,
+        'impact',
+        mod:localize('stat_impact'),
+        target_index
+    )
 end
 
 local function render_attack(
@@ -539,6 +678,8 @@ local function render_attack(
             is_active = false,
             power_level = power_level,
             ranged_extra = prof_info.ranged_extra,
+            extra_profile = prof_info.extra_profile,
+            sticky_entries = prof_info.sticky_entries,
             weapon_tweak_templates = weapon_tweak_templates,
             weapon_template = weapon_template,
         }
@@ -556,6 +697,8 @@ local function render_attack(
                 is_active = true,
                 power_level = power_level,
                 ranged_extra = prof_info.ranged_extra,
+                extra_profile = prof_info.extra_profile,
+                sticky_entries = prof_info.sticky_entries_special or prof_info.sticky_entries,
                 weapon_tweak_templates = weapon_tweak_templates,
                 weapon_template = weapon_template,
             }
