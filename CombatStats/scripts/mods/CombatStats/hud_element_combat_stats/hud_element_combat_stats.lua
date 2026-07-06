@@ -1,5 +1,6 @@
 local mod = get_mod('CombatStats')
 
+local UIWidget = mod:original_require('scripts/managers/ui/ui_widget')
 local Definitions =
     mod:io_dofile('CombatStats/scripts/mods/CombatStats/hud_element_combat_stats/hud_element_combat_stats_definitions')
 
@@ -23,6 +24,13 @@ end
 function HudElementCombatStats:init(parent, draw_layer, start_scale)
     HudElementCombatStats.super.init(self, parent, draw_layer, start_scale, Definitions)
     self:_update_position()
+end
+
+function HudElementCombatStats:set_visible(visible, ui_renderer, use_retained_mode)
+    local widget = self._widgets_by_name.session_stats
+    if widget and ui_renderer then
+        UIWidget.set_visible(widget, ui_renderer, visible)
+    end
 end
 
 function HudElementCombatStats:_update_position()
