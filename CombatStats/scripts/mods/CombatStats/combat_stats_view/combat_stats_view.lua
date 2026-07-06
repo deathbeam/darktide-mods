@@ -231,33 +231,36 @@ function CombatStatsView:_setup_entries()
         -- Add all engagements in reverse order (newest first) if they match search
         for i = #engagements, 1, -1 do
             local engagement = engagements[i]
-            local duration = (engagement.end_time or current_time) - engagement.start_time
-            local breed_name = engagement.name or (mod:localize('enemy') .. ' ' .. i)
-            local display_name = mod.utils:get_breed_display_name(breed_name)
+            -- Skip enemies the player dealt no damage to (teammate kills, aggro-only).
+            if engagement.stats.total_damage ~= 0 or engagement.stats.total_hits ~= 0 then
+                local duration = (engagement.end_time or current_time) - engagement.start_time
+                local breed_name = engagement.name or (mod:localize('enemy') .. ' ' .. i)
+                local display_name = mod.utils:get_breed_display_name(breed_name)
 
-            if
-                search_text == ''
-                or display_name:lower():find(search_text, 1, true)
-                or breed_name:lower():find(search_text, 1, true)
-                or engagement.type:lower():find(search_text, 1, true)
-            then
-                local enemy_entry = {
-                    widget_type = 'stats_entry',
-                    name = display_name,
-                    breed_name = breed_name,
-                    type = engagement.type,
-                    start_time = engagement.start_time,
-                    end_time = engagement.end_time,
-                    duration = duration,
-                    stats = engagement.stats,
-                    buffs = engagement.buffs,
-                    is_session = false,
-                    pressed_function = function(parent, widget, entry)
-                        parent:_select_entry(widget, entry)
-                    end,
-                }
-                enemy_entry.subtext, enemy_entry.subtext_color = self:_format_entry_subtext(enemy_entry)
-                entries[#entries + 1] = enemy_entry
+                if
+                    search_text == ''
+                    or display_name:lower():find(search_text, 1, true)
+                    or breed_name:lower():find(search_text, 1, true)
+                    or engagement.type:lower():find(search_text, 1, true)
+                then
+                    local enemy_entry = {
+                        widget_type = 'stats_entry',
+                        name = display_name,
+                        breed_name = breed_name,
+                        type = engagement.type,
+                        start_time = engagement.start_time,
+                        end_time = engagement.end_time,
+                        duration = duration,
+                        stats = engagement.stats,
+                        buffs = engagement.buffs,
+                        is_session = false,
+                        pressed_function = function(parent, widget, entry)
+                            parent:_select_entry(widget, entry)
+                        end,
+                    }
+                    enemy_entry.subtext, enemy_entry.subtext_color = self:_format_entry_subtext(enemy_entry)
+                    entries[#entries + 1] = enemy_entry
+                end
             end
         end
     end

@@ -155,12 +155,12 @@ function CombatStatsTracker:load_from_history(history_data)
 
     for _, engagement in ipairs(self._engagements) do
         accumulate(self._session_stats, engagement.stats or {})
+        local breed_type = engagement.type or 'unknown'
+        self._session_stats.damage_by_type[breed_type] = (self._session_stats.damage_by_type[breed_type] or 0)
+            + (engagement.stats.total_damage or 0)
         if engagement.killed then
-            local breed_type = engagement.type or 'unknown'
             self._session_stats.total_kills = self._session_stats.total_kills + 1
             self._session_stats.kills_by_type[breed_type] = (self._session_stats.kills_by_type[breed_type] or 0) + 1
-            self._session_stats.damage_by_type[breed_type] = (self._session_stats.damage_by_type[breed_type] or 0)
-                + (engagement.stats.total_damage or 0)
         end
     end
 end
