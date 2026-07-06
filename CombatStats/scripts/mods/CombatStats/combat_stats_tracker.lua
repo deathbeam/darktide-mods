@@ -374,6 +374,7 @@ function CombatStatsTracker:_finish_enemy_engagement(unit, killed)
     engagement.end_time = current_time
     engagement.killed = killed or false
     self._active_engagements_by_unit[unit] = nil
+    self._engagements_by_unit[unit] = nil
 
     if killed then
         local breed_type = engagement.type or 'unknown'
@@ -405,6 +406,7 @@ function CombatStatsTracker:_update_active_engagements()
         if should_end then
             engagement.end_time = current_time
             self._active_engagements_by_unit[unit] = nil
+            self._engagements_by_unit[unit] = nil
         end
     end
 end

@@ -176,7 +176,7 @@ mod:hook(
             local player = Managers.player:local_player_safe(1)
             if player then
                 local player_unit = player.player_unit
-                if player_unit and attacking_unit == player_unit then
+                if player_unit and attacking_unit == player_unit and ALIVE[attacked_unit] then
                     local unit_data_extension = ScriptUnit.has_extension(attacked_unit, 'unit_data_system')
                     local breed = unit_data_extension and unit_data_extension:breed()
                     if breed then
@@ -196,7 +196,12 @@ mod:hook(
                             mod.tracker:_finish_enemy_engagement(attacked_unit, true)
                         end
                     end
-                elseif player_unit and attacked_unit == player_unit and mod:get('track_incoming_attacks') then
+                elseif
+                    player_unit
+                    and attacked_unit == player_unit
+                    and ALIVE[attacking_unit]
+                    and mod:get('track_incoming_attacks')
+                then
                     local unit_data_extension = ScriptUnit.has_extension(attacking_unit, 'unit_data_system')
                     local breed = unit_data_extension and unit_data_extension:breed()
                     if breed then
