@@ -35,8 +35,14 @@ return {
     header_heavy_attacks = {
         en = 'HEAVY ATTACKS',
     },
-    header_weapon_special_attacks = {
-        en = 'WEAPON SPECIAL ATTACKS',
+    header_special_attacks = {
+        en = 'SPECIAL ATTACKS',
+    },
+    header_attack_pattern = {
+        en = 'ATTACK PATTERN',
+    },
+    header_special_active = {
+        en = 'SPECIAL ACTIVE ATTACKS',
     },
 
     -- Stat keys
@@ -71,7 +77,7 @@ return {
         en = 'Crit + Weakspot',
     },
     stat_crit_modifier = {
-        en = 'Crit Modifier',
+        en = 'Crit Chance',
     },
     stat_crit_strings = {
         en = 'Crit Strings',
@@ -102,6 +108,35 @@ return {
     },
     stat_adm = {
         en = 'ADM',
+    },
+    stat_direction = {
+        en = 'Direction',
+    },
+
+    label_primary = {
+        en = 'Light',
+    },
+    label_secondary = {
+        en = 'Heavy',
+    },
+    label_special = {
+        en = 'Special',
+    },
+    label_extra = {
+        en = 'Secondary',
+    },
+
+    direction_left = {
+        en = 'Left',
+    },
+    direction_right = {
+        en = 'Right',
+    },
+    direction_down = {
+        en = 'Down',
+    },
+    direction_up = {
+        en = 'Up',
     },
 
     -- Armor Types

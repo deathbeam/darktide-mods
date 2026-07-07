@@ -74,6 +74,70 @@ function WeaponStatsUtils.friendly_action_label(action_name)
     return prettified
 end
 
+-- Attack swing direction parsed from the action's anim_event token. Darktide encodes
+-- the swing direction in the animation name rather than a dedicated field, e.g.
+-- attack_left_diagonal_down, attack_swing_heavy_right_up, attack_down_left.
+-- Returns one of "left", "right", "down", "up", or nil (push/special/stab/etc).
+function WeaponStatsUtils.anim_event_direction(anim_event)
+    if type(anim_event) ~= 'string' then
+        return nil
+    end
+
+    local lowered = anim_event:lower()
+    local has_left = lowered:find('left', 1, true) ~= nil
+    local has_right = lowered:find('right', 1, true) ~= nil
+
+    -- left/right are unambiguous substrings. up/down are matched as tokens
+    -- (preceded and followed by '_' or string bounds) to avoid false positives
+    -- like "followup", "follow_up", "uppercut".
+    if has_left and not has_right then
+        return 'left'
+    end
+    if has_right and not has_left then
+        return 'right'
+    end
+
+    -- up/down only count as a direction when they sit at a '_' token boundary,
+    -- so "followup"/"follow_up"/"uppercut" don't false-positive.
+    if lowered:match('_down_') or lowered:match('_down$') or lowered:match('^down_') or lowered == 'down' then
+        return 'down'
+    end
+    if
+        (lowered:match('_up_') or lowered:match('_up$') or lowered:match('^up_') or lowered == 'up')
+        and not lowered:match('follow_up')
+    then
+        return 'up'
+    end
+
+    return nil
+end
+
+-- Gestalt icon texture for an attack-chain entry (smiter/linesman/tank/ninja_fencer/...).
+-- Mirrors UISettings.weapon_action_type_icons so the chain overview matches the in-game card.
+local GESTALT_ICONS = {
+    activate = 'content/ui/materials/icons/weapons/actions/activate',
+    ads = 'content/ui/materials/icons/weapons/actions/ads',
+    brace = 'content/ui/materials/icons/weapons/actions/brace',
+    charge = 'content/ui/materials/icons/weapons/actions/charge',
+    defence = 'content/ui/materials/icons/weapons/actions/defence',
+    flashlight = 'content/ui/materials/icons/weapons/actions/flashlight',
+    hipfire = 'content/ui/materials/icons/weapons/actions/hipfire',
+    linesman = 'content/ui/materials/icons/weapons/actions/linesman',
+    melee = 'content/ui/materials/icons/weapons/actions/melee',
+    melee_hand = 'content/ui/materials/icons/weapons/actions/melee_hand',
+    ninja_fencer = 'content/ui/materials/icons/weapons/actions/ninjafencer',
+    quick_grenade = 'content/ui/materials/icons/weapons/actions/quick_grenade',
+    smiter = 'content/ui/materials/icons/weapons/actions/smiter',
+    special_attack = 'content/ui/materials/icons/weapons/actions/special_attack',
+    special_bullet = 'content/ui/materials/icons/weapons/actions/special_bullet',
+    tank = 'content/ui/materials/icons/weapons/actions/tank',
+    vent = 'content/ui/materials/icons/weapons/actions/vent',
+}
+
+function WeaponStatsUtils.gestalt_icon(gestalt)
+    return gestalt and GESTALT_ICONS[gestalt] or nil
+end
+
 -- Weapon display names ----------------------------------------------------
 
 local function _safe_localize(text)

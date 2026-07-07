@@ -12,6 +12,40 @@ local WeaponTemplate = mod:original_require('scripts/utilities/weapon/weapon_tem
 local Builder = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_builder')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
 
+-- Bundles the weapon action gestalt icons (content/ui/materials/icons/weapons/actions/*)
+-- used by the chain overview. Same package CombatStats loads for its buff icons.
+local ICON_PACKAGES = {
+    'packages/ui/hud/player_weapon/player_weapon',
+}
+
+local function _package_is_available(package_name)
+    local application = Application and Application.can_get_resource
+    if not application then
+        return false
+    end
+    local ok, exists = pcall(application, 'package', package_name)
+    return ok and exists or false
+end
+
+local function _load_icon_packages()
+    local loaded = {}
+    for _, pkg in ipairs(ICON_PACKAGES) do
+        if _package_is_available(pkg) and mod:package_status(pkg) ~= 'loaded' then
+            mod:load_package(pkg, nil, true)
+            loaded[#loaded + 1] = pkg
+        end
+    end
+    return loaded
+end
+
+local function _release_icon_packages(loaded)
+    for i = 1, #loaded do
+        if mod:package_status(loaded[i]) == 'loaded' then
+            mod:unload_package(loaded[i])
+        end
+    end
+end
+
 -- Items cap at 0.8 (items.lua max_weapon_preview).
 local MAX_STAT_VALUE = 0.8
 
@@ -95,6 +129,8 @@ end
 
 function WeaponStatsView:on_enter()
     WeaponStatsView.super.on_enter(self)
+
+    self._loaded_icon_packages = _load_icon_packages()
 
     self:_setup_input_legend()
     self:_setup_search()
@@ -440,6 +476,51 @@ local function _make_armor_row(self, row, width, stripe)
     end
 end
 
+local CHAIN_ICON_SIZE = 28
+local CHAIN_ICON_SPACING = 6
+local CHAIN_ROW_HEIGHT = 34
+
+local function _make_chain_row(self, title, chain, width)
+    local passes = {}
+    passes[#passes + 1] = {
+        pass_type = 'text',
+        value_id = 'title',
+        value = title,
+        style = {
+            font_type = 'proxima_nova_bold',
+            font_size = 16,
+            text_vertical_alignment = 'center',
+            text_horizontal_alignment = 'left',
+            text_color = COLOR_LABEL,
+            offset = { 0, 0, 2 },
+            size = { width * 0.3, CHAIN_ROW_HEIGHT },
+            text_overflow_mode = 'truncate',
+        },
+    }
+    local icon_area_x = width * 0.3 + 10
+    local step = CHAIN_ICON_SIZE + CHAIN_ICON_SPACING
+    for i = 1, #chain do
+        local icon = Utils.gestalt_icon(chain[i])
+        if icon then
+            local x = icon_area_x + (i - 1) * step
+            passes[#passes + 1] = {
+                pass_type = 'texture',
+                value = icon,
+                style = {
+                    horizontal_alignment = 'left',
+                    vertical_alignment = 'center',
+                    offset = { x, 0, 2 },
+                    size = { CHAIN_ICON_SIZE, CHAIN_ICON_SIZE },
+                    color = Color.terminal_text_body(255, true),
+                },
+            }
+        end
+    end
+    local widget_def = UIWidget.create_definition(passes, 'weapon_stats_detail_pivot', nil, { width, CHAIN_ROW_HEIGHT })
+    local widget = self:_create_widget('detail_chain_' .. #self._detail_widgets, widget_def)
+    self._detail_widgets[#self._detail_widgets + 1] = widget
+end
+
 local function _render_record(self, record, width, stripe_state)
     local rtype = record.type
     if rtype == 'spacer' then
@@ -452,6 +533,9 @@ local function _render_record(self, record, width, stripe_state)
         stripe_state.count = 0
         _make_spacer(self, 2, width)
         _make_text_widget(self, record.text, 19, record.color, width, 26)
+    elseif rtype == 'chain' then
+        stripe_state.count = 0
+        _make_chain_row(self, record.title, record.chain, width)
     elseif rtype == 'subheader' then
         _make_text_widget(self, record.text, 16, record.color, width, 22, (record.indent or 0) * INDENT_PX)
     elseif rtype == 'stat' then
@@ -612,6 +696,9 @@ function WeaponStatsView:on_exit()
         self._input_legend_element = nil
         self:_remove_element('input_legend')
     end
+
+    _release_icon_packages(self._loaded_icon_packages)
+    self._loaded_icon_packages = nil
 
     WeaponStatsView.super.on_exit(self)
 end
