@@ -35,6 +35,12 @@ return {
     },
 
     -- Headers
+    header_attack_pattern = {
+        en = 'ATTACK PATTERN',
+    },
+    header_mobility = {
+        en = 'MOBILITY',
+    },
     header_ranged_attacks = {
         en = 'RANGED ATTACKS',
     },
@@ -47,14 +53,32 @@ return {
     header_special_attacks = {
         en = 'SPECIAL ATTACKS',
     },
-    header_attack_pattern = {
-        en = 'ATTACK PATTERN',
-    },
     header_special_active = {
         en = 'SPECIAL ACTIVE ATTACKS',
     },
 
     -- Stat keys
+    stat_dodge_distance = {
+        en = 'Dodge Distance',
+    },
+    stat_dodge_dr_start = {
+        en = 'Effective Dodge Count',
+    },
+    stat_stamina = {
+        en = 'Stamina',
+    },
+    stat_block_cost = {
+        en = 'Block Cost',
+    },
+    stat_push_cost = {
+        en = 'Push Cost',
+    },
+    stat_sprint_cost = {
+        en = 'Sprint Cost',
+    },
+    stat_sprint_speed = {
+        en = 'Sprint Speed',
+    },
     stat_fire_rate = {
         en = 'Fire Rate',
     },

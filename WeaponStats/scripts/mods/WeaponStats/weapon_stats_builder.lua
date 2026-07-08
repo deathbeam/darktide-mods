@@ -744,6 +744,72 @@ local function render_deferred_special(records, deferred)
     end
 end
 
+local function _first_resolved_template(tweak_templates, template_type)
+    local templates = tweak_templates and tweak_templates[template_type]
+    if not templates then
+        return nil
+    end
+    local _, first = next(templates)
+    return first
+end
+
+local function build_mobility_stats(records, weapon_tweak_templates)
+    local dodge = _first_resolved_template(weapon_tweak_templates, 'dodge')
+    local stamina = _first_resolved_template(weapon_tweak_templates, 'stamina')
+    local sprint = _first_resolved_template(weapon_tweak_templates, 'sprint')
+    if not dodge and not stamina and not sprint then
+        return
+    end
+
+    -- Collect non-zero values first so we only emit the section when there's something to show.
+    local pending = {}
+    local function add_num(label, value, fmt)
+        if type(value) ~= 'number' or value == 0 then
+            return
+        end
+        pending[#pending + 1] = { mod:localize(label), string.format(fmt, value) }
+    end
+
+    if dodge then
+        add_num('stat_dodge_distance', dodge.distance_scale and (dodge.distance_scale - 1) * 100, '%+.2f%%')
+        add_num(
+            'stat_dodge_dr_start',
+            dodge.diminishing_return_start and math.floor(dodge.diminishing_return_start),
+            '%d'
+        )
+    end
+
+    if stamina then
+        add_num('stat_stamina', stamina.stamina_modifier, '%+.2f')
+        local block = stamina.block_cost_default
+        if type(block) == 'table' and type(block.inner) == 'number' and type(block.outer) == 'number' then
+            if block.inner ~= 0 or block.outer ~= 0 then
+                pending[#pending + 1] = {
+                    mod:localize('stat_block_cost'),
+                    string.format('%.2f/%.2f', block.inner, block.outer),
+                }
+            end
+        end
+        add_num('stat_push_cost', stamina.push_cost and -stamina.push_cost, '%+.2f')
+        add_num('stat_sprint_cost', stamina.sprint_cost_per_second and -stamina.sprint_cost_per_second, '%+.2f/s')
+    end
+
+    if sprint then
+        add_num('stat_sprint_speed', sprint.sprint_speed_mod, '%+.2f m/s')
+    end
+
+    if #pending == 0 then
+        return
+    end
+
+    add_section(records, mod:localize('header_mobility'))
+    add_spacer(records, 4)
+    for i = 1, #pending do
+        add_stat(records, pending[i][1], pending[i][2], COLORS.META)
+    end
+    add_spacer(records, 10)
+end
+
 local function build_chain_overview(records, weapon_template)
     local displayed = weapon_template.displayed_attacks
     if not displayed then
@@ -844,6 +910,7 @@ local function build_stats(item)
     local records = {}
     local deferred_special = {}
     build_chain_overview(records, weapon_template)
+    build_mobility_stats(records, weapon_tweak_templates)
     for _, category in ipairs({ 'ranged', 'light', 'heavy', 'special' }) do
         local category_attacks = attacks[category]
         if #category_attacks > 0 then
