@@ -78,6 +78,27 @@ local function add_stat(records, label, value, label_color, indent)
     })
 end
 
+local function add_direction_stat(records, actions)
+    local dir_parts = {}
+    for _, action in ipairs(actions or {}) do
+        local action_dirs = {}
+        for dir in pairs(Utils.action_directions(action)) do
+            action_dirs[#action_dirs + 1] = dir
+        end
+        table.sort(action_dirs)
+        if #action_dirs > 0 then
+            local parts = {}
+            for i = 1, #action_dirs do
+                parts[i] = mod:localize('direction_' .. action_dirs[i])
+            end
+            dir_parts[#dir_parts + 1] = table.concat(parts, ' / ')
+        end
+    end
+    if #dir_parts > 0 then
+        add_stat(records, mod:localize('stat_direction'), table.concat(dir_parts, ', '), COLORS.META)
+    end
+end
+
 local function add_armor(records, rows, is_ranged, header)
     add(records, {
         type = 'armor',
@@ -155,11 +176,6 @@ local function extract_profiles(action)
         num_templates = n
     end
 
-    -- Gather main, inner-explosion, and sticky profiles for render_profile to fold together.
-    local has_direct_profile = action.damage_profile ~= nil
-        or action.inner_damage_profile ~= nil
-        or action.sweeps ~= nil
-
     for i = 1, num_templates do
         local ok, dmg_profile, special_profile = pcall(Action.damage_template, action, i)
         if ok and dmg_profile then
@@ -194,7 +210,7 @@ local function extract_profiles(action)
 
             profiles[#profiles + 1] = {
                 profile = dmg_profile,
-                special_active_profile = special_profile,
+                special_active_profile = special_profile ~= dmg_profile and special_profile or nil,
                 extra_entries = extra_entries,
                 extra_entries_special = extra_entries_special,
                 ranged_extra = ranged_extra,
@@ -636,26 +652,7 @@ local function render_attack(
     end
     add_attack(records, table.concat(labels, ', '))
 
-    local directions = {}
-    for _, anim_event in ipairs(attack_data.anim_events or {}) do
-        local dir = Utils.anim_event_direction(anim_event)
-        if dir and not directions[dir] then
-            directions[dir] = true
-        end
-    end
-    local dir_keys = {}
-    for dir in pairs(directions) do
-        dir_keys[#dir_keys + 1] = dir
-    end
-    table.sort(dir_keys)
-    if #dir_keys > 0 then
-        local parts = {}
-        for i = 1, #dir_keys do
-            parts[i] = mod:localize('direction_' .. dir_keys[i])
-        end
-        add_stat(records, mod:localize('stat_direction'), table.concat(parts, ' / '), COLORS.META)
-    end
-
+    add_direction_stat(records, attack_data.merged_actions)
     local slot_key = category == 'heavy' and 'secondary' or (category == 'special' and 'special') or 'primary'
     local attack_type =
         Utils.attack_type_name(weapon_template, slot_key, attack_data.profile and attack_data.profile.name)
@@ -729,11 +726,7 @@ local function render_deferred_special(records, deferred)
         local entry = deferred[i]
         add_attack(records, Utils.friendly_action_label(entry.action_name))
 
-        local dir = Utils.anim_event_direction(entry.action and entry.action.anim_event)
-        if dir then
-            add_stat(records, mod:localize('stat_direction'), mod:localize('direction_' .. dir), COLORS.META)
-        end
-
+        add_direction_stat(records, { entry.action })
         render_profile(records, {
             profile = entry.profile,
             action = entry.action,
@@ -823,7 +816,7 @@ local function build_stats(item)
                 for _, existing_attack in ipairs(existing) do
                     if profiles_equivalent(existing_attack.profiles[1], profiles[1]) then
                         table.insert(existing_attack.names, action_name)
-                        table.insert(existing_attack.anim_events, action.anim_event)
+                        table.insert(existing_attack.merged_actions, action)
                         merged = true
                         break
                     end
@@ -831,7 +824,7 @@ local function build_stats(item)
                 if not merged then
                     table.insert(existing, {
                         names = { action_name },
-                        anim_events = { action.anim_event },
+                        merged_actions = { action },
                         action = action,
                         profile = first_profile,
                         profiles = profiles,

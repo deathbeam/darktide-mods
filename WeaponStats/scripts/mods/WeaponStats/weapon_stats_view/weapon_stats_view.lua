@@ -12,6 +12,26 @@ local WeaponTemplate = mod:original_require('scripts/utilities/weapon/weapon_tem
 local Builder = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_builder')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
 
+local GESTALT_ICONS = {
+    activate = 'content/ui/materials/icons/weapons/actions/activate',
+    ads = 'content/ui/materials/icons/weapons/actions/ads',
+    brace = 'content/ui/materials/icons/weapons/actions/brace',
+    charge = 'content/ui/materials/icons/weapons/actions/charge',
+    defence = 'content/ui/materials/icons/weapons/actions/defence',
+    flashlight = 'content/ui/materials/icons/weapons/actions/flashlight',
+    hipfire = 'content/ui/materials/icons/weapons/actions/hipfire',
+    linesman = 'content/ui/materials/icons/weapons/actions/linesman',
+    melee = 'content/ui/materials/icons/weapons/actions/melee',
+    melee_hand = 'content/ui/materials/icons/weapons/actions/melee_hand',
+    ninja_fencer = 'content/ui/materials/icons/weapons/actions/ninjafencer',
+    quick_grenade = 'content/ui/materials/icons/weapons/actions/quick_grenade',
+    smiter = 'content/ui/materials/icons/weapons/actions/smiter',
+    special_attack = 'content/ui/materials/icons/weapons/actions/special_attack',
+    special_bullet = 'content/ui/materials/icons/weapons/actions/special_bullet',
+    tank = 'content/ui/materials/icons/weapons/actions/tank',
+    vent = 'content/ui/materials/icons/weapons/actions/vent',
+}
+
 -- Bundles the weapon action gestalt icons (content/ui/materials/icons/weapons/actions/*)
 -- used by the chain overview. Same package CombatStats loads for its buff icons.
 local ICON_PACKAGES = {
@@ -500,7 +520,8 @@ local function _make_chain_row(self, title, chain, width)
     local icon_area_x = width * 0.3 + 10
     local step = CHAIN_ICON_SIZE + CHAIN_ICON_SPACING
     for i = 1, #chain do
-        local icon = Utils.gestalt_icon(chain[i])
+        local gestalt = chain[i]
+        local icon = gestalt and GESTALT_ICONS[gestalt] or nil
         if icon then
             local x = icon_area_x + (i - 1) * step
             passes[#passes + 1] = {

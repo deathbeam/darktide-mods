@@ -11,9 +11,28 @@ local UISettings = mod:original_require('scripts/settings/ui/ui_settings')
 local WeaponHandlingTemplates =
     mod:original_require('scripts/settings/equipment/weapon_handling_templates/weapon_handling_templates')
 local WeaponTweakTemplates = mod:original_require('scripts/extension_systems/weapon/utilities/weapon_tweak_templates')
+
 local FALLBACK_LERP = 0.5
 local DEFAULT_POWER_LEVEL = 500
-local GESTALT_TOKENS = { 'smiter', 'linesman', 'tank', 'ninja_fencer' }
+
+local GESTALT_TOKENS = {
+    'smiter',
+    'linesman',
+    'tank',
+    'ninja_fencer',
+}
+
+local DIRECTION_TOKENS = {
+    left = 'left',
+    right = 'right',
+    cross = 'cross',
+    up = 'up',
+    down = 'down',
+    stab = 'thrust',
+    thrust = 'thrust',
+    push = 'thrust',
+    pull = 'thrust',
+}
 
 local function _localize_or_prettify(loc_id, key)
     local localized = mod:localize(loc_id)
@@ -74,68 +93,52 @@ function WeaponStatsUtils.friendly_action_label(action_name)
     return prettified
 end
 
--- Attack swing direction parsed from the action's anim_event token. Darktide encodes
--- the swing direction in the animation name rather than a dedicated field, e.g.
--- attack_left_diagonal_down, attack_swing_heavy_right_up, attack_down_left.
--- Returns one of "left", "right", "down", "up", or nil (push/special/stab/etc).
-function WeaponStatsUtils.anim_event_direction(anim_event)
-    if type(anim_event) ~= 'string' then
-        return nil
+function WeaponStatsUtils.action_directions(action)
+    if type(action) ~= 'table' then
+        return {}
     end
 
-    local lowered = anim_event:lower()
-    local has_left = lowered:find('left', 1, true) ~= nil
-    local has_right = lowered:find('right', 1, true) ~= nil
-
-    -- left/right are unambiguous substrings. up/down are matched as tokens
-    -- (preceded and followed by '_' or string bounds) to avoid false positives
-    -- like "followup", "follow_up", "uppercut".
-    if has_left and not has_right then
-        return 'left'
-    end
-    if has_right and not has_left then
-        return 'right'
+    local override = action.attack_direction_override
+    if type(override) == 'string' then
+        local dir = DIRECTION_TOKENS[override:lower()]
+        if dir then
+            return { [dir] = true }
+        end
     end
 
-    -- up/down only count as a direction when they sit at a '_' token boundary,
-    -- so "followup"/"follow_up"/"uppercut" don't false-positive.
-    if lowered:match('_down_') or lowered:match('_down$') or lowered:match('^down_') or lowered == 'down' then
-        return 'down'
+    local collected = {}
+    for _, field in ipairs({ 'anim_event', 'anim_event_3p' }) do
+        local value = action[field]
+        if type(value) == 'string' then
+            for token in value:lower():gmatch('[^_]+') do
+                local dir = DIRECTION_TOKENS[token]
+                if dir then
+                    collected[dir] = true
+                end
+            end
+        end
     end
-    if
-        (lowered:match('_up_') or lowered:match('_up$') or lowered:match('^up_') or lowered == 'up')
-        and not lowered:match('follow_up')
-    then
-        return 'up'
+
+    local dirs = {}
+    if collected.thrust then
+        dirs.thrust = true
     end
-
-    return nil
-end
-
--- Gestalt icon texture for an attack-chain entry (smiter/linesman/tank/ninja_fencer/...).
--- Mirrors UISettings.weapon_action_type_icons so the chain overview matches the in-game card.
-local GESTALT_ICONS = {
-    activate = 'content/ui/materials/icons/weapons/actions/activate',
-    ads = 'content/ui/materials/icons/weapons/actions/ads',
-    brace = 'content/ui/materials/icons/weapons/actions/brace',
-    charge = 'content/ui/materials/icons/weapons/actions/charge',
-    defence = 'content/ui/materials/icons/weapons/actions/defence',
-    flashlight = 'content/ui/materials/icons/weapons/actions/flashlight',
-    hipfire = 'content/ui/materials/icons/weapons/actions/hipfire',
-    linesman = 'content/ui/materials/icons/weapons/actions/linesman',
-    melee = 'content/ui/materials/icons/weapons/actions/melee',
-    melee_hand = 'content/ui/materials/icons/weapons/actions/melee_hand',
-    ninja_fencer = 'content/ui/materials/icons/weapons/actions/ninjafencer',
-    quick_grenade = 'content/ui/materials/icons/weapons/actions/quick_grenade',
-    smiter = 'content/ui/materials/icons/weapons/actions/smiter',
-    special_attack = 'content/ui/materials/icons/weapons/actions/special_attack',
-    special_bullet = 'content/ui/materials/icons/weapons/actions/special_bullet',
-    tank = 'content/ui/materials/icons/weapons/actions/tank',
-    vent = 'content/ui/materials/icons/weapons/actions/vent',
-}
-
-function WeaponStatsUtils.gestalt_icon(gestalt)
-    return gestalt and GESTALT_ICONS[gestalt] or nil
+    local has_side = false
+    for dir in pairs(collected) do
+        if dir == 'left' or dir == 'right' or dir == 'cross' then
+            dirs[dir] = true
+            has_side = true
+        end
+    end
+    if not has_side then
+        if collected.up then
+            dirs.up = true
+        end
+        if collected.down then
+            dirs.down = true
+        end
+    end
+    return dirs
 end
 
 -- Weapon display names ----------------------------------------------------
@@ -340,7 +343,6 @@ end
 -- action_lerp for the call then restore; mirrors damage_profile.lua lerp_values().
 -- Shared empty table so current_target_settings_lerp_values is never nil (lerp_value_from_path indexes it).
 local _TARGET_SETTINGS_NO_LERP_VALUES = {}
-
 local function _with_target_lerps(action_lerp, target_index)
     local cur = action_lerp or {}
     local targets = cur.targets

@@ -12,6 +12,15 @@ return {
     mod_description = {
         en = 'Shows detailed weapon damage profiles, attack speed, crit, cleave, armor damage and more in the inventory.',
     },
+
+    -- Config
+    toggle_view_keybind = {
+        en = 'Toggle Stats View',
+        ['zh-cn'] = '切换统计视图',
+        ['zh-tw'] = '切換統計檢視',
+    },
+
+    -- Window
     search_placeholder = {
         en = 'Search weapons...',
     },
@@ -137,6 +146,12 @@ return {
     },
     direction_up = {
         en = 'Up',
+    },
+    direction_thrust = {
+        en = 'Thrust',
+    },
+    direction_cross = {
+        en = 'Cross',
     },
 
     -- Armor Types
