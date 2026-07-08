@@ -44,7 +44,6 @@ local WEAPON_STATS_MENU_BUTTON = {
         Managers.ui:open_view('weapon_stats_view')
     end,
 }
-
 mod:hook(CLASS.SystemView, '_setup_content_widgets', function(func, self, content, ...)
     local patched = content
     if content then
@@ -66,31 +65,9 @@ mod:hook(CLASS.SystemView, '_setup_content_widgets', function(func, self, conten
     return func(self, patched, ...)
 end)
 
-mod:hook(CLASS.InventoryWeaponsView, '_setup_weapon_options', function(func, self, ...)
-    -- The grid was sized for 3 buttons; grow it (grid + mask) to fit the 4th.
-    if self._definitions and self._definitions.blueprints and self._definitions.blueprints.button then
-        local button_size = self._definitions.blueprints.button.size
-        local top_padding = 30
-        local grid_height = (button_size[2] + 20) * 4 + top_padding
-        -- mask_size mirrors the original +40 padding around grid_size.
-        self._weapon_stats_grid_size = { grid_height, grid_height + 40 }
-    end
-
-    func(self, ...)
-
-    local element = self._weapon_options_element
-    if not element then
-        return
-    end
-
-    if self._weapon_stats_grid_size then
-        element:update_grid_height(self._weapon_stats_grid_size[1], self._weapon_stats_grid_size[2])
-        self._weapon_stats_grid_size = nil
-    end
-
-    -- Append the Weapon Stats button to the existing options layout.
-    local layout = element:grid_layout()
-    if layout then
+-- Add a button to the weapon options grid that opens the view
+mod:hook(CLASS.ViewElementGrid, 'present_grid_layout', function(func, self, layout, ...)
+    if self._element_view_id == 'inventory_weapons_view_weapon_options' and layout then
         local already_added = false
         for i = 1, #layout do
             if layout[i]._is_weapon_stats_button then
@@ -99,21 +76,28 @@ mod:hook(CLASS.InventoryWeaponsView, '_setup_weapon_options', function(func, sel
             end
         end
         if not already_added then
-            local new_entry = {
+            layout[#layout + 1] = {
                 _is_weapon_stats_button = true,
                 widget_type = 'button',
                 display_icon = '',
                 display_name = mod:localize('mod_name'),
                 callback = function()
-                    local previewed_item = self._previewed_item
+                    local parent = self._parent
+                    local previewed_item = parent and parent._previewed_item
                     local weapon_template_name = previewed_item and previewed_item.weapon_template
                     Managers.ui:open_view('weapon_stats_view', nil, nil, nil, nil, {
                         weapon_template_name = weapon_template_name,
                     })
                 end,
             }
-            table.insert(layout, new_entry)
-            element:present_grid_layout(layout, self._definitions.blueprints)
+            -- Grow the grid to fit the extra button.
+            local menu_settings = self._menu_settings
+            if menu_settings then
+                local new_height = #layout * 86
+                menu_settings.grid_size[2] = new_height
+                menu_settings.mask_size[2] = new_height
+            end
         end
     end
+    return func(self, layout, ...)
 end)
