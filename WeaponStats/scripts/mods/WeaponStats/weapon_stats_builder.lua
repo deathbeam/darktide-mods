@@ -780,7 +780,7 @@ local function build_mobility_stats(records, weapon_tweak_templates)
     end
 
     if stamina then
-        add_num('stat_stamina', stamina.stamina_modifier, '%+.2f')
+        add_num('stat_stamina', stamina.stamina_modifier, '%.2f')
         local block = stamina.block_cost_default
         if type(block) == 'table' and type(block.inner) == 'number' and type(block.outer) == 'number' then
             if block.inner ~= 0 or block.outer ~= 0 then
@@ -790,8 +790,8 @@ local function build_mobility_stats(records, weapon_tweak_templates)
                 }
             end
         end
-        add_num('stat_push_cost', stamina.push_cost and -stamina.push_cost, '%+.2f')
-        add_num('stat_sprint_cost', stamina.sprint_cost_per_second and -stamina.sprint_cost_per_second, '%+.2f/s')
+        add_num('stat_push_cost', stamina.push_cost, '%.2f')
+        add_num('stat_sprint_cost', stamina.sprint_cost_per_second, '%.2f/s')
     end
 
     if sprint then
