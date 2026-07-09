@@ -105,7 +105,7 @@ mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, .
             not mod:get('only_in_psykhanium')
             or (mission_name == 'tg_shooting_range' or mission_name == 'tg_training_grounds')
         then
-            local player = Managers.player:local_player(1)
+            local player = Managers.player and Managers.player:local_player_safe(1)
             local class_name = player and player:archetype_name()
             mod.tracker:start(mission_name, class_name)
         end
@@ -163,7 +163,7 @@ mod:hook(
         ...
     )
         if mod.tracker:is_tracking() then
-            local player = Managers.player:local_player_safe(1)
+            local player = Managers.player and Managers.player:local_player_safe(1)
             if player then
                 local player_unit = player.player_unit
                 if player_unit and attacking_unit == player_unit and ALIVE[attacked_unit] then

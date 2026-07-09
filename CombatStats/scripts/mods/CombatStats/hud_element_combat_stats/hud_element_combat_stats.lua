@@ -45,7 +45,8 @@ function HudElementCombatStats:_update_position()
 end
 
 function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input_service)
-    if not is_hud_enabled() then
+    self._hud_enabled = is_hud_enabled()
+    if not self._hud_enabled then
         return
     end
 
@@ -64,23 +65,27 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
     local stats = session_data.stats
     local duration = session_data.duration
 
+    -- Duration and DPS advance every frame.
     widget.content.duration_text = string.format('%s: %.1fs', mod:localize('time'), duration)
-
-    local kill_text = string.format('%s: %d', mod:localize('kills'), stats.total_kills)
-    local kill_details = {}
-    for breed_type, count in pairs(stats.kills_by_type) do
-        table.insert(kill_details, string.format('%s:%d', breed_type:sub(1, 1):upper(), count))
-    end
-    if #kill_details > 0 then
-        kill_text = kill_text .. ' (' .. table.concat(kill_details, ' ') .. ')'
-    end
-    widget.content.kills_text = kill_text
-
     if duration > 0 and stats.total_damage > 0 then
         local dps = stats.total_damage / duration
         widget.content.dps_text = string.format('%.0f %s', dps, mod:localize('dps'))
     else
         widget.content.dps_text = string.format('0 %s', mod:localize('dps'))
+    end
+
+    -- Kills breakdown only changes when total_kills changes.
+    if self._last_total_kills ~= stats.total_kills then
+        self._last_total_kills = stats.total_kills
+        local kill_text = string.format('%s: %d', mod:localize('kills'), stats.total_kills)
+        local kill_details = {}
+        for breed_type, count in pairs(stats.kills_by_type) do
+            kill_details[#kill_details + 1] = string.format('%s:%d', breed_type:sub(1, 1):upper(), count)
+        end
+        if #kill_details > 0 then
+            kill_text = kill_text .. ' (' .. table.concat(kill_details, ' ') .. ')'
+        end
+        widget.content.kills_text = kill_text
     end
 
     if self._last_total_damage == stats.total_damage and self._last_total_hits == stats.total_hits then
@@ -198,7 +203,7 @@ function HudElementCombatStats:update(dt, t, ui_renderer, render_settings, input
 end
 
 function HudElementCombatStats:draw(dt, t, ui_renderer, render_settings, input_service)
-    if not is_hud_enabled() then
+    if not self._hud_enabled then
         return
     end
 

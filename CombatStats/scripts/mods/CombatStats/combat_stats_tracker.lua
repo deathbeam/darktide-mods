@@ -113,9 +113,14 @@ function CombatStatsTracker:reset()
     })
     self._active_engagements_by_unit = {}
     self._engagements_by_unit = {}
+    self._session_view = nil
 end
 
 function CombatStatsTracker:get_time()
+    local cached = self._current_time
+    if cached then
+        return cached
+    end
     return Managers.time and Managers.time:has_timer('gameplay') and Managers.time:time('gameplay') or 0
 end
 
@@ -193,11 +198,13 @@ function CombatStatsTracker:get_session_stats()
         total = total + (self:get_time() - self._last_combat_start)
     end
 
-    return {
-        duration = total,
-        buffs = self._buffs,
-        stats = self._session_stats,
-    }
+    local view = self._session_view
+    if not view then
+        view = { duration = 0, buffs = self._buffs, stats = self._session_stats }
+        self._session_view = view
+    end
+    view.duration = total
+    return view
 end
 
 function CombatStatsTracker:get_engagement_stats()
@@ -390,6 +397,7 @@ function CombatStatsTracker:_update_active_engagements()
     end
 
     local current_time = self:get_time()
+    local timeout = mod:get('engagement_timeout')
 
     for unit, engagement in pairs(self._active_engagements_by_unit) do
         local should_end = false
@@ -398,7 +406,7 @@ function CombatStatsTracker:_update_active_engagements()
             should_end = true
         elseif engagement.last_damage_time then
             local time_since_damage = current_time - engagement.last_damage_time
-            if time_since_damage >= mod:get('engagement_timeout') then
+            if time_since_damage >= timeout then
                 should_end = true
             end
         end
@@ -416,7 +424,13 @@ function CombatStatsTracker:_update_buffs(active_buffs_data, hidden_buff_data, d
         return
     end
 
-    local templates = {}
+    local templates = self._buff_templates_set
+    if templates then
+        table.clear(templates)
+    else
+        templates = {}
+        self._buff_templates_set = templates
+    end
 
     if active_buffs_data then
         for i = 1, #active_buffs_data do
@@ -469,8 +483,11 @@ function CombatStatsTracker:_update_buffs(active_buffs_data, hidden_buff_data, d
 end
 
 function CombatStatsTracker:update()
+    -- Seed the per-frame time cache so all calls during this update share one manager lookup.
+    self._current_time = Managers.time and Managers.time:has_timer('gameplay') and Managers.time:time('gameplay')
     self:_update_active_engagements()
     self:_update_combat()
+    self._current_time = nil
 end
 
 return CombatStatsTracker
