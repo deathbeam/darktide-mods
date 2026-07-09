@@ -243,21 +243,48 @@ local function _start_broker_autostim()
     return true
 end
 
-local function _is_quick_throw_grenade()
+local function _grenade_template()
     local player_unit = _get_player_unit()
     if not player_unit then
-        return false
+        return nil
     end
     local weapon_extension = ScriptUnit.has_extension(player_unit, 'weapon_system')
     local weapons = weapon_extension and weapon_extension._weapons
     local weapon = weapons and weapons.slot_grenade_ability
     local weapon_template = weapon and weapon.weapon_template
+    return weapon_template
+end
+
+local function _is_quick_throw_grenade(weapon_template)
+    local grenade = weapon_template and weapon_template.name
+    return grenade == 'zealot_throwing_knives' or grenade == 'quick_flash_grenade'
+end
+
+local function _is_auto_throw_eligible(weapon_template)
     if not weapon_template then
         return false
     end
-    local grenade = weapon_template.name
-    if grenade == 'zealot_throwing_knives' or grenade == 'quick_flash_grenade' then
-        return true
+    local action_inputs = weapon_template.action_inputs
+    if not action_inputs then
+        return false
+    end
+    for _, input_def in pairs(action_inputs) do
+        local sequence = input_def.input_sequence
+        if sequence then
+            for _, step in ipairs(sequence) do
+                if step.input == 'action_one_pressed' then
+                    return true
+                end
+                local inputs = step.inputs
+                if inputs then
+                    for _, sub in ipairs(inputs) do
+                        if sub.input == 'action_one_pressed' then
+                            return true
+                        end
+                    end
+                end
+            end
+        end
     end
     return false
 end
@@ -334,7 +361,13 @@ mod:hook(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(func, self
         end
 
         -- Start auto throw for grenades if enabled
-        if auto_blitz_enabled and slot_name == SLOT_GRENADE and not _is_quick_throw_grenade() then
+        local weapon_template = _grenade_template()
+        if
+            auto_blitz_enabled
+            and slot_name == SLOT_GRENADE
+            and not _is_quick_throw_grenade(weapon_template)
+            and _is_auto_throw_eligible(weapon_template)
+        then
             switch_to_waiting = true
             skip_wield_action = true
         end
