@@ -66,7 +66,7 @@ local function add_damage(stats, actual_damage, overkill_damage, attack_type, is
         end
     elseif attack_type == 'explosion' then
         stats.explosion_damage = stats.explosion_damage + actual_damage
-    elseif attack_type == 'companion_dog' then
+    elseif attack_type == 'companion' then
         stats.companion_damage = stats.companion_damage + actual_damage
     elseif attack_type == 'arc' then
         stats.arc_damage = stats.arc_damage + actual_damage

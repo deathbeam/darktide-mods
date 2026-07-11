@@ -172,10 +172,16 @@ mod:hook(
                     if breed then
                         mod.tracker:_start_enemy_engagement(attacked_unit, breed)
 
+                        local damage_profile_name = damage_profile and damage_profile.name
+                        local effective_attack_type = attack_type
+                        if damage_profile_name and damage_profile_name:find('companion') then
+                            effective_attack_type = 'companion'
+                        end
+
                         mod.tracker:_track_enemy_damage(
                             attacked_unit,
                             damage,
-                            attack_type,
+                            effective_attack_type,
                             is_critical_strike,
                             hit_weakspot,
                             damage_profile and damage_profile.name,
