@@ -1,5 +1,7 @@
 local mod = get_mod('CombatStats')
 
+local Breed = mod:original_require('scripts/utilities/breed')
+
 local CombatStatsTracker = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_tracker')
 local CombatStatsHistory = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_history')
 local CombatStatsUtils = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_utils')
@@ -166,31 +168,44 @@ mod:hook(
             local player = Managers.player and Managers.player:local_player_safe(1)
             if player then
                 local player_unit = player.player_unit
-                if player_unit and attacking_unit == player_unit and ALIVE[attacked_unit] then
-                    local unit_data_extension = ScriptUnit.has_extension(attacked_unit, 'unit_data_system')
-                    local breed = unit_data_extension and unit_data_extension:breed()
-                    if breed then
-                        mod.tracker:_start_enemy_engagement(attacked_unit, breed)
+                local player_unit_spawn_manager = Managers.state and Managers.state.player_unit_spawn
+                local attacker_owner = attacking_unit
+                    and player_unit_spawn_manager
+                    and player_unit_spawn_manager:owner(attacking_unit)
 
-                        local damage_profile_name = damage_profile and damage_profile.name
-                        local effective_attack_type = attack_type
-                        if damage_profile_name and damage_profile_name:find('companion') then
-                            effective_attack_type = 'companion'
-                        end
+                local attacked_breed = ALIVE[attacked_unit]
+                        and ScriptUnit.has_extension(attacked_unit, 'unit_data_system')
+                    or nil
+                attacked_breed = attacked_breed and attacked_breed:breed()
 
-                        mod.tracker:_track_enemy_damage(
-                            attacked_unit,
-                            damage,
-                            effective_attack_type,
-                            is_critical_strike,
-                            hit_weakspot,
-                            damage_profile and damage_profile.name,
-                            attack_result
-                        )
+                -- Update the HP ledger for any player hit so teammate damage is reflected.
+                local actual_damage, overkill_damage = damage, 0
+                if attacker_owner and Breed.is_minion(attacked_breed) then
+                    actual_damage, overkill_damage =
+                        mod.tracker:update_enemy_health(attacked_unit, damage, attack_result)
+                end
 
-                        if attack_result == 'died' then
-                            mod.tracker:_finish_enemy_engagement(attacked_unit, true)
-                        end
+                if player_unit and attacking_unit == player_unit and attacked_breed then
+                    mod.tracker:start_enemy_engagement(attacked_unit, attacked_breed)
+
+                    local damage_profile_name = damage_profile and damage_profile.name
+                    local effective_attack_type = damage_profile_name
+                            and damage_profile_name:find('companion')
+                            and 'companion'
+                        or attack_type
+
+                    mod.tracker:track_enemy_damage(
+                        attacked_unit,
+                        actual_damage,
+                        overkill_damage,
+                        effective_attack_type,
+                        is_critical_strike,
+                        hit_weakspot,
+                        damage_profile_name
+                    )
+
+                    if attack_result == 'died' then
+                        mod.tracker:finish_enemy_engagement(attacked_unit, true)
                     end
                 elseif
                     player_unit
@@ -201,7 +216,7 @@ mod:hook(
                     local unit_data_extension = ScriptUnit.has_extension(attacking_unit, 'unit_data_system')
                     local breed = unit_data_extension and unit_data_extension:breed()
                     if breed then
-                        mod.tracker:_start_enemy_engagement(attacking_unit, breed)
+                        mod.tracker:start_enemy_engagement(attacking_unit, breed)
                     end
                 end
             end
@@ -225,6 +240,14 @@ mod:hook(
     end
 )
 
+-- Seed at full max_health on spawn; the husk damage field is racy on clients.
+mod:hook_safe(CLASS.HuskHealthExtension, 'init', function(self, extension_init_context, unit, ...)
+    if not mod.tracker:is_tracking() then
+        return
+    end
+    mod.tracker:register_enemy_health(unit, self)
+end)
+
 mod:hook_safe('HudElementPlayerBuffs', '_update_buffs', function(self)
     if not mod.tracker:is_tracking() then
         return
@@ -245,7 +268,7 @@ mod:hook_safe('HudElementPlayerBuffs', '_update_buffs', function(self)
         end
     end
 
-    mod.tracker:_update_buffs(active_buffs_data, hidden_buffs_data, dt)
+    mod.tracker:update_buffs(active_buffs_data, hidden_buffs_data, dt)
 end)
 
 function mod.on_setting_changed(setting_id)
