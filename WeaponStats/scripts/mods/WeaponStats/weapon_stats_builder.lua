@@ -936,13 +936,24 @@ local function build_stats(item)
         if skip_actions and skip_actions[action_name] then
             -- skip
         elseif #profiles > 0 then
-            local first_profile_entry = profiles[1]
-            local category = categorize(action_name, first_profile_entry, weapon_template)
-            if category then
+            -- Group profiles by category so special-active variants (e.g. a
+            -- chainsword's revved hits) land in their own section instead of
+            -- duplicating inside light/heavy attacks.
+            local by_category = {}
+            for _, profile_entry in ipairs(profiles) do
+                local category = categorize(action_name, profile_entry, weapon_template)
+                if category then
+                    by_category[category] = by_category[category] or {}
+                    by_category[category][#by_category[category] + 1] = profile_entry
+                end
+            end
+
+            for category, category_profiles in pairs(by_category) do
                 local existing = attacks[category]
+                local first_profile_entry = category_profiles[1]
                 local merged = false
                 for _, existing_attack in ipairs(existing) do
-                    if profiles_equivalent(existing_attack.profiles[1], profiles[1]) then
+                    if profiles_equivalent(existing_attack.profiles[1], first_profile_entry) then
                         table.insert(existing_attack.names, action_name)
                         table.insert(existing_attack.merged_actions, action)
                         merged = true
@@ -955,7 +966,7 @@ local function build_stats(item)
                         merged_actions = { action },
                         action = action,
                         profile = first_profile_entry,
-                        profiles = profiles,
+                        profiles = category_profiles,
                         is_ranged = is_ranged_weapon or category == 'ranged',
                     })
                 end
