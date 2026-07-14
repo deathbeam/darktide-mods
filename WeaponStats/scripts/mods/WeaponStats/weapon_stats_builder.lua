@@ -563,6 +563,7 @@ local function render_profile(records, ctx)
     local profile = ctx.profile
     local action_lerp = ctx.action_lerp
     local is_ranged = ctx.is_ranged
+    local power_level = ctx.power_level
 
     local target_settings, target_index = Utils.target_settings(profile)
     if not target_settings then
