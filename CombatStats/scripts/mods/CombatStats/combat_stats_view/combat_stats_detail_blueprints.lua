@@ -6,6 +6,7 @@ local TEXT_PADDING = 10
 
 local COLOR_LABEL = Color.terminal_text_body(255, true)
 local COLOR_BAR_BG = { 100, 50, 50, 50 }
+local COLOR_RULE = Color.terminal_corner(120, true)
 
 local function make_blueprints(width)
     local blueprints = {}
@@ -75,7 +76,7 @@ local function make_blueprints(width)
     }
 
     blueprints.section = {
-        size = { width, 30 },
+        size = { width, 36 },
         pass_template = {
             {
                 pass_type = 'text',
@@ -90,6 +91,15 @@ local function make_blueprints(width)
                     text_color = Color.terminal_text_header(255, true),
                     offset = { 0, 0, 2 },
                     size = { width, 30 },
+                },
+            },
+            {
+                pass_type = 'rect',
+                style_id = 'rule',
+                style = {
+                    color = COLOR_RULE,
+                    offset = { 0, 30, 1 },
+                    size = { width, 2 },
                 },
             },
         },

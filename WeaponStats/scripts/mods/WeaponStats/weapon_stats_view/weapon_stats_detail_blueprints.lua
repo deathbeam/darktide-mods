@@ -285,7 +285,7 @@ local function make_blueprints(width)
                 style_id = 'rule',
                 style = {
                     color = COLOR_RULE,
-                    offset = { 0, 0, 1 },
+                    offset = { 0, 30, 1 },
                     size = { width, 2 },
                 },
             },
@@ -458,9 +458,6 @@ local function make_blueprints(width)
                 end
             end
             return passes
-        end,
-        init = function(_, widget, element)
-            widget.content.title = element.title or ''
         end,
     }
 

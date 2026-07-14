@@ -316,7 +316,6 @@ function CombatStatsView:_setup_entries()
                     local enemy_entry = {
                         widget_type = 'stats_entry',
                         name = display_name,
-                        breed_name = breed_name,
                         type = engagement.type,
                         start_time = engagement.start_time,
                         end_time = engagement.end_time,

@@ -60,12 +60,10 @@ function WeaponStatsView:_build_weapon_list()
     for name, weapon_template in pairs(WeaponTemplates) do
         if weapon_template.base_stats ~= nil then
             local is_ranged = WeaponTemplate.is_ranged(weapon_template)
-            local display_name, sub_name, family = Utils.weapon_display_name(name)
+            local display_name, sub_name = Utils.weapon_display_name(name)
             list[#list + 1] = {
                 name = display_name or Utils.friendly_action_label(name),
-                display_name = display_name or Utils.friendly_action_label(name),
                 sub_display_name = sub_name,
-                family = family,
                 weapon_template = weapon_template,
                 is_ranged = is_ranged,
             }
@@ -76,7 +74,7 @@ function WeaponStatsView:_build_weapon_list()
         if a.is_ranged ~= b.is_ranged then
             return not a.is_ranged -- melee first
         end
-        return a.display_name:lower() < b.display_name:lower()
+        return a.name:lower() < b.name:lower()
     end)
 
     WeaponStatsView._weapon_list = list
@@ -240,7 +238,7 @@ function WeaponStatsView:_setup_entries()
     local entries = {}
     for i = 1, #self._weapon_list do
         local weapon = self._weapon_list[i]
-        local name = weapon.display_name
+        local name = weapon.name
         local sub_name = weapon.sub_display_name or ''
         local match = search_text == ''
             or name:lower():find(search_text, 1, true)
@@ -249,8 +247,7 @@ function WeaponStatsView:_setup_entries()
         if match then
             local entry = {
                 widget_type = 'weapon_entry',
-                name = weapon.display_name,
-                display_name = weapon.display_name,
+                name = weapon.name,
                 sub_display_name = weapon.sub_display_name,
                 weapon = weapon,
                 is_ranged = weapon.is_ranged,
