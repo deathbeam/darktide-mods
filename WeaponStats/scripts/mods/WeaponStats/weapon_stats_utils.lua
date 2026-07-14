@@ -12,6 +12,7 @@ local WeaponHandlingTemplates =
     mod:original_require('scripts/settings/equipment/weapon_handling_templates/weapon_handling_templates')
 local WeaponTweakTemplates = mod:original_require('scripts/extension_systems/weapon/utilities/weapon_tweak_templates')
 
+-- Constants
 local FALLBACK_LERP = 0.5
 local DEFAULT_POWER_LEVEL = 500
 
@@ -33,6 +34,13 @@ local DIRECTION_TOKENS = {
     push = 'thrust',
     pull = 'thrust',
 }
+
+local COMBO_CHAIN_INPUTS = { 'light_attack', 'heavy_attack' }
+local SPECIAL_CHAIN_INPUT = 'special_action'
+local PUSH_CHAIN_INPUTS = { 'push', 'push_follow_up' }
+local MODE_SWAP_PATTERNS = { '_activate', '_deactivate' }
+
+local _TARGET_SETTINGS_NO_LERP_VALUES = {}
 
 local function _localize_or_prettify(loc_id, key)
     local localized = mod:localize(loc_id)
@@ -93,6 +101,201 @@ function WeaponStatsUtils.friendly_action_label(action_name)
     return prettified
 end
 
+-- Combo action numbering
+
+local function _chain_targets(action, chain_input)
+    local chains = action and action.allowed_chain_actions
+    local entry = chains and chains[chain_input]
+    if type(entry) ~= 'table' then
+        return nil
+    end
+
+    if entry[1] ~= nil then
+        local out = {}
+        for i = 1, #entry do
+            local child = entry[i]
+            if type(child) == 'table' and type(child.action_name) == 'string' then
+                out[#out + 1] = child.action_name
+            end
+        end
+        return #out > 0 and out or nil
+    end
+
+    if type(entry.action_name) == 'string' then
+        return { entry.action_name }
+    end
+    return nil
+end
+
+local function _first_chain_target(action, chain_input)
+    local targets = _chain_targets(action, chain_input)
+    return targets and targets[1]
+end
+
+local function _combo_strength(action, action_name)
+    local strength = nil
+    for _, field in ipairs({ 'damage_profile', 'inner_damage_profile', 'outer_damage_profile' }) do
+        local ok, profile = pcall(function()
+            return type(action[field]) == 'table' and action[field]
+                or (field == 'damage_profile' and Action.damage_template(action))
+        end)
+        if ok and profile then
+            if profile.melee_attack_strength == 'heavy' then
+                return 'Heavy'
+            elseif profile.melee_attack_strength == 'light' then
+                strength = 'Light'
+            end
+        end
+    end
+    if strength then
+        return strength
+    end
+    if action_name and action_name:find('heavy', 1, true) then
+        return 'Heavy'
+    end
+    return nil
+end
+
+-- Walk a combo branch from start_sweep, numbering each sweep. Windups continue via
+-- the combo input; sweeps continue via start_attack (next windup) then the combo input.
+-- Rejoin (a late windup loops back to an earlier sweep) stops at a labelled action.
+-- Skipped actions are walked past without consuming a number.
+local function _walk_branch(actions, start_sweep, chain_input, label_for, names, skip)
+    local index = 0
+    local current = start_sweep
+    while current and not names[current] do
+        local action = actions[current]
+        if not action then
+            break
+        end
+
+        if action.kind == 'sweep' and not (skip and skip[current]) then
+            index = index + 1
+            names[current] = label_for(current, index)
+        end
+
+        if action.kind == 'windup' then
+            current = _first_chain_target(action, chain_input)
+        else
+            current = _first_chain_target(action, 'start_attack') or _first_chain_target(action, chain_input)
+        end
+    end
+end
+
+function WeaponStatsUtils.is_powered_mode(action_name)
+    return type(action_name) == 'string' and action_name:find('_special', 1, true) ~= nil
+end
+
+local function _label_for(chain_input, action_name)
+    local base = chain_input == 'light_attack' and 'Light' or 'Heavy'
+    if WeaponStatsUtils.is_powered_mode(action_name) then
+        return 'Special ' .. base
+    end
+    return base
+end
+
+-- Walk every wield start_attack branch so mode-swap weapons (base + powered mode) both
+-- get numbered. Each branch leads to a windup whose combo input is the first real sweep.
+local function _number_combo(actions, chain_input, names, skip)
+    local wield = actions.action_wield
+    if not wield then
+        return
+    end
+
+    for _, branch in ipairs(_chain_targets(wield, 'start_attack') or {}) do
+        local start_action = actions[branch]
+        if start_action and start_action.kind == 'windup' then
+            local first_sweep = _first_chain_target(start_action, chain_input)
+            if first_sweep and actions[first_sweep] and actions[first_sweep].kind == 'sweep' then
+                _walk_branch(actions, first_sweep, chain_input, function(action_name, index)
+                    return _label_for(chain_input, action_name) .. ' ' .. index
+                end, names, skip)
+            end
+        end
+    end
+end
+
+local function _number_specials(actions, names, skip)
+    local special_action_name = nil
+    for action_name, action in pairs(actions) do
+        if type(action) == 'table' and action.kind == 'sweep' then
+            local target = _first_chain_target(action, SPECIAL_CHAIN_INPUT)
+            if target and actions[target] and actions[target].kind == 'sweep' and not names[target] then
+                special_action_name = target
+            end
+        end
+    end
+
+    if not special_action_name then
+        return
+    end
+
+    _walk_branch(actions, special_action_name, SPECIAL_CHAIN_INPUT, function(action_name, index)
+        local strength = _combo_strength(actions[action_name], action_name)
+        local label = strength and ('Weapon Special ' .. strength) or 'Weapon Special'
+        return label .. ' ' .. index
+    end, names, skip)
+end
+
+local function _tag_push_attacks(actions, names)
+    local tagged = {}
+    for _source_name, source_action in pairs(actions) do
+        if type(source_action) == 'table' then
+            for _, input in ipairs(PUSH_CHAIN_INPUTS) do
+                local targets = _chain_targets(source_action, input)
+                if targets then
+                    for i = 1, #targets do
+                        local target = targets[i]
+                        local action = actions[target]
+                        if action and action.kind == 'sweep' and not names[target] then
+                            tagged[target] = true
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    for action_name in pairs(tagged) do
+        local strength = _combo_strength(actions[action_name], action_name)
+        local prefix = WeaponStatsUtils.is_powered_mode(action_name) and 'Special Push Attack' or 'Push Attack'
+        names[action_name] = strength and (prefix .. ' ' .. strength) or prefix
+    end
+end
+
+local function _is_mode_swap_utility(action_name)
+    for i = 1, #MODE_SWAP_PATTERNS do
+        if action_name:find(MODE_SWAP_PATTERNS[i], 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Returns {action_name -> display_name} and a skip set of mode-swap utility actions.
+function WeaponStatsUtils.action_display_names(weapon_template)
+    local actions = weapon_template and weapon_template.actions
+    if type(actions) ~= 'table' then
+        return {}, {}
+    end
+
+    local names = {}
+    local skip = {}
+    for action_name in pairs(actions) do
+        if _is_mode_swap_utility(action_name) then
+            skip[action_name] = true
+        end
+    end
+
+    for _, input in ipairs(COMBO_CHAIN_INPUTS) do
+        _number_combo(actions, input, names, skip)
+    end
+    _number_specials(actions, names, skip)
+    _tag_push_attacks(actions, names)
+
+    return names, skip
+end
+
 function WeaponStatsUtils.action_directions(action)
     if type(action) ~= 'table' then
         return {}
@@ -141,7 +344,7 @@ function WeaponStatsUtils.action_directions(action)
     return dirs
 end
 
--- Weapon display names ----------------------------------------------------
+-- Weapon display names
 
 local function _safe_localize(text)
     if not text or text == '' or text == 'n/a' then
@@ -154,14 +357,12 @@ local function _safe_localize(text)
     return localized
 end
 
--- item.weapon_family/pattern/mark_display_name are each { loc_id = "..." }.
 local function _lore_name(item, field)
     local desc = item and item[field]
     local loc_id = desc and desc.loc_id
     return loc_id and _safe_localize(loc_id) or nil
 end
 
--- template_name -> { family, pattern, mark }. Cached on the module.
 local _weapon_name_cache
 local function _weapon_name_map()
     if _weapon_name_cache then
@@ -191,7 +392,6 @@ local function _weapon_name_map()
         end
     end
 
-    -- Fallback for templates not in weapon_patterns (bot/exotic weapons).
     local master_items = MasterItems and MasterItems.get_cached and MasterItems.get_cached()
     if master_items then
         for _id, item in pairs(master_items) do
@@ -217,8 +417,6 @@ function WeaponStatsUtils.attack_type_name(weapon_template, slot_key, damage_pro
         for i = 1, #GESTALT_TOKENS do
             local token = GESTALT_TOKENS[i]
             local token_len = #token
-            -- Match the gestalt as a whole underscore-delimited token in any position
-            -- (start / middle / end / whole name), never as a substring of another word.
             if
                 damage_profile_name == token
                 or damage_profile_name:sub(1, token_len + 1) == token .. '_'
@@ -231,7 +429,6 @@ function WeaponStatsUtils.attack_type_name(weapon_template, slot_key, damage_pro
         end
     end
 
-    -- No gestalt token => the slot's default gestalt.
     if not gestalt then
         local displayed = weapon_template and weapon_template.displayed_attacks
         local entry = displayed and displayed[slot_key]
@@ -244,7 +441,6 @@ function WeaponStatsUtils.attack_type_name(weapon_template, slot_key, damage_pro
     return _safe_localize('loc_gestalt_' .. gestalt) or _label('gestalt_', gestalt)
 end
 
--- Matches the in-game card: title = family, subtitle = pattern • mark.
 function WeaponStatsUtils.weapon_display_name(template_name)
     local map = _weapon_name_map()
     local entry = map[template_name]
@@ -269,7 +465,7 @@ function WeaponStatsUtils.weapon_display_name(template_name)
     return display_name, sub_display_name, family
 end
 
--- Damage profile helpers --------------------------------------------------
+-- Damage profile helpers
 
 function WeaponStatsUtils.lerp_entry(entry, lerp_value)
     if type(entry) ~= 'table' then
@@ -289,7 +485,6 @@ function WeaponStatsUtils.lerp_from_path(action_lerp, ...)
     return value
 end
 
--- lerp_values are keyed by action name, then optionally damage profile name.
 function WeaponStatsUtils.lerp_for_action(damage_profile_lerp_values, action_name, damage_profile)
     if not damage_profile_lerp_values then
         return nil
@@ -304,7 +499,6 @@ function WeaponStatsUtils.lerp_for_action(damage_profile_lerp_values, action_nam
     return cur
 end
 
--- Mirrors Action.stat_power_level so explosive/charged profiles use the right power.
 function WeaponStatsUtils.action_power_level(action, template_index)
     if Action and Action.stat_power_level then
         local ok, pl = pcall(Action.stat_power_level, action, template_index)
@@ -315,7 +509,6 @@ function WeaponStatsUtils.action_power_level(action, template_index)
     return action.power_level or DEFAULT_POWER_LEVEL
 end
 
--- Damage profile target index: targets[1] for melee, targets.default_target for ranged.
 function WeaponStatsUtils.target_settings(damage_profile)
     if not damage_profile or not damage_profile.targets then
         return damage_profile, nil
@@ -325,7 +518,6 @@ function WeaponStatsUtils.target_settings(damage_profile)
     return DamageProfile.target_settings(damage_profile, target_index), target_index
 end
 
--- Lerpable {lerp_basic, lerp_perfect} -> midpoint; scalars pass through.
 function WeaponStatsUtils.resolve_lerpable(value)
     if type(value) ~= 'table' then
         return value
@@ -338,11 +530,6 @@ function WeaponStatsUtils.resolve_lerpable(value)
     return nil
 end
 
--- DamageProfile helpers read current_target_settings_lerp_values off the lerp table (set by
--- DamageProfile.lerp_values when an attacker exists). With no attacker we patch it onto
--- action_lerp for the call then restore; mirrors damage_profile.lua lerp_values().
--- Shared empty table so current_target_settings_lerp_values is never nil (lerp_value_from_path indexes it).
-local _TARGET_SETTINGS_NO_LERP_VALUES = {}
 local function _with_target_lerps(action_lerp, target_index)
     local cur = action_lerp or {}
     local targets = cur.targets
@@ -369,7 +556,6 @@ function WeaponStatsUtils.base_powers(
 )
     local cur_lerps, prev = _with_target_lerps(action_lerp, target_index)
 
-    -- power_level_multiplier is applied by DamageCalculation.calculate, not base_ui_damage.
     local resolved_power_level = power_level or DEFAULT_POWER_LEVEL
     if target_settings.power_level_multiplier then
         local pl_lerp = WeaponStatsUtils.lerp_from_path(cur_lerps, 'targets', target_index, 'power_level_multiplier')
@@ -384,7 +570,7 @@ function WeaponStatsUtils.base_powers(
         damage_profile,
         target_settings,
         resolved_power_level,
-        1, -- charge_level (full)
+        1,
         dropoff_scalar,
         cur_lerps
     )
@@ -395,7 +581,6 @@ function WeaponStatsUtils.base_powers(
     return attack, impact
 end
 
--- Returns the additive-over-1 multiplier, e.g. 1.75 means +75% weakspot damage.
 function WeaponStatsUtils.finesse_multiplier(
     damage_profile,
     target_settings,
@@ -405,7 +590,6 @@ function WeaponStatsUtils.finesse_multiplier(
     target_index,
     armor_type
 )
-    -- armor_type selects the per-armor finesse_boost entry.
     armor_type = armor_type or ArmorSettings.types.unarmored
     local cur_lerps, prev = _with_target_lerps(action_lerp, target_index)
     local ok, mult = pcall(
@@ -444,8 +628,8 @@ function WeaponStatsUtils.armor_modifier(
         armor_type,
         is_crit,
         dropoff_scalar,
-        false, -- armor_penetrating
-        1 -- charge_level (full)
+        false,
+        1
     )
     _restore_lerps(action_lerp, prev)
     if not ok or not mod then
@@ -468,8 +652,6 @@ function WeaponStatsUtils.ranges(damage_profile, action_lerp)
     return min_r, max_r
 end
 
--- 0 = point-blank (no falloff), 1 = at/inside max range (full falloff).
--- false when the profile has no ranges (melee).
 function WeaponStatsUtils.dropoff_scalar(hit_distance, damage_profile, action_lerp)
     local cur_lerps = action_lerp or {}
     local ok, scalar = pcall(DamageProfile.dropoff_scalar, hit_distance, damage_profile, cur_lerps)
@@ -478,8 +660,7 @@ function WeaponStatsUtils.dropoff_scalar(hit_distance, damage_profile, action_le
     end
     return scalar
 end
--- Cleave target count from the power-curve pipeline (PowerLevel.scale_power_level_to_power_type_curve
--- then cleave_distribution), mapped onto PowerLevelSettings.cleave_output min/max.
+
 local function _cleave_value(cleave_min, cleave_range, scaled_cleave_power_level, distribution, power_type, action_lerp)
     local dist = distribution and distribution[power_type]
 
@@ -525,9 +706,8 @@ function WeaponStatsUtils.cleave_values(profile, power_level, action_lerp)
     return attack, impact
 end
 
--- Extra damage applied alongside the main profile: the inner explosion (bolter/plasma,
--- weight 1) plus sticky ticks (chainswords, instances-1 normal + 1 last). Each entry
--- carries its own power level; the builder sums them weighted into the hit total.
+-- Extra damage applied alongside the main profile: inner explosion (bolter/plasma) plus
+-- sticky ticks (chainswords). Each entry carries its own power level.
 function WeaponStatsUtils.extra_damage_entries(action, main_profile, template_index, use_special_active)
     local entries = {}
 
@@ -575,7 +755,6 @@ function WeaponStatsUtils.extra_damage_entries(action, main_profile, template_in
     return #entries > 0 and entries or nil
 end
 
--- critical_strike.chance_modifier from weapon_handling
 function WeaponStatsUtils.crit_chance_modifier(action, weapon_template, weapon_tweak_templates, action_name)
     if type(action) ~= 'table' then
         return nil

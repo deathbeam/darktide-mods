@@ -12,6 +12,21 @@ local WeaponTemplate = mod:original_require('scripts/utilities/weapon/weapon_tem
 local Builder = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_builder')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
 
+local MAX_STAT_VALUE = 0.8
+local GRID_SPACING = { 4, 4 }
+local DETAIL_GRID_SPACING = { 0, 2 }
+local INDENT_PX = 18
+local STAT_ROW_HEIGHT = 21
+
+local TABLE_HEADER_HEIGHT = 26
+local TABLE_ROW_HEIGHT = 22
+local TABLE_NAME_WIDTH = 150
+local TABLE_FRAME_COLOR = Color.terminal_frame(180, true)
+local TABLE_CORNER_COLOR = Color.terminal_corner(180, true)
+local TABLE_BG_COLOR = Color.terminal_grid_background(90, true)
+local TABLE_HEADER_BG_COLOR = Color.terminal_grid_background(160, true)
+local TABLE_GRID_COLOR = Color.terminal_frame(50, true)
+
 local GESTALT_ICONS = {
     activate = 'content/ui/materials/icons/weapons/actions/activate',
     ads = 'content/ui/materials/icons/weapons/actions/ads',
@@ -66,14 +81,6 @@ local function _release_icon_packages(loaded)
     end
 end
 
--- Items cap at 0.8 (items.lua max_weapon_preview).
-local MAX_STAT_VALUE = 0.8
-
-local GRID_SPACING = { 4, 4 }
-local DETAIL_GRID_SPACING = { 0, 2 }
-local INDENT_PX = 18
-local STAT_ROW_HEIGHT = 21
-
 local WeaponStatsView = class('WeaponStatsView', 'BaseView')
 
 -- Cached on the class so re-opening the view is instant.
@@ -88,7 +95,7 @@ function WeaponStatsView:_build_weapon_list()
             local is_ranged = WeaponTemplate.is_ranged(weapon_template)
             local display_name, sub_name, family = Utils.weapon_display_name(name)
             list[#list + 1] = {
-                name = name,
+                name = display_name or Utils.friendly_action_label(name),
                 display_name = display_name or Utils.friendly_action_label(name),
                 sub_display_name = sub_name,
                 family = family,
@@ -225,10 +232,11 @@ function WeaponStatsView:_setup_entries()
         if match then
             local entry = {
                 widget_type = 'weapon_entry',
-                name = name,
+                name = weapon.display_name,
+                display_name = weapon.display_name,
+                sub_display_name = weapon.sub_display_name,
                 weapon = weapon,
                 is_ranged = weapon.is_ranged,
-                sub_display_name = weapon.sub_display_name,
                 pressed_function = function(parent, widget, entry)
                     parent:_select_entry(widget, entry)
                 end,
@@ -466,15 +474,6 @@ local function _make_stat_row(self, label, value, label_color, width, indent, va
     local widget = self:_create_widget('detail_stat_' .. #self._detail_widgets, widget_def)
     self._detail_widgets[#self._detail_widgets + 1] = widget
 end
-
-local TABLE_HEADER_HEIGHT = 26
-local TABLE_ROW_HEIGHT = 22
-local TABLE_NAME_WIDTH = 150
-local TABLE_FRAME_COLOR = Color.terminal_frame(180, true)
-local TABLE_CORNER_COLOR = Color.terminal_corner(180, true)
-local TABLE_BG_COLOR = Color.terminal_grid_background(90, true)
-local TABLE_HEADER_BG_COLOR = Color.terminal_grid_background(160, true)
-local TABLE_GRID_COLOR = Color.terminal_frame(50, true)
 
 -- Single bordered widget: header row + one row per entry, drawn as passes positioned by
 -- absolute Y so the whole grid reads as one table. No striping; a thin frame and column
