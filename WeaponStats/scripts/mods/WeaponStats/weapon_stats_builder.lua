@@ -46,8 +46,6 @@ local CHAIN_SLOT_ORDER = {
     'extra',
 }
 
--- Records ----------------------------------------------------------------
-
 local function add(records, rec)
     records[#records + 1] = rec
 end
@@ -99,18 +97,16 @@ local function add_direction_stat(records, actions)
     end
 end
 
-local function add_table(records, header, columns, rows)
+local function add_table(records, columns, rows)
     add(records, {
         type = 'table',
-        header = header,
-        color = COLORS.HEADER,
         columns = columns,
         rows = rows,
     })
 end
 
-local function add_spacer(records, height)
-    add(records, { type = 'spacer', height = height or 8 })
+local function add_spacer(records, size)
+    add(records, { type = 'spacer', size = size or 'tight' })
 end
 
 local function add_chain(records, title, chain)
@@ -375,13 +371,11 @@ end
 
 -- Armor damage modifiers as a single table: attack and impact, each normal and crit.
 -- Ranged profiles carry near/far ADM (point-blank vs max-range falloff); melee has a single value.
-local function render_adm_table(records, profile, target_settings, action_lerp, is_ranged, target_index)
-    local near_dropoff, far_dropoff
-    if is_ranged then
-        near_dropoff = 0
-        far_dropoff = 1
-    end
 
+-- Per-armor raw ADM values. Ranged carries both near and far; melee uses near only.
+local function _compute_adm_values(profile, target_settings, action_lerp, is_ranged, target_index)
+    local near_dropoff = is_ranged and 0 or nil
+    local far_dropoff = is_ranged and 1 or nil
     local any_crit = false
     local rows = {}
 
@@ -493,62 +487,74 @@ local function render_adm_table(records, profile, target_settings, action_lerp, 
     end
 
     if #rows == 0 then
+        return nil
+    end
+
+    return { rows = rows, any_crit = any_crit }
+end
+
+local function _fmt_pct(value)
+    return string.format('%.0f%%', value * 100)
+end
+
+-- Formats the computed ADM values into a generic table record. Decides whether crit
+-- columns are worth showing and builds near→far cells for ranged profiles.
+local function render_adm_table(records, profile, target_settings, action_lerp, is_ranged, target_index)
+    local data = _compute_adm_values(profile, target_settings, action_lerp, is_ranged, target_index)
+    if not data then
         return
     end
 
-    local columns = {
-        { label = mod:localize('stat_adm'), color = COLORS.DAMAGE },
-        { label = mod:localize('stat_adm') .. ' ' .. mod:localize('stat_crit'), color = COLORS.CRIT },
-        { label = mod:localize('stat_impact'), color = COLORS.DAMAGE },
-        { label = mod:localize('stat_impact') .. ' ' .. mod:localize('stat_crit'), color = COLORS.CRIT },
-    }
-    if not any_crit then
+    local rows = data.rows
+    local any_crit = data.any_crit
+
+    local adm_label = mod:localize('stat_adm')
+    local impact_label = mod:localize('stat_impact')
+    local crit_label = mod:localize('stat_crit')
+    local columns
+    if any_crit then
         columns = {
-            { label = mod:localize('stat_adm'), color = COLORS.DAMAGE },
-            { label = mod:localize('stat_impact'), color = COLORS.DAMAGE },
+            { label = adm_label, color = COLORS.DAMAGE },
+            { label = adm_label .. ' ' .. crit_label, color = COLORS.CRIT },
+            { label = impact_label, color = COLORS.DAMAGE },
+            { label = impact_label .. ' ' .. crit_label, color = COLORS.CRIT },
+        }
+    else
+        columns = {
+            { label = adm_label, color = COLORS.DAMAGE },
+            { label = impact_label, color = COLORS.DAMAGE },
         }
     end
 
-    local function fmt_pct(value)
-        return string.format('%.0f%%', value * 100)
+    -- Ranged cells append a near→far pair; melee cells use a single value.
+    local function cell(value, far_value, color)
+        local text = _fmt_pct(value)
+        if far_value ~= nil then
+            text = text .. ' → ' .. _fmt_pct(far_value)
+        end
+        return { text = text, color = color }
     end
 
     for i = 1, #rows do
         local row = rows[i]
         local cells
-        if is_ranged then
-            if any_crit then
-                cells = {
-                    { text = fmt_pct(row.attack) .. ' → ' .. fmt_pct(row.attack_far), color = COLORS.DAMAGE },
-                    { text = fmt_pct(row.crit_attack) .. ' → ' .. fmt_pct(row.crit_attack_far), color = COLORS.CRIT },
-                    { text = fmt_pct(row.impact) .. ' → ' .. fmt_pct(row.impact_far), color = COLORS.DAMAGE },
-                    { text = fmt_pct(row.crit_impact) .. ' → ' .. fmt_pct(row.crit_impact_far), color = COLORS.CRIT },
-                }
-            else
-                cells = {
-                    { text = fmt_pct(row.attack) .. ' → ' .. fmt_pct(row.attack_far), color = COLORS.DAMAGE },
-                    { text = fmt_pct(row.impact) .. ' → ' .. fmt_pct(row.impact_far), color = COLORS.DAMAGE },
-                }
-            end
+        if any_crit then
+            cells = {
+                cell(row.attack, row.attack_far, COLORS.DAMAGE),
+                cell(row.crit_attack, row.crit_attack_far, COLORS.CRIT),
+                cell(row.impact, row.impact_far, COLORS.DAMAGE),
+                cell(row.crit_impact, row.crit_impact_far, COLORS.CRIT),
+            }
         else
-            if any_crit then
-                cells = {
-                    { text = fmt_pct(row.attack), color = COLORS.DAMAGE },
-                    { text = fmt_pct(row.crit_attack), color = COLORS.CRIT },
-                    { text = fmt_pct(row.impact), color = COLORS.DAMAGE },
-                    { text = fmt_pct(row.crit_impact), color = COLORS.CRIT },
-                }
-            else
-                cells = {
-                    { text = fmt_pct(row.attack), color = COLORS.DAMAGE },
-                    { text = fmt_pct(row.impact), color = COLORS.DAMAGE },
-                }
-            end
+            cells = {
+                cell(row.attack, row.attack_far, COLORS.DAMAGE),
+                cell(row.impact, row.impact_far, COLORS.DAMAGE),
+            }
         end
         row.cells = cells
     end
 
-    add_table(records, mod:localize('stat_adm'), columns, rows)
+    add_table(records, columns, rows)
 end
 
 local function render_profile(records, ctx)
@@ -790,7 +796,7 @@ local function render_attack(
         end
     end
 
-    add_spacer(records, 10)
+    add_spacer(records, 'group')
 end
 
 -- Special-active attack profiles (chainsword revved, power sword charged, ...) are
@@ -802,7 +808,7 @@ local function render_deferred_special(records, deferred)
     end
 
     add_section(records, mod:localize('header_special_active'))
-    add_spacer(records, 4)
+    add_spacer(records, 'tight')
 
     for i = 1, #deferred do
         local entry = deferred[i]
@@ -822,7 +828,7 @@ local function render_deferred_special(records, deferred)
             weapon_tweak_templates = entry.weapon_tweak_templates,
             weapon_template = entry.weapon_template,
         })
-        add_spacer(records, 10)
+        add_spacer(records, 'group')
     end
 end
 
@@ -885,11 +891,11 @@ local function build_mobility_stats(records, weapon_tweak_templates)
     end
 
     add_section(records, mod:localize('header_mobility'))
-    add_spacer(records, 4)
+    add_spacer(records, 'tight')
     for i = 1, #pending do
         add_stat(records, pending[i][1], pending[i][2], COLORS.META)
     end
-    add_spacer(records, 10)
+    add_spacer(records, 'group')
 end
 
 local function build_chain_overview(records, weapon_template)
@@ -910,7 +916,7 @@ local function build_chain_overview(records, weapon_template)
     end
 
     add_section(records, mod:localize('header_attack_pattern'))
-    add_spacer(records, 4)
+    add_spacer(records, 'tight')
 
     for _, slot in ipairs(CHAIN_SLOT_ORDER) do
         local data = displayed[slot]
@@ -921,7 +927,7 @@ local function build_chain_overview(records, weapon_template)
         end
     end
 
-    add_spacer(records, 10)
+    add_spacer(records, 'group')
 end
 
 local function build_stats(item)
@@ -1007,7 +1013,7 @@ local function build_stats(item)
                 header = mod:localize('header_special_attacks')
             end
             add_section(records, header)
-            add_spacer(records, 4)
+            add_spacer(records, 'tight')
             for _, attack_data in ipairs(category_attacks) do
                 render_attack(
                     records,

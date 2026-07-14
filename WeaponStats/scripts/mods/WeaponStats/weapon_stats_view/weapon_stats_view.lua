@@ -683,14 +683,19 @@ local function _make_chain_row(self, title, chain, width)
     self._detail_widgets[#self._detail_widgets + 1] = widget
 end
 
+local SPACER_HEIGHT = {
+    group = 10,
+    tight = 4,
+}
+
 local function _render_record(self, record, width, stripe_state)
     local rtype = record.type
     if rtype == 'spacer' then
-        _make_spacer(self, record.height, width)
+        _make_spacer(self, SPACER_HEIGHT[record.size or 'tight'] or 8, width)
     elseif rtype == 'section' then
         _make_text_widget(self, record.text, 22, record.color, width, 30)
         _make_rule(self, width)
-        _make_spacer(self, 4, width)
+        _make_spacer(self, SPACER_HEIGHT.tight, width)
     elseif rtype == 'attack' then
         stripe_state.count = 0
         _make_spacer(self, 2, width)
