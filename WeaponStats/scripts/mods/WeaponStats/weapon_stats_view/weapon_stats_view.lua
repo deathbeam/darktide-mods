@@ -287,7 +287,7 @@ function WeaponStatsView:_cb_on_list_presented()
     local match_index = nil
     if initial_template then
         for i = 1, #entries do
-            if entries[i].weapon.name == initial_template then
+            if entries[i].weapon.weapon_template.name == initial_template then
                 match_index = i
                 break
             end
@@ -295,6 +295,7 @@ function WeaponStatsView:_cb_on_list_presented()
     end
     match_index = match_index or 1
     self._list_grid:select_grid_index(match_index)
+    self._list_grid:scroll_to_grid_index(match_index)
     self:_select_entry(entries[match_index])
     self._initial_weapon_template = nil
 end
