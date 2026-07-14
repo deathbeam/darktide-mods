@@ -611,47 +611,7 @@ local function render_profile(records, ctx)
         add_stat(records, mod:localize('stat_backstab'), string.format('%.0f%%', bonus * 100), COLORS.CRIT)
     end
 
-    local weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, false, target_index)
-    local crit_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, false, true, target_index)
-    local crit_weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, true, target_index)
-
-    local any_mult = (weakspot_mult and math.abs(weakspot_mult - 1) > 0.005)
-        or (crit_mult and math.abs(crit_mult - 1) > 0.005)
-    if any_mult then
-        add_subheader(records, mod:localize('stat_finesse_and_crit'))
-        if weakspot_mult and math.abs(weakspot_mult - 1) > 0.005 then
-            add_stat(records, mod:localize('stat_weakspot'), fmt_mult(weakspot_mult), COLORS.CRIT, 1)
-        end
-        if crit_mult and math.abs(crit_mult - 1) > 0.005 then
-            add_stat(records, mod:localize('stat_crit'), fmt_mult(crit_mult), COLORS.CRIT, 1)
-        end
-        if
-            crit_weakspot_mult
-            and math.abs(crit_weakspot_mult - math.max(weakspot_mult or 1, crit_mult or 1)) > 0.005
-        then
-            add_stat(records, mod:localize('stat_crit_plus_weakspot'), fmt_mult(crit_weakspot_mult), COLORS.CRIT, 1)
-        end
-    end
-
-    -- Crit modifier: weapon_handling (per-action) then legacy weapon_handling_template.
-    local chance_modifier =
-        Utils.crit_chance_modifier(ctx.action, ctx.weapon_template, ctx.weapon_tweak_templates, ctx.action_name)
-    if chance_modifier then
-        local sign = chance_modifier >= 0 and '+' or ''
-        add_stat(
-            records,
-            mod:localize('stat_crit_modifier'),
-            string.format('%s%.1f%%', sign, chance_modifier * 100),
-            COLORS.CRIT
-        )
-    end
-
-    local tmpl = handling_template_for_action(ctx.weapon_template, ctx.weapon_tweak_templates, ctx.action_name)
-    local crit_strike = tmpl and tmpl.critical_strike
-    if crit_strike and crit_strike.max_critical_shots and crit_strike.max_critical_shots ~= 0 then
-        add_stat(records, mod:localize('stat_crit_strings'), tostring(crit_strike.max_critical_shots), COLORS.CRIT)
-    end
-
+    -- Ranged weapon specifics
     local ranged_extra = ctx.ranged_extra
     if ranged_extra then
         if ranged_extra.num_pellets then
@@ -702,6 +662,54 @@ local function render_profile(records, ctx)
     end
     if #flags > 0 then
         add_stat(records, mod:localize('stat_flags'), table.concat(flags, ', '), COLORS.META)
+    end
+
+    -- Finesse & Crit, grouped right above the ADM table.
+    local weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, false, target_index)
+    local crit_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, false, true, target_index)
+    local crit_weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, true, target_index)
+
+    local has_weakspot = weakspot_mult and math.abs(weakspot_mult - 1) > 0.005
+    local has_crit = crit_mult and math.abs(crit_mult - 1) > 0.005
+    local has_crit_weakspot = crit_weakspot_mult
+        and math.abs(crit_weakspot_mult - math.max(weakspot_mult or 1, crit_mult or 1)) > 0.005
+
+    -- Crit modifier: weapon_handling (per-action) then legacy weapon_handling_template.
+    local chance_modifier =
+        Utils.crit_chance_modifier(ctx.action, ctx.weapon_template, ctx.weapon_tweak_templates, ctx.action_name)
+    local tmpl = handling_template_for_action(ctx.weapon_template, ctx.weapon_tweak_templates, ctx.action_name)
+    local crit_strike = tmpl and tmpl.critical_strike
+    local has_crit_strings = crit_strike and crit_strike.max_critical_shots and crit_strike.max_critical_shots ~= 0
+
+    if has_weakspot or has_crit or has_crit_weakspot or chance_modifier or has_crit_strings then
+        add_subheader(records, mod:localize('stat_finesse_and_crit'))
+        if has_weakspot then
+            add_stat(records, mod:localize('stat_weakspot'), fmt_mult(weakspot_mult), COLORS.CRIT, 1)
+        end
+        if has_crit then
+            add_stat(records, mod:localize('stat_crit'), fmt_mult(crit_mult), COLORS.CRIT, 1)
+        end
+        if has_crit_weakspot then
+            add_stat(records, mod:localize('stat_crit_plus_weakspot'), fmt_mult(crit_weakspot_mult), COLORS.CRIT, 1)
+        end
+        if chance_modifier then
+            add_stat(
+                records,
+                mod:localize('stat_crit_modifier'),
+                string.format('%+.1f%%', chance_modifier * 100),
+                COLORS.CRIT,
+                1
+            )
+        end
+        if has_crit_strings then
+            add_stat(
+                records,
+                mod:localize('stat_crit_strings'),
+                tostring(crit_strike.max_critical_shots),
+                COLORS.CRIT,
+                1
+            )
+        end
     end
 
     render_adm_table(records, profile, target_settings, action_lerp, is_ranged, target_index)
