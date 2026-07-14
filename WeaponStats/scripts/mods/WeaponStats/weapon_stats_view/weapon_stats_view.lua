@@ -258,7 +258,6 @@ function WeaponStatsView:_setup_entries()
     end
 
     self._filtered_list = entries
-    self._selected_entry = nil
 
     local blueprints = make_list_blueprints(self:_list_width())
     local left_click_callback = callback(self, 'cb_on_list_entry_left_pressed')
@@ -305,7 +304,6 @@ function WeaponStatsView:cb_on_list_entry_left_pressed(widget, element)
 end
 
 function WeaponStatsView:_select_entry(entry)
-    self._selected_entry = entry
     if entry then
         local index = self._list_grid:index_by_element(entry)
         if index then

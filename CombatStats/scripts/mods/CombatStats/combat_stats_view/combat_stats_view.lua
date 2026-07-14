@@ -332,7 +332,6 @@ function CombatStatsView:_setup_entries()
     end
 
     self._filtered_list = entries
-    self._selected_entry = nil
     self:_present_list(entries)
 end
 
@@ -380,7 +379,6 @@ function CombatStatsView:cb_on_list_entry_left_pressed(widget, element)
 end
 
 function CombatStatsView:_select_entry(entry)
-    self._selected_entry = entry
     if entry and not entry.disabled then
         local index = self._list_grid:index_by_element(entry) or self._list_grid:selected_grid_index()
         if index then
@@ -678,7 +676,6 @@ function CombatStatsView:cb_on_history_pressed()
         self._viewing_history = true
         self._viewing_history_entry = false
         self._history_loading = true
-        self._selected_entry = nil
         self:_setup_entries()
 
         mod.history:load_index(function()
@@ -705,7 +702,6 @@ function CombatStatsView:cb_on_back_to_current_pressed()
         self._history_entry_loading = false
         self._history_loading = false
         self._current_history_file = nil
-        self._selected_entry = nil
         self._tracker = mod.tracker
         self:_setup_entries()
     else
@@ -714,7 +710,6 @@ function CombatStatsView:cb_on_back_to_current_pressed()
         self._history_entry_loading = false
         self._history_loading = false
         self._current_history_file = nil
-        self._selected_entry = nil
         self._tracker = mod.tracker
         self:_setup_entries()
     end
@@ -748,7 +743,6 @@ function CombatStatsView:_load_history_entry(entry)
     self._tracker = nil
     self._viewing_history = false
     self._viewing_history_entry = true
-    self._selected_entry = nil
     self:_setup_entries()
 
     mod.history:load_history_entry(file_name, function(full_data)
