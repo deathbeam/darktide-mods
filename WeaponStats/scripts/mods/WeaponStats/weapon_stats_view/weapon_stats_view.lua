@@ -467,33 +467,174 @@ local function _make_stat_row(self, label, value, label_color, width, indent, va
     self._detail_widgets[#self._detail_widgets + 1] = widget
 end
 
-local function _armor_value_text(normal, crit, has_crit)
-    local text = string.format('%.0f%%', normal * 100)
-    if has_crit then
-        text = text .. string.format(' (C: %.0f%%)', crit * 100)
-    end
-    return text
-end
+local TABLE_HEADER_HEIGHT = 26
+local TABLE_ROW_HEIGHT = 22
+local TABLE_NAME_WIDTH = 150
+local TABLE_FRAME_COLOR = Color.terminal_frame(180, true)
+local TABLE_CORNER_COLOR = Color.terminal_corner(180, true)
+local TABLE_BG_COLOR = Color.terminal_grid_background(90, true)
+local TABLE_HEADER_BG_COLOR = Color.terminal_grid_background(160, true)
+local TABLE_GRID_COLOR = Color.terminal_frame(50, true)
 
-local function _make_armor_row(self, row, width, stripe)
-    local name_color = row.name_color or COLOR_LABEL
-    if row.has_far then
-        local value = _armor_value_text(row.normal, row.crit, row.has_crit)
-            .. ' → '
-            .. _armor_value_text(row.normal_far, row.crit_far, row.has_crit)
-        _make_stat_row(self, row.name, value, name_color, width, 1, nil, stripe)
-    else
-        _make_stat_row(
-            self,
-            row.name,
-            _armor_value_text(row.normal, row.crit, row.has_crit),
-            name_color,
-            width,
-            1,
-            nil,
-            stripe
-        )
+-- Single bordered widget: header row + one row per entry, drawn as passes positioned by
+-- absolute Y so the whole grid reads as one table. No striping; a thin frame and column
+-- separators carry the structure.
+local function _make_table(self, record, width, stripe_state)
+    local columns = record.columns or {}
+    local rows = record.rows or {}
+    if #rows == 0 then
+        return
     end
+
+    _make_spacer(self, 6, width)
+
+    local num_columns = #columns
+    local cell_area_width = width - TABLE_NAME_WIDTH
+    local column_width = num_columns > 0 and math.floor(cell_area_width / num_columns) or 0
+    local row_height = TABLE_ROW_HEIGHT
+    local header_height = TABLE_HEADER_HEIGHT
+    local total_height = header_height + #rows * row_height
+
+    local passes = {}
+
+    -- Background fill + border for the whole table.
+    passes[#passes + 1] = {
+        pass_type = 'rect',
+        style = {
+            color = TABLE_BG_COLOR,
+            offset = { 0, 0, 0 },
+            size = { width, total_height },
+        },
+    }
+    passes[#passes + 1] = {
+        pass_type = 'texture',
+        value = 'content/ui/materials/frames/frame_tile_2px',
+        style = {
+            scale_to_material = true,
+            color = TABLE_FRAME_COLOR,
+            offset = { 0, 0, 3 },
+            size = { width, total_height },
+        },
+    }
+    passes[#passes + 1] = {
+        pass_type = 'texture',
+        value = 'content/ui/materials/frames/frame_corner_2px',
+        style = {
+            scale_to_material = true,
+            color = TABLE_CORNER_COLOR,
+            offset = { 0, 0, 4 },
+            size = { width, total_height },
+        },
+    }
+
+    -- Header band.
+    passes[#passes + 1] = {
+        pass_type = 'rect',
+        style = {
+            color = TABLE_HEADER_BG_COLOR,
+            offset = { 0, 0, 1 },
+            size = { width, header_height },
+        },
+    }
+    -- Separator under the header row.
+    passes[#passes + 1] = {
+        pass_type = 'rect',
+        style = {
+            color = TABLE_GRID_COLOR,
+            offset = { 0, header_height - 1, 2 },
+            size = { width, 2 },
+        },
+    }
+
+    -- Vertical separators between columns (the frame covers the outer edges).
+    for col_index = 1, num_columns - 1 do
+        local x = TABLE_NAME_WIDTH + col_index * column_width - 1
+        passes[#passes + 1] = {
+            pass_type = 'rect',
+            style = {
+                color = TABLE_GRID_COLOR,
+                offset = { x, 0, 2 },
+                size = { 2, total_height },
+            },
+        }
+    end
+    -- Separator between the name column and the cell area.
+    passes[#passes + 1] = {
+        pass_type = 'rect',
+        style = {
+            color = TABLE_GRID_COLOR,
+            offset = { TABLE_NAME_WIDTH - 1, 0, 2 },
+            size = { 2, total_height },
+        },
+    }
+
+    -- Column header labels.
+    for col_index = 1, num_columns do
+        local column = columns[col_index]
+        local x = TABLE_NAME_WIDTH + (col_index - 1) * column_width
+        passes[#passes + 1] = {
+            pass_type = 'text',
+            value_id = 'col_' .. col_index,
+            value = column and column.label or '',
+            style = {
+                font_type = 'proxima_nova_bold',
+                font_size = 15,
+                text_vertical_alignment = 'center',
+                text_horizontal_alignment = 'center',
+                text_color = (column and column.color) or COLOR_LABEL,
+                offset = { x, 0, 5 },
+                size = { column_width, header_height },
+                text_overflow_mode = 'truncate',
+            },
+        }
+    end
+
+    -- Data rows.
+    for row_index = 1, #rows do
+        local row = rows[row_index]
+        local cells = row.cells or {}
+        local y = header_height + (row_index - 1) * row_height
+
+        passes[#passes + 1] = {
+            pass_type = 'text',
+            value_id = 'name_' .. row_index,
+            value = row.name or '',
+            style = {
+                font_type = 'proxima_nova_bold',
+                font_size = 15,
+                text_vertical_alignment = 'center',
+                text_horizontal_alignment = 'left',
+                text_color = row.name_color or COLOR_LABEL,
+                offset = { 6, y, 5 },
+                size = { TABLE_NAME_WIDTH - 12, row_height },
+                text_overflow_mode = 'truncate',
+            },
+        }
+
+        for col_index = 1, num_columns do
+            local cell = cells[col_index] or {}
+            local x = TABLE_NAME_WIDTH + (col_index - 1) * column_width
+            passes[#passes + 1] = {
+                pass_type = 'text',
+                value_id = 'cell_' .. row_index .. '_' .. col_index,
+                value = cell.text or '',
+                style = {
+                    font_type = 'proxima_nova_bold',
+                    font_size = 15,
+                    text_vertical_alignment = 'center',
+                    text_horizontal_alignment = 'center',
+                    text_color = cell.color or COLOR_VALUE,
+                    offset = { x, y, 5 },
+                    size = { column_width, row_height },
+                    text_overflow_mode = 'truncate',
+                },
+            }
+        end
+    end
+
+    local def = UIWidget.create_definition(passes, 'weapon_stats_detail_pivot', nil, { width, total_height })
+    local widget = self:_create_widget('detail_table_' .. #self._detail_widgets, def)
+    self._detail_widgets[#self._detail_widgets + 1] = widget
 end
 
 local CHAIN_ICON_SIZE = 28
@@ -563,14 +704,8 @@ local function _render_record(self, record, width, stripe_state)
         local stripe = stripe_state.count % 2 == 1
         stripe_state.count = stripe_state.count + 1
         _make_stat_row(self, record.label, record.value, record.label_color, width, record.indent or 0, nil, stripe)
-    elseif rtype == 'armor' then
-        _make_spacer(self, 2, width)
-        _make_text_widget(self, record.header, 16, record.color, width, 22)
-        for _, row in ipairs(record.rows) do
-            local stripe = stripe_state.count % 2 == 1
-            stripe_state.count = stripe_state.count + 1
-            _make_armor_row(self, row, width, stripe)
-        end
+    elseif rtype == 'table' then
+        _make_table(self, record, width, stripe_state)
     end
 end
 

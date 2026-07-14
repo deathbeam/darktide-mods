@@ -99,13 +99,13 @@ local function add_direction_stat(records, actions)
     end
 end
 
-local function add_armor(records, rows, is_ranged, header)
+local function add_table(records, header, columns, rows)
     add(records, {
-        type = 'armor',
+        type = 'table',
         header = header,
         color = COLORS.HEADER,
+        columns = columns,
         rows = rows,
-        is_ranged = is_ranged,
     })
 end
 
@@ -373,25 +373,26 @@ local function render_timing(records, action, weapon_template, weapon_tweak_temp
     add_stat(records, lbl, string.format('%.2f/s', 1 / scaled_time), COLORS.TIMING)
 end
 
+-- Armor damage modifiers as a single table: attack and impact, each normal and crit.
 -- Ranged profiles carry near/far ADM (point-blank vs max-range falloff); melee has a single value.
-local function render_armor(records, profile, target_settings, action_lerp, is_ranged, power_type, header, target_index)
-    local armor_order = ARMOR_ORDER
-    local rows = {}
-
+local function render_adm_table(records, profile, target_settings, action_lerp, is_ranged, target_index)
     local near_dropoff, far_dropoff
     if is_ranged then
         near_dropoff = 0
         far_dropoff = 1
     end
 
-    for _, armor_key in ipairs(armor_order) do
+    local any_crit = false
+    local rows = {}
+
+    for _, armor_key in ipairs(ARMOR_ORDER) do
         local armor_type = ArmorSettings.types[armor_key]
         if armor_type then
             local normal_near = Utils.armor_modifier(
                 profile,
                 target_settings,
                 action_lerp,
-                power_type,
+                'attack',
                 armor_type,
                 false,
                 near_dropoff,
@@ -401,20 +402,40 @@ local function render_armor(records, profile, target_settings, action_lerp, is_r
                 profile,
                 target_settings,
                 action_lerp,
-                power_type,
+                'attack',
+                armor_type,
+                true,
+                near_dropoff,
+                target_index
+            )
+            local normal_impact = Utils.armor_modifier(
+                profile,
+                target_settings,
+                action_lerp,
+                'impact',
+                armor_type,
+                false,
+                near_dropoff,
+                target_index
+            )
+            local crit_impact = Utils.armor_modifier(
+                profile,
+                target_settings,
+                action_lerp,
+                'impact',
                 armor_type,
                 true,
                 near_dropoff,
                 target_index
             )
 
-            local normal_far, crit_far
+            local normal_far, crit_far, normal_impact_far, crit_impact_far
             if is_ranged then
                 normal_far = Utils.armor_modifier(
                     profile,
                     target_settings,
                     action_lerp,
-                    power_type,
+                    'attack',
                     armor_type,
                     false,
                     far_dropoff,
@@ -424,7 +445,27 @@ local function render_armor(records, profile, target_settings, action_lerp, is_r
                     profile,
                     target_settings,
                     action_lerp,
-                    power_type,
+                    'attack',
+                    armor_type,
+                    true,
+                    far_dropoff,
+                    target_index
+                )
+                normal_impact_far = Utils.armor_modifier(
+                    profile,
+                    target_settings,
+                    action_lerp,
+                    'impact',
+                    armor_type,
+                    false,
+                    far_dropoff,
+                    target_index
+                )
+                crit_impact_far = Utils.armor_modifier(
+                    profile,
+                    target_settings,
+                    action_lerp,
+                    'impact',
                     armor_type,
                     true,
                     far_dropoff,
@@ -432,22 +473,82 @@ local function render_armor(records, profile, target_settings, action_lerp, is_r
                 )
             end
 
+            if math.abs(crit_near - normal_near) > 0.005 or math.abs(crit_impact - normal_impact) > 0.005 then
+                any_crit = true
+            end
+
             rows[#rows + 1] = {
                 name = Utils.armor_name(armor_key),
                 name_color = ARMOR_COLORS[armor_key],
-                normal = normal_near,
-                crit = crit_near,
-                has_crit = math.abs(crit_near - normal_near) > 0.005,
-                normal_far = normal_far,
-                crit_far = crit_far,
-                has_far = is_ranged,
+                attack = normal_near,
+                attack_far = normal_far,
+                impact = normal_impact,
+                impact_far = normal_impact_far,
+                crit_attack = crit_near,
+                crit_attack_far = crit_far,
+                crit_impact = crit_impact,
+                crit_impact_far = crit_impact_far,
             }
         end
     end
 
-    if #rows > 0 then
-        add_armor(records, rows, is_ranged, header)
+    if #rows == 0 then
+        return
     end
+
+    local columns = {
+        { label = mod:localize('stat_adm'), color = COLORS.DAMAGE },
+        { label = mod:localize('stat_adm') .. ' ' .. mod:localize('stat_crit'), color = COLORS.CRIT },
+        { label = mod:localize('stat_impact'), color = COLORS.DAMAGE },
+        { label = mod:localize('stat_impact') .. ' ' .. mod:localize('stat_crit'), color = COLORS.CRIT },
+    }
+    if not any_crit then
+        columns = {
+            { label = mod:localize('stat_adm'), color = COLORS.DAMAGE },
+            { label = mod:localize('stat_impact'), color = COLORS.DAMAGE },
+        }
+    end
+
+    local function fmt_pct(value)
+        return string.format('%.0f%%', value * 100)
+    end
+
+    for i = 1, #rows do
+        local row = rows[i]
+        local cells
+        if is_ranged then
+            if any_crit then
+                cells = {
+                    { text = fmt_pct(row.attack) .. ' → ' .. fmt_pct(row.attack_far), color = COLORS.DAMAGE },
+                    { text = fmt_pct(row.crit_attack) .. ' → ' .. fmt_pct(row.crit_attack_far), color = COLORS.CRIT },
+                    { text = fmt_pct(row.impact) .. ' → ' .. fmt_pct(row.impact_far), color = COLORS.DAMAGE },
+                    { text = fmt_pct(row.crit_impact) .. ' → ' .. fmt_pct(row.crit_impact_far), color = COLORS.CRIT },
+                }
+            else
+                cells = {
+                    { text = fmt_pct(row.attack) .. ' → ' .. fmt_pct(row.attack_far), color = COLORS.DAMAGE },
+                    { text = fmt_pct(row.impact) .. ' → ' .. fmt_pct(row.impact_far), color = COLORS.DAMAGE },
+                }
+            end
+        else
+            if any_crit then
+                cells = {
+                    { text = fmt_pct(row.attack), color = COLORS.DAMAGE },
+                    { text = fmt_pct(row.crit_attack), color = COLORS.CRIT },
+                    { text = fmt_pct(row.impact), color = COLORS.DAMAGE },
+                    { text = fmt_pct(row.crit_impact), color = COLORS.CRIT },
+                }
+            else
+                cells = {
+                    { text = fmt_pct(row.attack), color = COLORS.DAMAGE },
+                    { text = fmt_pct(row.impact), color = COLORS.DAMAGE },
+                }
+            end
+        end
+        row.cells = cells
+    end
+
+    add_table(records, mod:localize('stat_adm'), columns, rows)
 end
 
 local function render_profile(records, ctx)
@@ -611,26 +712,7 @@ local function render_profile(records, ctx)
         add_stat(records, mod:localize('stat_flags'), table.concat(flags, ', '), COLORS.META)
     end
 
-    render_armor(
-        records,
-        profile,
-        target_settings,
-        action_lerp,
-        is_ranged,
-        'attack',
-        mod:localize('stat_adm'),
-        target_index
-    )
-    render_armor(
-        records,
-        profile,
-        target_settings,
-        action_lerp,
-        is_ranged,
-        'impact',
-        mod:localize('stat_impact'),
-        target_index
-    )
+    render_adm_table(records, profile, target_settings, action_lerp, is_ranged, target_index)
 end
 
 local function render_attack(
