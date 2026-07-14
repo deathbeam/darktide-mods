@@ -31,14 +31,8 @@ local function filter_table(tbl)
     return result
 end
 
--- Managers.token drives SaveSystem callbacks each frame in StateGame, but may be
--- nil during very early mod lifecycle hooks. Guard so we never crash.
-local function token_manager_ready()
-    return Managers and Managers.token ~= nil
-end
-
 local function safe_auto_save(file_name, data, callback)
-    if not token_manager_ready() then
+    if not (Managers and Managers.token ~= nil) then
         if callback then
             callback({ done = true, error = 'token manager unavailable' })
         end
@@ -48,7 +42,7 @@ local function safe_auto_save(file_name, data, callback)
 end
 
 local function safe_auto_load(file_name, callback)
-    if not token_manager_ready() then
+    if not (Managers and Managers.token ~= nil) then
         if callback then
             callback({ done = true, error = 'token manager unavailable' })
         end
@@ -62,7 +56,6 @@ local CombatStatsHistory = class('CombatStatsHistory')
 function CombatStatsHistory:init()
     self._index = nil -- ordered list of file names, newest first; nil until loaded
     self._entries_cache = nil
-    self._pending_saves = {}
     self._index_loading = false
     self._index_waiters = {}
 end
@@ -111,11 +104,6 @@ function CombatStatsHistory:load_index(on_loaded)
             waiters[i](loaded)
         end
     end)
-end
-
----@return boolean
-function CombatStatsHistory:is_index_loaded()
-    return self._index ~= nil
 end
 
 function CombatStatsHistory:_save_index()
@@ -171,17 +159,10 @@ function CombatStatsHistory:save_history_entry(tracker_data, mission_name, class
     local filtered_data = filter_table(data)
 
     local token = safe_auto_save(clean_filename(file_name), filtered_data, function(info)
-        if token then
-            self._pending_saves[token] = nil
-        end
         if info and info.error then
             mod:echo('Failed to save history entry: ' .. tostring(info.error))
         end
     end)
-
-    if token then
-        self._pending_saves[token] = file_name
-    end
 
     if self._index ~= nil then
         self:_apply_index_insert(file_name)
@@ -297,15 +278,6 @@ function CombatStatsHistory:delete_history_entry(file_name)
     self:_save_index()
 
     return true
-end
-
----@return number
-function CombatStatsHistory:pending_save_count()
-    local count = 0
-    for _ in pairs(self._pending_saves) do
-        count = count + 1
-    end
-    return count
 end
 
 return CombatStatsHistory
