@@ -997,6 +997,7 @@ local function build_stats(item)
             table.sort(category_attacks, function(a, b)
                 return _row_min_label(a, action_names) < _row_min_label(b, action_names)
             end)
+            local header
             if category == 'ranged' then
                 header = mod:localize('header_ranged_attacks')
             elseif category == 'light' then
