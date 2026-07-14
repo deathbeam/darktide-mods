@@ -1,54 +1,21 @@
 local mod = get_mod('WeaponStats')
 
-local UIWidget = mod:original_require('scripts/managers/ui/ui_widget')
-local UIWidgetGrid = mod:original_require('scripts/ui/widget_logic/ui_widget_grid')
-local UIRenderer = mod:original_require('scripts/managers/ui/ui_renderer')
 local ViewElementInputLegend =
     mod:original_require('scripts/ui/view_elements/view_element_input_legend/view_element_input_legend')
+local ViewElementGrid = mod:original_require('scripts/ui/view_elements/view_element_grid/view_element_grid')
 
 local WeaponTemplates = mod:original_require('scripts/settings/equipment/weapon_templates/weapon_templates')
 local WeaponTemplate = mod:original_require('scripts/utilities/weapon/weapon_template')
 
 local Builder = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_builder')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
+local make_list_blueprints =
+    mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_view/weapon_stats_view_blueprints')
+local make_detail_blueprints =
+    mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_view/weapon_stats_detail_blueprints')
 
 local MAX_STAT_VALUE = 0.8
-local GRID_SPACING = { 4, 4 }
-local DETAIL_GRID_SPACING = { 0, 2 }
-local INDENT_PX = 18
-local STAT_ROW_HEIGHT = 21
 
-local TABLE_HEADER_HEIGHT = 26
-local TABLE_ROW_HEIGHT = 22
-local TABLE_NAME_WIDTH = 150
-local TABLE_FRAME_COLOR = Color.terminal_frame(180, true)
-local TABLE_CORNER_COLOR = Color.terminal_corner(180, true)
-local TABLE_BG_COLOR = Color.terminal_grid_background(90, true)
-local TABLE_HEADER_BG_COLOR = Color.terminal_grid_background(160, true)
-local TABLE_GRID_COLOR = Color.terminal_frame(50, true)
-
-local GESTALT_ICONS = {
-    activate = 'content/ui/materials/icons/weapons/actions/activate',
-    ads = 'content/ui/materials/icons/weapons/actions/ads',
-    brace = 'content/ui/materials/icons/weapons/actions/brace',
-    charge = 'content/ui/materials/icons/weapons/actions/charge',
-    defence = 'content/ui/materials/icons/weapons/actions/defence',
-    flashlight = 'content/ui/materials/icons/weapons/actions/flashlight',
-    hipfire = 'content/ui/materials/icons/weapons/actions/hipfire',
-    linesman = 'content/ui/materials/icons/weapons/actions/linesman',
-    melee = 'content/ui/materials/icons/weapons/actions/melee',
-    melee_hand = 'content/ui/materials/icons/weapons/actions/melee_hand',
-    ninja_fencer = 'content/ui/materials/icons/weapons/actions/ninjafencer',
-    quick_grenade = 'content/ui/materials/icons/weapons/actions/quick_grenade',
-    smiter = 'content/ui/materials/icons/weapons/actions/smiter',
-    special_attack = 'content/ui/materials/icons/weapons/actions/special_attack',
-    special_bullet = 'content/ui/materials/icons/weapons/actions/special_bullet',
-    tank = 'content/ui/materials/icons/weapons/actions/tank',
-    vent = 'content/ui/materials/icons/weapons/actions/vent',
-}
-
--- Bundles the weapon action gestalt icons (content/ui/materials/icons/weapons/actions/*)
--- used by the chain overview. Same package CombatStats loads for its buff icons.
 local ICON_PACKAGES = {
     'packages/ui/hud/player_weapon/player_weapon',
 }
@@ -137,19 +104,18 @@ function WeaponStatsView._placeholder_item(weapon_template)
     }
 end
 
+function WeaponStatsView:ui_renderer()
+    return self._ui_renderer
+end
+
 function WeaponStatsView:init(settings, context)
     self._definitions =
         mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_view/weapon_stats_view_definitions')
-    self._blueprints =
-        mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_view/weapon_stats_view_blueprints')
 
     WeaponStatsView.super.init(self, self._definitions, settings)
 
     self._pass_draw = false
-    self._using_cursor_navigation = Managers.ui:using_cursor_navigation()
     self._weapon_list = self:_build_weapon_list()
-    self._filtered_list = self._weapon_list
-    self._selected_weapon = nil
     self._last_search_text = ''
     self._initial_weapon_template = context and context.weapon_template_name or nil
 end
@@ -161,6 +127,8 @@ function WeaponStatsView:on_enter()
 
     self:_setup_input_legend()
     self:_setup_search()
+    self:_setup_list_grid()
+    self:_setup_detail_grid()
     self:_setup_entries()
 end
 
@@ -197,6 +165,62 @@ function WeaponStatsView:_setup_input_legend()
     end
 end
 
+-- Grid elements ----------------------------------------------------------
+
+function WeaponStatsView:_setup_list_grid()
+    if self._list_grid then
+        self._list_grid = nil
+        self:_remove_element('list_grid')
+    end
+
+    local grid_settings = self._definitions.list_grid_settings
+    self._list_grid = self:_add_element(ViewElementGrid, 'list_grid', 10, grid_settings)
+    self:_update_list_grid_position()
+end
+
+function WeaponStatsView:_setup_detail_grid()
+    if self._detail_grid then
+        self._detail_grid = nil
+        self:_remove_element('detail_grid')
+    end
+
+    local grid_settings = self._definitions.detail_grid_settings
+    self._detail_grid = self:_add_element(ViewElementGrid, 'detail_grid', 10, grid_settings)
+    self:_update_detail_grid_position()
+end
+
+function WeaponStatsView:_update_list_grid_position()
+    if not self._list_grid then
+        return
+    end
+
+    local position = self:_scenegraph_world_position('weapon_stats_list_content')
+    if position then
+        self._list_grid:set_pivot_offset(position[1], position[2])
+    end
+end
+
+function WeaponStatsView:_update_detail_grid_position()
+    if not self._detail_grid then
+        return
+    end
+
+    local position = self:_scenegraph_world_position('weapon_stats_detail_content')
+    if position then
+        self._detail_grid:set_pivot_offset(position[1], position[2])
+    end
+end
+
+function WeaponStatsView:_list_width()
+    local grid_settings = self._definitions.list_grid_settings
+    return grid_settings and grid_settings.grid_size[1] or 480
+end
+
+function WeaponStatsView:_detail_width()
+    local grid_settings = self._definitions.detail_grid_settings
+    return grid_settings and grid_settings.grid_size[1] or 600
+end
+
 -- Matches the in-game card: title = family, subtext = kind + pattern • mark.
 function WeaponStatsView:_format_entry_subtext(entry)
     local kind = entry.is_ranged and mod:localize('kind_ranged') or mod:localize('kind_melee')
@@ -206,16 +230,9 @@ function WeaponStatsView:_format_entry_subtext(entry)
     return kind, Color.terminal_text_body_sub_header(255, true)
 end
 
-function WeaponStatsView:_setup_entries()
-    if self._entry_widgets then
-        for i = 1, #self._entry_widgets do
-            local widget = self._entry_widgets[i]
-            self:_unregister_widget_name(widget.name)
-        end
-        self._entry_widgets = {}
-        self._selected_widget = nil
-    end
+-- Weapon list ------------------------------------------------------------
 
+function WeaponStatsView:_setup_entries()
     local search_widget = self._widgets_by_name.weapon_stats_search
     local search_text = search_widget and search_widget.content.input_text or ''
     search_text = search_text:lower()
@@ -237,527 +254,145 @@ function WeaponStatsView:_setup_entries()
                 sub_display_name = weapon.sub_display_name,
                 weapon = weapon,
                 is_ranged = weapon.is_ranged,
-                pressed_function = function(parent, widget, entry)
-                    parent:_select_entry(widget, entry)
-                end,
             }
             entry.subtext, entry.subtext_color = self:_format_entry_subtext(entry)
             entries[#entries + 1] = entry
         end
     end
+
     self._filtered_list = entries
+    self._selected_entry = nil
 
-    local scenegraph_id = 'weapon_stats_list_pivot'
-    local callback_name = 'cb_on_entry_pressed'
-    self._entry_widgets, self._entry_alignment_list = self:_setup_widgets(entries, scenegraph_id, callback_name)
+    local blueprints = make_list_blueprints(self:_list_width())
+    local left_click_callback = callback(self, 'cb_on_list_entry_left_pressed')
+    local on_present_callback = callback(self, '_cb_on_list_presented')
+    local display_name = nil
+    local grow_direction = 'down'
 
-    local grid_scenegraph_id = 'weapon_stats_list_background'
-    self._entry_grid =
-        self:_setup_grid(self._entry_widgets, self._entry_alignment_list, grid_scenegraph_id, GRID_SPACING)
+    self._list_grid:present_grid_layout(
+        entries,
+        blueprints,
+        left_click_callback,
+        nil,
+        display_name,
+        grow_direction,
+        on_present_callback
+    )
+end
 
-    local scrollbar_widget = self._widgets_by_name.weapon_stats_list_scrollbar
-    self._entry_grid:assign_scrollbar(scrollbar_widget, 'weapon_stats_list_pivot', grid_scenegraph_id)
-    self._entry_grid:set_scrollbar_progress(0)
+function WeaponStatsView:_cb_on_list_presented()
+    local entries = self._filtered_list
+    if not entries or #entries == 0 then
+        self:_present_detail(nil)
+        return
+    end
 
-    if #self._entry_widgets > 0 then
-        local initial_template = self._initial_weapon_template
-        local match_index = nil
-        if initial_template then
-            for i = 1, #entries do
-                if entries[i].weapon.name == initial_template then
-                    match_index = i
-                    break
-                end
+    local initial_template = self._initial_weapon_template
+    local match_index = nil
+    if initial_template then
+        for i = 1, #entries do
+            if entries[i].weapon.name == initial_template then
+                match_index = i
+                break
             end
         end
-        match_index = match_index or 1
-        local widget = self._entry_widgets[match_index]
-        local entry = entries[match_index]
-        self:_select_entry(widget, entry)
-        self:_scroll_entries_to_widget(widget)
-    else
-        self:_rebuild_detail_widgets(nil)
     end
+    match_index = match_index or 1
+    self._list_grid:select_grid_index(match_index)
+    self:_select_entry(entries[match_index])
     self._initial_weapon_template = nil
 end
 
--- Scroll the entry grid so the given widget is visible (top-aligned when possible).
-function WeaponStatsView:_scroll_entries_to_widget(widget)
-    local grid = self._entry_grid
-    if not grid or not widget then
-        return
-    end
-    local progress = grid:get_scrollbar_percentage_by_index(grid:index_by_widget(widget))
-    if progress then
-        grid:set_scrollbar_progress(progress, true)
-    end
+function WeaponStatsView:cb_on_list_entry_left_pressed(widget, element)
+    self:_select_entry(element)
 end
 
-function WeaponStatsView:_setup_widgets(content, scenegraph_id, callback_name)
-    local widget_definitions = {}
-    local widgets = {}
-    local alignment_list = {}
-
-    for i = 1, #content do
-        local entry = content[i]
-        local widget_type = entry.widget_type
-        local template = self._blueprints[widget_type]
-        local size = template.size
-        local pass_template = template.pass_template
-
-        if pass_template and not widget_definitions[widget_type] then
-            widget_definitions[widget_type] = UIWidget.create_definition(pass_template, scenegraph_id, nil, size)
-        end
-
-        local widget_definition = widget_definitions[widget_type]
-        local widget = nil
-
-        if widget_definition then
-            local name = scenegraph_id .. '_widget_' .. i
-            widget = self:_create_widget(name, widget_definition)
-
-            local init = template.init
-            if init then
-                init(self, widget, entry, callback_name)
-            end
-
-            widgets[#widgets + 1] = widget
-        end
-
-        alignment_list[#alignment_list + 1] = widget
-    end
-
-    return widgets, alignment_list
-end
-
-function WeaponStatsView:_setup_grid(widgets, alignment_list, grid_scenegraph_id, spacing)
-    local ui_scenegraph = self._ui_scenegraph
-    local direction = 'down'
-
-    local grid = UIWidgetGrid:new(
-        widgets,
-        alignment_list,
-        ui_scenegraph,
-        grid_scenegraph_id,
-        direction,
-        spacing,
-        nil, -- fill_section_spacing
-        true -- use_is_focused_for_navigation
-    )
-    local render_scale = self._render_scale
-
-    grid:set_render_scale(render_scale)
-    return grid
-end
-
-function WeaponStatsView:_select_entry(widget, entry)
+function WeaponStatsView:_select_entry(entry)
     self._selected_entry = entry
-    self._selected_widget = widget
-    self:_rebuild_detail_widgets(entry)
-end
-
--- Detail-pane renderer -----------------------------------------------------
-
-local COLOR_LABEL = Color.terminal_text_body_sub_header(255, true)
-local COLOR_VALUE = Color.terminal_text_body(255, true)
-local COLOR_RULE = Color.terminal_corner(120, true)
-local STRIPE_BLEED_LEFT = 20
-local STRIPE_BLEED_RIGHT = 30
-
--- Darktide's terminal-background greenish-gray, a touch brighter than the pane background.
-local COLOR_STRIPE = { 120, 49, 56, 49 }
-
-local function _make_text_widget(self, text, font_size, color, width, height, offset_x)
-    local h = height or (font_size + 6)
-    local widget_def = UIWidget.create_definition({
-        {
-            pass_type = 'text',
-            value_id = 'text',
-            value = text,
-            style = {
-                font_type = 'proxima_nova_bold',
-                font_size = font_size,
-                text_vertical_alignment = 'top',
-                text_horizontal_alignment = 'left',
-                text_color = color or COLOR_VALUE,
-                offset = { offset_x or 0, 0, 2 },
-                size = { width, h },
-            },
-        },
-    }, 'weapon_stats_detail_pivot', nil, { width, h })
-
-    local widget = self:_create_widget('detail_' .. #self._detail_widgets, widget_def)
-    self._detail_widgets[#self._detail_widgets + 1] = widget
-    return widget
-end
-
-local function _make_rule(self, width)
-    local h = 2
-    local widget_def = UIWidget.create_definition({
-        {
-            pass_type = 'rect',
-            style = {
-                color = COLOR_RULE,
-                offset = { 0, 0, 1 },
-                size = { width, h },
-            },
-        },
-    }, 'weapon_stats_detail_pivot', nil, { width, h })
-
-    local widget = self:_create_widget('detail_rule_' .. #self._detail_widgets, widget_def)
-    self._detail_widgets[#self._detail_widgets + 1] = widget
-end
-
-local function _make_spacer(self, height, width)
-    local h = height or 8
-    local widget_def = UIWidget.create_definition({
-        {
-            pass_type = 'rect',
-            style = {
-                color = { 0, 0, 0, 0 },
-            },
-        },
-    }, 'weapon_stats_detail_pivot', nil, { width, h })
-
-    local widget = self:_create_widget('detail_spacer_' .. #self._detail_widgets, widget_def)
-    self._detail_widgets[#self._detail_widgets + 1] = widget
-end
-
-local function _make_stat_row(self, label, value, label_color, width, indent, value_color, stripe)
-    local h = STAT_ROW_HEIGHT
-    local x = (indent or 0) * INDENT_PX
-    local label_w = width * 0.55
-    local value_w = width - label_w
-    local passes = {}
-    if stripe then
-        passes[#passes + 1] = {
-            pass_type = 'rect',
-            style = {
-                color = COLOR_STRIPE,
-                offset = { -STRIPE_BLEED_LEFT, 0, 0 },
-                size = { width + STRIPE_BLEED_LEFT + STRIPE_BLEED_RIGHT, h },
-            },
-        }
+    if entry then
+        local index = self._list_grid:index_by_element(entry)
+        if index then
+            self._list_grid:select_grid_index(index)
+        end
     end
-    passes[#passes + 1] = {
-        pass_type = 'text',
-        value_id = 'label',
-        value = label,
-        style = {
-            font_type = 'proxima_nova_bold',
-            font_size = 16,
-            text_vertical_alignment = 'center',
-            text_horizontal_alignment = 'left',
-            text_color = label_color or COLOR_LABEL,
-            offset = { x, 0, 2 },
-            size = { label_w - x, h },
-            text_overflow_mode = 'truncate',
-        },
-    }
-    passes[#passes + 1] = {
-        pass_type = 'text',
-        value_id = 'value',
-        value = value,
-        style = {
-            font_type = 'proxima_nova_bold',
-            font_size = 16,
-            text_vertical_alignment = 'center',
-            text_horizontal_alignment = 'left',
-            text_color = value_color or COLOR_VALUE,
-            offset = { label_w, 0, 2 },
-            size = { value_w, h },
-            text_overflow_mode = 'truncate',
-        },
-    }
-    local widget_def = UIWidget.create_definition(passes, 'weapon_stats_detail_pivot', nil, { width, h })
-
-    local widget = self:_create_widget('detail_stat_' .. #self._detail_widgets, widget_def)
-    self._detail_widgets[#self._detail_widgets + 1] = widget
+    self:_present_detail(entry)
 end
 
--- Single bordered widget: header row + one row per entry, drawn as passes positioned by
--- absolute Y so the whole grid reads as one table. No striping; a thin frame and column
--- separators carry the structure.
-local function _make_table(self, record, width, stripe_state)
-    local columns = record.columns or {}
-    local rows = record.rows or {}
-    if #rows == 0 then
+-- Detail panel -----------------------------------------------------------
+
+function WeaponStatsView:_present_detail(entry)
+    if not self._detail_grid then
         return
     end
 
-    _make_spacer(self, 6, width)
+    local width = self:_detail_width()
+    local blueprints = make_detail_blueprints(width)
 
-    local num_columns = #columns
-    local cell_area_width = width - TABLE_NAME_WIDTH
-    local column_width = num_columns > 0 and math.floor(cell_area_width / num_columns) or 0
-    local row_height = TABLE_ROW_HEIGHT
-    local header_height = TABLE_HEADER_HEIGHT
-    local total_height = header_height + #rows * row_height
-
-    local passes = {}
-
-    -- Background fill + border for the whole table.
-    passes[#passes + 1] = {
-        pass_type = 'rect',
-        style = {
-            color = TABLE_BG_COLOR,
-            offset = { 0, 0, 0 },
-            size = { width, total_height },
-        },
-    }
-    passes[#passes + 1] = {
-        pass_type = 'texture',
-        value = 'content/ui/materials/frames/frame_tile_2px',
-        style = {
-            scale_to_material = true,
-            color = TABLE_FRAME_COLOR,
-            offset = { 0, 0, 3 },
-            size = { width, total_height },
-        },
-    }
-    passes[#passes + 1] = {
-        pass_type = 'texture',
-        value = 'content/ui/materials/frames/frame_corner_2px',
-        style = {
-            scale_to_material = true,
-            color = TABLE_CORNER_COLOR,
-            offset = { 0, 0, 4 },
-            size = { width, total_height },
-        },
-    }
-
-    -- Header band.
-    passes[#passes + 1] = {
-        pass_type = 'rect',
-        style = {
-            color = TABLE_HEADER_BG_COLOR,
-            offset = { 0, 0, 1 },
-            size = { width, header_height },
-        },
-    }
-    -- Separator under the header row.
-    passes[#passes + 1] = {
-        pass_type = 'rect',
-        style = {
-            color = TABLE_GRID_COLOR,
-            offset = { 0, header_height - 1, 2 },
-            size = { width, 2 },
-        },
-    }
-
-    -- Vertical separators between columns (the frame covers the outer edges).
-    for col_index = 1, num_columns - 1 do
-        local x = TABLE_NAME_WIDTH + col_index * column_width - 1
-        passes[#passes + 1] = {
-            pass_type = 'rect',
-            style = {
-                color = TABLE_GRID_COLOR,
-                offset = { x, 0, 2 },
-                size = { 2, total_height },
-            },
+    local layout = {}
+    if entry then
+        layout[#layout + 1] = {
+            widget_type = 'header',
+            text = entry.name,
+            color = Color.terminal_text_header(255, true),
         }
-    end
-    -- Separator between the name column and the cell area.
-    passes[#passes + 1] = {
-        pass_type = 'rect',
-        style = {
-            color = TABLE_GRID_COLOR,
-            offset = { TABLE_NAME_WIDTH - 1, 0, 2 },
-            size = { 2, total_height },
-        },
-    }
-
-    -- Column header labels.
-    for col_index = 1, num_columns do
-        local column = columns[col_index]
-        local x = TABLE_NAME_WIDTH + (col_index - 1) * column_width
-        passes[#passes + 1] = {
-            pass_type = 'text',
-            value_id = 'col_' .. col_index,
-            value = column and column.label or '',
-            style = {
-                font_type = 'proxima_nova_bold',
-                font_size = 15,
-                text_vertical_alignment = 'center',
-                text_horizontal_alignment = 'center',
-                text_color = (column and column.color) or COLOR_LABEL,
-                offset = { x, 0, 5 },
-                size = { column_width, header_height },
-                text_overflow_mode = 'truncate',
-            },
-        }
-    end
-
-    -- Data rows.
-    for row_index = 1, #rows do
-        local row = rows[row_index]
-        local cells = row.cells or {}
-        local y = header_height + (row_index - 1) * row_height
-
-        passes[#passes + 1] = {
-            pass_type = 'text',
-            value_id = 'name_' .. row_index,
-            value = row.name or '',
-            style = {
-                font_type = 'proxima_nova_bold',
-                font_size = 15,
-                text_vertical_alignment = 'center',
-                text_horizontal_alignment = 'left',
-                text_color = row.name_color or COLOR_LABEL,
-                offset = { 6, y, 5 },
-                size = { TABLE_NAME_WIDTH - 12, row_height },
-                text_overflow_mode = 'truncate',
-            },
-        }
-
-        for col_index = 1, num_columns do
-            local cell = cells[col_index] or {}
-            local x = TABLE_NAME_WIDTH + (col_index - 1) * column_width
-            passes[#passes + 1] = {
-                pass_type = 'text',
-                value_id = 'cell_' .. row_index .. '_' .. col_index,
-                value = cell.text or '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 15,
-                    text_vertical_alignment = 'center',
-                    text_horizontal_alignment = 'center',
-                    text_color = cell.color or COLOR_VALUE,
-                    offset = { x, y, 5 },
-                    size = { column_width, row_height },
-                    text_overflow_mode = 'truncate',
-                },
+        if entry.subtext then
+            layout[#layout + 1] = {
+                widget_type = 'subtext',
+                text = entry.subtext,
+                color = entry.subtext_color,
             }
         end
-    end
+        layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
 
-    local def = UIWidget.create_definition(passes, 'weapon_stats_detail_pivot', nil, { width, total_height })
-    local widget = self:_create_widget('detail_table_' .. #self._detail_widgets, def)
-    self._detail_widgets[#self._detail_widgets + 1] = widget
-end
+        local weapon = entry.weapon
+        local item = WeaponStatsView._placeholder_item(weapon.weapon_template)
+        local records = Builder.build_stats(item)
 
-local CHAIN_ICON_SIZE = 28
-local CHAIN_ICON_SPACING = 6
-local CHAIN_ROW_HEIGHT = 34
-
-local function _make_chain_row(self, title, chain, width)
-    local passes = {}
-    passes[#passes + 1] = {
-        pass_type = 'text',
-        value_id = 'title',
-        value = title,
-        style = {
-            font_type = 'proxima_nova_bold',
-            font_size = 16,
-            text_vertical_alignment = 'center',
-            text_horizontal_alignment = 'left',
-            text_color = COLOR_LABEL,
-            offset = { 0, 0, 2 },
-            size = { width * 0.3, CHAIN_ROW_HEIGHT },
-            text_overflow_mode = 'truncate',
-        },
-    }
-    local icon_area_x = width * 0.3 + 10
-    local step = CHAIN_ICON_SIZE + CHAIN_ICON_SPACING
-    for i = 1, #chain do
-        local gestalt = chain[i]
-        local icon = gestalt and GESTALT_ICONS[gestalt] or nil
-        if icon then
-            local x = icon_area_x + (i - 1) * step
-            passes[#passes + 1] = {
-                pass_type = 'texture',
-                value = icon,
-                style = {
-                    horizontal_alignment = 'left',
-                    vertical_alignment = 'center',
-                    offset = { x, 0, 2 },
-                    size = { CHAIN_ICON_SIZE, CHAIN_ICON_SIZE },
-                    color = Color.terminal_text_body(255, true),
-                },
-            }
+        local stripe_count = 0
+        for i = 1, #records do
+            local record = records[i]
+            local rtype = record.type
+            if rtype == 'stat' then
+                local grid_entry = {
+                    widget_type = 'stat',
+                    label = record.label,
+                    value = record.value,
+                    label_color = record.label_color,
+                    indent = record.indent or 0,
+                    stripe = stripe_count % 2 == 1,
+                }
+                layout[#layout + 1] = grid_entry
+                stripe_count = stripe_count + 1
+            elseif rtype == 'table' then
+                layout[#layout + 1] = { widget_type = 'spacer', size = 'tight' }
+                layout[#layout + 1] = { widget_type = 'table', record = record }
+                stripe_count = 0
+            elseif rtype == 'chain' then
+                layout[#layout + 1] = {
+                    widget_type = 'chain',
+                    title = record.title,
+                    chain = record.chain,
+                }
+                stripe_count = 0
+            else
+                layout[#layout + 1] = {
+                    widget_type = rtype,
+                    text = record.text,
+                    color = record.color,
+                    size = record.size,
+                    indent = record.indent,
+                }
+            end
         end
     end
-    local widget_def = UIWidget.create_definition(passes, 'weapon_stats_detail_pivot', nil, { width, CHAIN_ROW_HEIGHT })
-    local widget = self:_create_widget('detail_chain_' .. #self._detail_widgets, widget_def)
-    self._detail_widgets[#self._detail_widgets + 1] = widget
+
+    local left_click_callback = callback(self, 'cb_on_detail_entry_left_pressed')
+    self._detail_grid:present_grid_layout(layout, blueprints, left_click_callback)
 end
 
-local SPACER_HEIGHT = {
-    group = 10,
-    tight = 4,
-}
-
-local function _render_record(self, record, width, stripe_state)
-    local rtype = record.type
-    if rtype == 'spacer' then
-        _make_spacer(self, SPACER_HEIGHT[record.size or 'tight'] or 8, width)
-    elseif rtype == 'section' then
-        _make_text_widget(self, record.text, 22, record.color, width, 30)
-        _make_rule(self, width)
-        _make_spacer(self, SPACER_HEIGHT.tight, width)
-    elseif rtype == 'attack' then
-        stripe_state.count = 0
-        _make_spacer(self, 2, width)
-        _make_text_widget(self, record.text, 19, record.color, width, 26)
-    elseif rtype == 'chain' then
-        stripe_state.count = 0
-        _make_chain_row(self, record.title, record.chain, width)
-    elseif rtype == 'subheader' then
-        _make_text_widget(self, record.text, 16, record.color, width, 22, (record.indent or 0) * INDENT_PX)
-    elseif rtype == 'stat' then
-        local stripe = stripe_state.count % 2 == 1
-        stripe_state.count = stripe_state.count + 1
-        _make_stat_row(self, record.label, record.value, record.label_color, width, record.indent or 0, nil, stripe)
-    elseif rtype == 'table' then
-        _make_table(self, record, width, stripe_state)
-    end
-end
-
-function WeaponStatsView:_rebuild_detail_widgets(entry)
-    if self._detail_widgets then
-        for i = 1, #self._detail_widgets do
-            local widget = self._detail_widgets[i]
-            self:_unregister_widget_name(widget.name)
-        end
-    end
-    self._detail_widgets = {}
-
-    if not entry then
-        return
-    end
-
-    local detail_scenegraph = self._ui_scenegraph.weapon_stats_detail_content
-    local detail_width = detail_scenegraph and detail_scenegraph.size[1] or 600
-
-    _make_text_widget(self, entry.name, 26, Color.terminal_text_header(255, true), detail_width, 34)
-    if entry.subtext then
-        _make_text_widget(self, entry.subtext, 16, entry.subtext_color or COLOR_LABEL, detail_width, 22)
-    end
-    _make_spacer(self, 8, detail_width)
-
-    local weapon = entry.weapon
-    local item = WeaponStatsView._placeholder_item(weapon.weapon_template)
-    local records = Builder.build_stats(item)
-
-    local stripe_state = { count = 0 }
-    for i = 1, #records do
-        _render_record(self, records[i], detail_width, stripe_state)
-    end
-
-    local detail_grid_scenegraph_id = 'weapon_stats_detail_content'
-    self._detail_grid =
-        self:_setup_grid(self._detail_widgets, self._detail_widgets, detail_grid_scenegraph_id, DETAIL_GRID_SPACING)
-
-    local detail_scrollbar_widget = self._widgets_by_name.weapon_stats_detail_scrollbar
-    self._detail_grid:assign_scrollbar(detail_scrollbar_widget, 'weapon_stats_detail_pivot', detail_grid_scenegraph_id)
-    self._detail_grid:set_scrollbar_progress(0)
-end
-
-function WeaponStatsView:cb_on_entry_pressed(widget, entry)
-    local pressed_function = entry.pressed_function
-    if pressed_function then
-        pressed_function(self, widget, entry)
-    end
+function WeaponStatsView:cb_on_detail_entry_left_pressed(widget, element)
+    -- Non-interactive detail grid; left clicks are absorbed but do nothing.
+    return
 end
 
 function WeaponStatsView:cb_on_close_pressed()
@@ -774,87 +409,23 @@ function WeaponStatsView:update(dt, t, input_service)
         end
     end
 
-    local widgets_by_name = self._widgets_by_name
-
-    if self._entry_grid and widgets_by_name.weapon_stats_list_interaction then
-        local list_interaction = widgets_by_name.weapon_stats_list_interaction
-        local is_list_hovered = not self._using_cursor_navigation or list_interaction.content.hotspot.is_hover or false
-        local list_input_service = is_list_hovered and input_service or input_service:null_service()
-        self._entry_grid:update(dt, t, list_input_service)
-    end
-
-    if self._detail_grid and widgets_by_name.weapon_stats_detail_interaction then
-        local detail_interaction = widgets_by_name.weapon_stats_detail_interaction
-        local is_detail_hovered = not self._using_cursor_navigation
-            or detail_interaction.content.hotspot.is_hover
-            or false
-        local detail_input_service = is_detail_hovered and input_service or input_service:null_service()
-        self._detail_grid:update(dt, t, detail_input_service)
-    end
-
     return WeaponStatsView.super.update(self, dt, t, input_service)
-end
-
-function WeaponStatsView:_draw_grid(grid, widgets, interaction_widget, ui_renderer, is_grid_hovered)
-    if not grid or not widgets then
-        return
-    end
-
-    for i = 1, #widgets do
-        local widget = widgets[i]
-        if widget and grid:is_widget_visible(widget) then
-            local hotspot = widget.content.hotspot
-            if hotspot then
-                hotspot.force_disabled = not is_grid_hovered
-                hotspot.is_selected = widget == self._selected_widget or nil
-            end
-            UIWidget.draw(widget, ui_renderer)
-        end
-    end
-end
-
-function WeaponStatsView:_draw_widgets(dt, t, input_service, ui_renderer)
-    WeaponStatsView.super._draw_widgets(self, dt, t, input_service, ui_renderer)
-
-    local ui_scenegraph = self._ui_scenegraph
-    local render_settings = self._render_settings
-    local widgets_by_name = self._widgets_by_name
-
-    if self._entry_grid then
-        local list_scrollbar = widgets_by_name.weapon_stats_list_scrollbar
-        if list_scrollbar then
-            list_scrollbar.content.visible = self._entry_grid:can_scroll()
-        end
-    end
-
-    if self._detail_grid then
-        local detail_scrollbar = widgets_by_name.weapon_stats_detail_scrollbar
-        if detail_scrollbar then
-            detail_scrollbar.content.visible = self._detail_grid:can_scroll()
-        end
-    end
-
-    UIRenderer.begin_pass(ui_renderer, ui_scenegraph, input_service, dt, render_settings)
-
-    local grid_interaction_widget = widgets_by_name.weapon_stats_list_interaction
-    local is_list_hovered = not self._using_cursor_navigation
-        or grid_interaction_widget.content.hotspot.is_hover
-        or false
-    self:_draw_grid(self._entry_grid, self._entry_widgets, grid_interaction_widget, ui_renderer, is_list_hovered)
-
-    local detail_interaction_widget = widgets_by_name.weapon_stats_detail_interaction
-    local is_detail_hovered = not self._using_cursor_navigation
-        or detail_interaction_widget.content.hotspot.is_hover
-        or false
-    self:_draw_grid(self._detail_grid, self._detail_widgets, detail_interaction_widget, ui_renderer, is_detail_hovered)
-
-    UIRenderer.end_pass(ui_renderer)
 end
 
 function WeaponStatsView:on_exit()
     if self._input_legend_element then
         self._input_legend_element = nil
         self:_remove_element('input_legend')
+    end
+
+    if self._list_grid then
+        self._list_grid = nil
+        self:_remove_element('list_grid')
+    end
+
+    if self._detail_grid then
+        self._detail_grid = nil
+        self:_remove_element('detail_grid')
     end
 
     _release_icon_packages(self._loaded_icon_packages)

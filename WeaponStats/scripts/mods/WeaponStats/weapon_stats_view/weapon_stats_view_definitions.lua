@@ -3,7 +3,6 @@ local mod = get_mod('WeaponStats')
 local UIWidget = mod:original_require('scripts/managers/ui/ui_widget')
 local UIWorkspaceSettings = mod:original_require('scripts/settings/ui/ui_workspace_settings')
 local UIFontSettings = mod:original_require('scripts/managers/ui/ui_font_settings')
-local ScrollbarPassTemplates = mod:original_require('scripts/ui/pass_templates/scrollbar_pass_templates')
 local TextInputPassTemplates = mod:original_require('scripts/ui/pass_templates/text_input_pass_templates')
 
 -- Dynamic sizing based on screen
@@ -16,7 +15,6 @@ local top_padding = 150
 local bottom_padding = 50
 local gap = 20
 local scrollbar_width = 7
-local content_padding = 10
 local search_height = 50
 local search_gap = 10
 
@@ -41,26 +39,12 @@ local scenegraph_definition = {
         size = { grid_width, grid_height },
         position = { left_padding, top_padding + search_height + search_gap, 1 },
     },
-    weapon_stats_list_pivot = {
-        vertical_alignment = 'top',
-        parent = 'weapon_stats_list_background',
-        horizontal_alignment = 'left',
-        size = { 0, 0 },
-        position = { content_padding, content_padding, 1 },
-    },
-    weapon_stats_list_scrollbar = {
-        vertical_alignment = 'center',
-        parent = 'weapon_stats_list_background',
-        horizontal_alignment = 'right',
-        size = { scrollbar_width, grid_height - content_padding * 2 },
-        position = { -content_padding, 0, 10 },
-    },
-    weapon_stats_list_interaction = {
+    weapon_stats_list_content = {
         vertical_alignment = 'top',
         parent = 'weapon_stats_list_background',
         horizontal_alignment = 'left',
         size = { grid_width, grid_height },
-        position = { 0, 0, 10 },
+        position = { 0, 0, 1 },
     },
     weapon_stats_detail_background = {
         vertical_alignment = 'top',
@@ -73,29 +57,8 @@ local scenegraph_definition = {
         vertical_alignment = 'top',
         parent = 'weapon_stats_detail_background',
         horizontal_alignment = 'left',
-        size = { detail_width - content_padding * 4 - scrollbar_width, detail_height - content_padding * 4 },
-        position = { content_padding * 2, content_padding * 2, 1 },
-    },
-    weapon_stats_detail_pivot = {
-        vertical_alignment = 'top',
-        parent = 'weapon_stats_detail_content',
-        horizontal_alignment = 'left',
-        size = { 0, 0 },
+        size = { detail_width, detail_height },
         position = { 0, 0, 1 },
-    },
-    weapon_stats_detail_scrollbar = {
-        vertical_alignment = 'center',
-        parent = 'weapon_stats_detail_background',
-        horizontal_alignment = 'right',
-        size = { scrollbar_width, detail_height - content_padding * 4 },
-        position = { -content_padding, 0, 10 },
-    },
-    weapon_stats_detail_interaction = {
-        vertical_alignment = 'top',
-        parent = 'weapon_stats_detail_content',
-        horizontal_alignment = 'left',
-        size = { detail_width - content_padding * 4 - scrollbar_width, detail_height - content_padding * 4 },
-        position = { 0, 0, 10 },
     },
     weapon_stats_title_text = {
         vertical_alignment = 'top',
@@ -129,14 +92,6 @@ local widget_definitions = {
             },
         },
     }, 'weapon_stats_list_background'),
-    weapon_stats_list_scrollbar = UIWidget.create_definition(
-        ScrollbarPassTemplates.default_scrollbar,
-        'weapon_stats_list_scrollbar'
-    ),
-    weapon_stats_detail_scrollbar = UIWidget.create_definition(
-        ScrollbarPassTemplates.default_scrollbar,
-        'weapon_stats_detail_scrollbar'
-    ),
     weapon_stats_detail_background = UIWidget.create_definition({
         {
             pass_type = 'rect',
@@ -145,18 +100,52 @@ local widget_definitions = {
             },
         },
     }, 'weapon_stats_detail_background'),
-    weapon_stats_detail_interaction = UIWidget.create_definition({
-        {
-            pass_type = 'hotspot',
-            content_id = 'hotspot',
-        },
-    }, 'weapon_stats_detail_interaction'),
-    weapon_stats_list_interaction = UIWidget.create_definition({
-        {
-            pass_type = 'hotspot',
-            content_id = 'hotspot',
-        },
-    }, 'weapon_stats_list_interaction'),
+}
+
+local fade_margin = 16
+
+local list_grid_width = grid_width
+local list_grid_height = grid_height - 13
+local list_grid_settings = {
+    grid_id = 'list_grid',
+    scrollbar_width = scrollbar_width,
+    scrollbar_horizontal_offset = -scrollbar_width,
+    use_is_focused_for_navigation = false,
+    use_select_on_focused = false,
+    use_terminal_background = false,
+    hide_dividers = true,
+    hide_background = true,
+    using_custom_gamepad_navigation = false,
+    enable_gamepad_scrolling = true,
+    widget_icon_load_margin = 0,
+    top_padding = 0,
+    edge_padding = fade_margin,
+    grid_spacing = { 0, 2 },
+    grid_size = { list_grid_width - fade_margin, list_grid_height },
+    mask_size = { list_grid_width, list_grid_height },
+    title_height = 0,
+}
+
+local detail_grid_width = detail_width
+local detail_grid_height = detail_height - 13
+local detail_grid_settings = {
+    grid_id = 'detail_grid',
+    scrollbar_width = scrollbar_width,
+    scrollbar_horizontal_offset = -scrollbar_width,
+    use_is_focused_for_navigation = false,
+    use_select_on_focused = false,
+    use_terminal_background = false,
+    hide_dividers = true,
+    hide_background = true,
+    using_custom_gamepad_navigation = false,
+    enable_gamepad_scrolling = true,
+    widget_icon_load_margin = 0,
+    top_padding = 0,
+    edge_padding = fade_margin,
+    grid_spacing = { 0, 2 },
+    grid_size = { detail_grid_width - fade_margin, detail_grid_height },
+    mask_size = { detail_grid_width, detail_grid_height },
+    title_height = 0,
 }
 
 local legend_inputs = {
@@ -172,4 +161,6 @@ return {
     widget_definitions = widget_definitions,
     scenegraph_definition = scenegraph_definition,
     legend_inputs = legend_inputs,
+    list_grid_settings = list_grid_settings,
+    detail_grid_settings = detail_grid_settings,
 }
