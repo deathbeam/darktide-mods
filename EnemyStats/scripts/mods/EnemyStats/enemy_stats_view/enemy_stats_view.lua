@@ -20,15 +20,7 @@ function EnemyStatsView:init(settings, context)
 
     self._pass_draw = false
     self._enemy_groups = Data.build_enemy_list()
-    self._flat_list = {}
-    for _, cat in ipairs(Data.category_order()) do
-        local group = self._enemy_groups[cat] or {}
-        for i = 1, #group do
-            self._flat_list[#self._flat_list + 1] = group[i]
-        end
-    end
     self._last_search_text = ''
-    self._initial_breed = context and context.breed_name or nil
 end
 
 function EnemyStatsView:on_enter()
@@ -195,21 +187,8 @@ function EnemyStatsView:_cb_on_list_presented()
         return
     end
 
-    local initial_breed = self._initial_breed
-    local match_index = nil
-    if initial_breed then
-        for i = 1, #entries do
-            if entries[i].breed_name == initial_breed then
-                match_index = i
-                break
-            end
-        end
-    end
-    match_index = match_index or 1
-    self._list_grid:select_grid_index(match_index)
-    self._list_grid:scroll_to_grid_index(match_index)
-    self:_select_entry(entries[match_index])
-    self._initial_breed = nil
+    self._list_grid:select_grid_index(1)
+    self:_select_entry(entries[1])
 end
 
 function EnemyStatsView:cb_on_list_entry_left_pressed(widget, element)
