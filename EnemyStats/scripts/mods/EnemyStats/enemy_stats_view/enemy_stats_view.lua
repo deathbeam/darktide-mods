@@ -259,21 +259,21 @@ function EnemyStatsView:_present_detail(entry)
                 layout[#layout + 1] = {
                     widget_type = 'stat',
                     label = mod:localize('stat_challenge'),
-                    value = tostring(info.challenge_rating),
+                    value = string.format('%.2f', info.challenge_rating),
                 }
             end
             if info.stagger_resistance then
                 layout[#layout + 1] = {
                     widget_type = 'stat',
                     label = mod:localize('stat_stagger_resist'),
-                    value = tostring(info.stagger_resistance),
+                    value = string.format('%.2f', info.stagger_resistance),
                 }
             end
             if info.stagger_reduction then
                 layout[#layout + 1] = {
                     widget_type = 'stat',
                     label = mod:localize('stat_stagger_reduction'),
-                    value = tostring(info.stagger_reduction),
+                    value = string.format('%.2f', info.stagger_reduction),
                 }
             end
             if info.run_speed then

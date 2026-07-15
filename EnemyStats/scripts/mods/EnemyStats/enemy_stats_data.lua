@@ -119,7 +119,7 @@ end
 
 local function zone_armor(breed, zone_name)
     local overrides = breed.hitzone_armor_override
-    return overrides and overrides[zone_name] or breed.armor_type
+    return overrides and overrides[zone_name] or breed.armor_type or 'unarmored'
 end
 
 local function breed_zone_lookup(breed)
@@ -372,7 +372,7 @@ function EnemyStatsData.hit_zones(breed_name)
                 zone = zone,
                 label = zone_name(zone),
                 armor_cat = armor_cat,
-                armor_label = mod:localize('armor_' .. armor_cat),
+                armor_label = armor_cat and mod:localize('armor_' .. armor_cat) or '',
                 armor_color = ARMOR_COLOR[armor_cat] or { 200, 200, 200 },
                 weakspot = weakspot,
                 weakspot_label = weakspot and weakspot_name(weakspot) or nil,
