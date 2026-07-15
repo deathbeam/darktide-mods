@@ -1,4 +1,5 @@
 local mod = get_mod('EnemyStats')
+local SharedUtils = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/shared/shared_utils')
 
 local Breeds = require('scripts/settings/breed/breeds')
 local ArmorSettings = require('scripts/settings/damage/armor_settings')
@@ -60,19 +61,7 @@ local function breed_label(breed_name)
         return name_cache[breed_name]
     end
     local breed = Breeds[breed_name]
-    local label
-    if breed and breed.display_name then
-        local ok, s = pcall(Localize, breed.display_name)
-        if ok and s and s ~= '' and not s:find('^<') then
-            label = s
-        end
-    end
-    if not label then
-        label = breed_name:gsub('_', ' ')
-        label = label:gsub("(%a)([%w']*)", function(a, b)
-            return a:upper() .. b
-        end)
-    end
+    local label = (breed and SharedUtils.safe_localize(breed.display_name)) or SharedUtils.prettify(breed_name)
     name_cache[breed_name] = label
     return label
 end
@@ -225,9 +214,7 @@ local function zone_name(zone_key)
     if s and not s:find('^<') then
         return s
     end
-    return zone_key:gsub('_', ' '):gsub("(%a)([%w']*)", function(a, b)
-        return a:upper() .. b
-    end)
+    return SharedUtils.prettify(zone_key)
 end
 
 local function weakspot_name(type_key)

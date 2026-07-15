@@ -39,3 +39,6 @@ luac.out
 *.x86_64
 *.hex
 
+
+# Build-time copied shared files (synced from scripts/shared/ by CI or dev script)
+*/scripts/mods/*/shared/

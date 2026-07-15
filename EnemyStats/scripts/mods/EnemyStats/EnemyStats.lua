@@ -1,18 +1,8 @@
 local mod = get_mod('EnemyStats')
 
+local SharedUtils = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/shared/shared_utils')
 local _game_loc = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/EnemyStats_localization').game_loc or {}
-
-local _orig_localize = mod.localize
-function mod:localize(text_id, ...)
-    local loc_id = _game_loc[text_id]
-    if loc_id then
-        local ok, s = pcall(Localize, loc_id)
-        if ok and s and s ~= '' and not s:find('^<') then
-            return s
-        end
-    end
-    return _orig_localize(self, text_id, ...)
-end
+SharedUtils.apply_game_loc(mod, _game_loc)
 
 -- Register Enemy Stats View
 mod:add_require_path('EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_view')

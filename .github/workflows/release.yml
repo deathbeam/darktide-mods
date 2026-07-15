@@ -58,4 +58,4 @@ jobs:
           if [ "${{ inputs.force }}" = "true" ]; then
             ARGS+=("--force")
           fi
-          node scripts/ci/publish_mods.js "${ARGS[@]}"
+          make publish ARGS="${ARGS[*]}"

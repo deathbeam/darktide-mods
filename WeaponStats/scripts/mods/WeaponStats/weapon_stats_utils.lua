@@ -1,4 +1,5 @@
 local mod = get_mod('WeaponStats')
+local SharedUtils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/shared/shared_utils')
 
 local DamageProfile = mod:original_require('scripts/utilities/attack/damage_profile')
 local DamageCalculation = mod:original_require('scripts/utilities/attack/damage_calculation')
@@ -58,14 +59,7 @@ local function _localize_or_prettify(loc_id, key)
     if localized and not localized:find('^<') then
         return localized
     end
-    if type(key) ~= 'string' then
-        return tostring(key)
-    end
-    local prettified = key:gsub('_', ' ')
-    prettified = prettified:gsub('(%a)(%a+)', function(first, rest)
-        return first:upper() .. rest
-    end)
-    return prettified
+    return SharedUtils.prettify(key)
 end
 
 local function _label(prefix, key)
@@ -361,21 +355,10 @@ end
 
 -- Weapon display names
 
-local function _safe_localize(text)
-    if not text or text == '' or text == 'n/a' then
-        return nil
-    end
-    local ok, localized = pcall(Localize, text)
-    if not ok then
-        return nil
-    end
-    return localized
-end
-
 local function _lore_name(item, field)
     local desc = item and item[field]
     local loc_id = desc and desc.loc_id
-    return loc_id and _safe_localize(loc_id) or nil
+    return loc_id and SharedUtils.safe_localize(loc_id) or nil
 end
 
 local _weapon_name_cache
@@ -388,7 +371,7 @@ local function _weapon_name_map()
     local weapon_patterns = UISettings and UISettings.weapon_patterns
     if weapon_patterns then
         for _pattern_key, pattern_data in pairs(weapon_patterns) do
-            local family = _safe_localize(pattern_data.display_name)
+            local family = SharedUtils.safe_localize(pattern_data.display_name)
             local marks = pattern_data.marks
             if marks then
                 for i = 1, #marks do
@@ -450,10 +433,10 @@ function WeaponStatsUtils.attack_type_name(weapon_template, slot_key, damage_pro
         if not entry then
             return nil
         end
-        return _safe_localize(entry.display_name) or _label('gestalt_', entry.type)
+        return SharedUtils.safe_localize(entry.display_name) or _label('gestalt_', entry.type)
     end
 
-    return _safe_localize('loc_gestalt_' .. gestalt) or _label('gestalt_', gestalt)
+    return SharedUtils.safe_localize('loc_gestalt_' .. gestalt) or _label('gestalt_', gestalt)
 end
 
 function WeaponStatsUtils.weapon_display_name(template_name)

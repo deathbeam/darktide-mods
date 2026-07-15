@@ -4,7 +4,7 @@ local ViewElementInputLegend =
     mod:original_require('scripts/ui/view_elements/view_element_input_legend/view_element_input_legend')
 local ViewElementGrid = mod:original_require('scripts/ui/view_elements/view_element_grid/view_element_grid')
 
-local Data = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_data')
+local Data = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_utils')
 local make_list_blueprints =
     mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_view_blueprints')
 local make_detail_blueprints =
