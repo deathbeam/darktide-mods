@@ -130,27 +130,24 @@ function EnemyStatsView:_setup_entries()
     search_text = search_text:lower()
 
     local entries = {}
-    for _, cat in ipairs(Data.category_order()) do
-        local group = self._enemy_groups[cat] or {}
-        for i = 1, #group do
-            local entry = group[i]
-            local label = entry.label
-            local match = search_text == ''
-                or label:lower():find(search_text, 1, true)
-                or entry.breed_name:lower():find(search_text, 1, true)
-            if match then
-                entries[#entries + 1] = {
-                    widget_type = 'enemy_entry',
-                    name = label,
-                    subtext = self:_format_list_subtext(entry),
-                    subtext_color = Color.terminal_text_body_sub_header(255, true),
-                    breed_name = entry.breed_name,
-                    category = cat,
-                    size = entry.size,
-                    is_ranged = entry.is_ranged,
-                    faction = entry.faction,
-                }
-            end
+    for i = 1, #self._enemy_groups do
+        local entry = self._enemy_groups[i]
+        local label = entry.label
+        local match = search_text == ''
+            or label:lower():find(search_text, 1, true)
+            or entry.breed_name:lower():find(search_text, 1, true)
+        if match then
+            entries[#entries + 1] = {
+                widget_type = 'enemy_entry',
+                name = label,
+                subtext = self:_format_list_subtext(entry),
+                subtext_color = Color.terminal_text_body_sub_header(255, true),
+                breed_name = entry.breed_name,
+                category = entry.category,
+                size = entry.size,
+                is_ranged = entry.is_ranged,
+                faction = entry.faction,
+            }
         end
     end
 

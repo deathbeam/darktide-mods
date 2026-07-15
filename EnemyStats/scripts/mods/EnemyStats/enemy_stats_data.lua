@@ -20,8 +20,6 @@ local ARMOR_COLOR = {
     [armor_types.void_shield] = { 80, 165, 240 },
 }
 
-local CATEGORY_ORDER = { 'regular', 'elite', 'specialist', 'boss' }
-
 local HIT_ZONE_ORDER = {
     'head',
     'torso',
@@ -315,26 +313,10 @@ function EnemyStatsData.build_enemy_list()
         end
     end
 
-    local groups = {}
-    for _, cat in ipairs(CATEGORY_ORDER) do
-        groups[cat] = {}
-    end
-    for _, entry in ipairs(deduped) do
-        local group = groups[entry.category]
-        if group then
-            group[#group + 1] = entry
-        end
-    end
-    for _, group in pairs(groups) do
-        table.sort(group, function(a, b)
-            return a.label:lower() < b.label:lower()
-        end)
-    end
-    return groups
-end
-
-function EnemyStatsData.category_order()
-    return CATEGORY_ORDER
+    table.sort(deduped, function(a, b)
+        return a.label:lower() < b.label:lower()
+    end)
+    return deduped
 end
 
 -- Difficulty-scaling rows: { difficulty, health, hit_mass }.
