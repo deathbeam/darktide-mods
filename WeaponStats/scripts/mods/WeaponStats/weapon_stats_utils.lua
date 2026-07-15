@@ -35,6 +35,17 @@ local DIRECTION_TOKENS = {
     pull = 'thrust',
 }
 
+local ARMOR_COLOR = {
+    unarmored = { 90, 195, 90 },
+    armored = { 215, 150, 50 },
+    super_armor = { 150, 155, 175 },
+    berserker = { 210, 70, 70 },
+    resistant = { 160, 95, 195 },
+    disgustingly_resilient = { 150, 185, 70 },
+    player = { 90, 195, 90 },
+    void_shield = { 80, 165, 240 },
+}
+
 local COMBO_CHAIN_INPUTS = { 'light_attack', 'heavy_attack' }
 local SPECIAL_CHAIN_INPUT = 'special_action'
 local PUSH_CHAIN_INPUTS = { 'push', 'push_follow_up' }
@@ -68,6 +79,14 @@ local WeaponStatsUtils = {}
 
 function WeaponStatsUtils.armor_name(armor_key)
     return _label('armor_', armor_key)
+end
+
+function WeaponStatsUtils.armor_color(armor_key)
+    local rgb = ARMOR_COLOR[armor_key]
+    if not rgb then
+        return nil
+    end
+    return { 255, rgb[1], rgb[2], rgb[3] }
 end
 
 function WeaponStatsUtils.damage_type_name(damage_type)

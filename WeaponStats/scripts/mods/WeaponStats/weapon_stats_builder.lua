@@ -466,6 +466,7 @@ local function _compute_adm_values(profile, target_settings, action_lerp, is_ran
 
             rows[#rows + 1] = {
                 name = Utils.armor_name(armor_key),
+                name_color = Utils.armor_color(armor_key),
                 attack = normal_near,
                 attack_far = normal_far,
                 impact = normal_impact,
