@@ -174,10 +174,10 @@ function EnemyStatsView:_setup_entries()
 end
 
 function EnemyStatsView:_format_list_subtext(entry)
-    local size_label = mod:localize('size_' .. entry.size)
     local role_label = mod:localize(entry.is_ranged and 'role_ranged' or 'role_melee')
+    local category_label = mod:localize('kind_' .. entry.category)
     local faction_label = mod:localize('faction_' .. entry.faction)
-    return string.format('%s | %s | %s', size_label, role_label, faction_label)
+    return string.format('%s | %s | %s', role_label, category_label, faction_label)
 end
 
 function EnemyStatsView:_cb_on_list_presented()
