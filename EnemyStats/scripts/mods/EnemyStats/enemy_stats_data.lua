@@ -240,25 +240,78 @@ local function weakspot_name(type_key)
     return mod:localize('weakspot_' .. type_key)
 end
 
--- Builds the full enemy list, grouped and sorted by category, deduped by display name.
+local function breed_signature(breed)
+    local hit_mass = breed.hit_mass
+    local hit_mass_key = type(hit_mass) == 'table' and table.concat(hit_mass, ',') or tostring(hit_mass or '')
+    local parts = {
+        breed.armor_type or 'none',
+        breed.run_speed or '',
+        breed.walk_speed or '',
+        breed.stagger_resistance or '',
+        breed.stagger_reduction or '',
+        breed.base_height or '',
+        hit_mass_key,
+        breed.ranged == true and 'r' or 'm',
+    }
+    local zone_list = {}
+    for zone in pairs(breed_zone_lookup(breed)) do
+        zone_list[#zone_list + 1] = zone .. ':' .. zone_armor(breed, zone)
+    end
+    table.sort(zone_list)
+    return table.concat(parts, '|') .. '#' .. table.concat(zone_list, ',')
+end
+
 function EnemyStatsData.build_enemy_list()
-    local by_label = {}
+    local all = {}
     for breed_name, breed in pairs(Breeds) do
         if breed.tags then
-            local label = breed_label(breed_name)
-            local cat = breed_category(breed)
-            local entry = by_label[label]
-            -- First entry wins; keeps a stable canonical breed per display name.
-            if not entry or (cat == 'boss' and entry.category ~= 'boss') then
-                by_label[label] = {
-                    breed_name = breed_name,
-                    label = label,
-                    category = cat,
-                    size = breed_size(breed),
-                    is_ranged = breed_is_ranged(breed),
-                    faction = breed_faction(breed),
-                }
+            all[#all + 1] = {
+                breed_name = breed_name,
+                label = breed_label(breed_name),
+                category = breed_category(breed),
+                size = breed_size(breed),
+                is_ranged = breed_is_ranged(breed),
+                faction = breed_faction(breed),
+                signature = breed_signature(breed, breed_name),
+            }
+        end
+    end
+
+    -- Collapse same-name breeds whose displayed stats are identical. A divergent
+    -- mutator variant (e.g. a circumstance hound with lower HP) stays distinct.
+    local by_label = {}
+    for i = 1, #all do
+        local entry = all[i]
+        local group = by_label[entry.label]
+        if not group then
+            group = {}
+            by_label[entry.label] = group
+        end
+        group[#group + 1] = entry
+    end
+
+    local deduped = {}
+    for label, group in pairs(by_label) do
+        local seen_sigs = {}
+        for i = 1, #group do
+            local entry = group[i]
+            if not seen_sigs[entry.signature] then
+                seen_sigs[entry.signature] = true
+                deduped[#deduped + 1] = entry
             end
+        end
+    end
+
+    -- Disambiguate any remaining same-name entries that genuinely differ.
+    local label_counts = {}
+    for i = 1, #deduped do
+        local label = deduped[i].label
+        label_counts[label] = (label_counts[label] or 0) + 1
+    end
+    for i = 1, #deduped do
+        local entry = deduped[i]
+        if label_counts[entry.label] > 1 then
+            entry.label = entry.label .. ' (' .. entry.breed_name .. ')'
         end
     end
 
@@ -266,7 +319,7 @@ function EnemyStatsData.build_enemy_list()
     for _, cat in ipairs(CATEGORY_ORDER) do
         groups[cat] = {}
     end
-    for _, entry in pairs(by_label) do
+    for _, entry in ipairs(deduped) do
         local group = groups[entry.category]
         if group then
             group[#group + 1] = entry

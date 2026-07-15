@@ -16,6 +16,30 @@ local SPACER_HEIGHT = {
     tight = 4,
 }
 
+-- Humanoid body diagram: rect passes laid out as a silhouette, each part colored
+-- by its zone armor type. Shown beside the hit-zone table for humanoid breeds.
+local BODY_W = 180
+local BODY_GAP = 10
+local BODY_BG = { 80, 18, 18, 18 }
+local BODY_FRAME = Color.terminal_frame(100, true)
+local PART_BORDER = { 120, 0, 0, 0 }
+
+-- Zone key to { cx, cy, w, h }: center coordinates relative to the canvas center,
+-- scaled to a -1..1 range so the silhouette stretches to the diagram height.
+local BODY_PARTS = {
+    head = { 0, -0.82, 0.19, 0.12 },
+    torso = { 0, -0.46, 0.33, 0.18 },
+    center_mass = { 0, -0.46, 0.33, 0.08 },
+    upper_left_arm = { -0.47, -0.44, 0.10, 0.18 },
+    lower_left_arm = { -0.47, -0.06, 0.09, 0.16 },
+    upper_right_arm = { 0.47, -0.44, 0.10, 0.18 },
+    lower_right_arm = { 0.47, -0.06, 0.09, 0.16 },
+    upper_left_leg = { -0.18, 0.0, 0.16, 0.18 },
+    lower_left_leg = { -0.18, 0.36, 0.14, 0.18 },
+    upper_right_leg = { 0.18, 0.0, 0.16, 0.18 },
+    lower_right_leg = { 0.18, 0.36, 0.14, 0.18 },
+}
+
 -- Generic 3-column table: name + 2 value columns, sized to its content.
 local function _stat_table_passes(width, columns, rows, difficulty_header)
     local num_value_cols = #columns
@@ -179,7 +203,9 @@ local function _stat_table_passes(width, columns, rows, difficulty_header)
 end
 
 -- Hit-zone table: zone name + armor label (color-coded) + weakspot tag.
-local function _zone_table_passes(width, rows, zone_header, armor_header, weakspot_header)
+-- origin_x shifts the table right so it can sit beside the body diagram.
+local function _zone_table_passes(width, rows, zone_header, armor_header, weakspot_header, origin_x)
+    origin_x = origin_x or 0
     local num_rows = #rows
     local col_width = (width - TABLE_NAME_WIDTH) / 2
     local header_height = TABLE_HEADER_HEIGHT
@@ -192,7 +218,7 @@ local function _zone_table_passes(width, rows, zone_header, armor_header, weaksp
         style_id = 'background',
         style = {
             color = TABLE_BG_COLOR,
-            offset = { 0, 0, 0 },
+            offset = { origin_x, 0, 0 },
             size = { width, total_height },
         },
     }
@@ -203,7 +229,7 @@ local function _zone_table_passes(width, rows, zone_header, armor_header, weaksp
         style = {
             scale_to_material = true,
             color = TABLE_FRAME_COLOR,
-            offset = { 0, 0, 3 },
+            offset = { origin_x, 0, 3 },
             size = { width, total_height },
         },
     }
@@ -214,7 +240,7 @@ local function _zone_table_passes(width, rows, zone_header, armor_header, weaksp
         style = {
             scale_to_material = true,
             color = TABLE_CORNER_COLOR,
-            offset = { 0, 0, 4 },
+            offset = { origin_x, 0, 4 },
             size = { width, total_height },
         },
     }
@@ -223,7 +249,7 @@ local function _zone_table_passes(width, rows, zone_header, armor_header, weaksp
         style_id = 'header_band',
         style = {
             color = TABLE_HEADER_BG_COLOR,
-            offset = { 0, 0, 1 },
+            offset = { origin_x, 0, 1 },
             size = { width, header_height },
         },
     }
@@ -232,7 +258,7 @@ local function _zone_table_passes(width, rows, zone_header, armor_header, weaksp
         style_id = 'header_separator',
         style = {
             color = TABLE_GRID_COLOR,
-            offset = { 0, header_height - 1, 2 },
+            offset = { origin_x, header_height - 1, 2 },
             size = { width, 2 },
         },
     }
@@ -241,7 +267,7 @@ local function _zone_table_passes(width, rows, zone_header, armor_header, weaksp
         style_id = 'name_separator',
         style = {
             color = TABLE_GRID_COLOR,
-            offset = { TABLE_NAME_WIDTH - 1, 0, 2 },
+            offset = { origin_x + TABLE_NAME_WIDTH - 1, 0, 2 },
             size = { 2, total_height },
         },
     }
@@ -265,7 +291,7 @@ local function _zone_table_passes(width, rows, zone_header, armor_header, weaksp
                 text_vertical_alignment = 'center',
                 text_horizontal_alignment = header_aligns[col_index],
                 text_color = COLOR_LABEL,
-                offset = { header_x[col_index], 0, 5 },
+                offset = { origin_x + header_x[col_index], 0, 5 },
                 size = { col_width, header_height },
                 text_overflow_mode = 'truncate',
             },
@@ -278,7 +304,7 @@ local function _zone_table_passes(width, rows, zone_header, armor_header, weaksp
             style_id = 'col_sep_' .. col_index,
             style = {
                 color = TABLE_GRID_COLOR,
-                offset = { x, 0, 2 },
+                offset = { origin_x + x, 0, 2 },
                 size = { 2, total_height },
             },
         }
@@ -298,7 +324,7 @@ local function _zone_table_passes(width, rows, zone_header, armor_header, weaksp
                 text_vertical_alignment = 'center',
                 text_horizontal_alignment = 'left',
                 text_color = COLOR_LABEL,
-                offset = { 6, y, 5 },
+                offset = { origin_x + 6, y, 5 },
                 size = { TABLE_NAME_WIDTH - 12, row_height },
                 text_overflow_mode = 'truncate',
             },
@@ -314,7 +340,7 @@ local function _zone_table_passes(width, rows, zone_header, armor_header, weaksp
                 text_vertical_alignment = 'center',
                 text_horizontal_alignment = 'center',
                 text_color = { 255, row.armor_color[1], row.armor_color[2], row.armor_color[3] },
-                offset = { TABLE_NAME_WIDTH, y, 5 },
+                offset = { origin_x + TABLE_NAME_WIDTH, y, 5 },
                 size = { col_width, row_height },
                 text_overflow_mode = 'truncate',
             },
@@ -330,12 +356,64 @@ local function _zone_table_passes(width, rows, zone_header, armor_header, weaksp
                 text_vertical_alignment = 'center',
                 text_horizontal_alignment = 'center',
                 text_color = row.weakspot and Color.ui_terminal(255, true) or COLOR_VALUE,
-                offset = { TABLE_NAME_WIDTH + col_width, y, 5 },
+                offset = { origin_x + TABLE_NAME_WIDTH + col_width, y, 5 },
                 size = { col_width, row_height },
                 text_overflow_mode = 'truncate',
             },
         }
     end
+    return passes
+end
+
+local function _body_diagram_passes(origin_x, canvas_h, zones)
+    local zone_by_key = {}
+    for i = 1, #zones do
+        zone_by_key[zones[i].zone] = zones[i]
+    end
+
+    local passes = {
+        {
+            pass_type = 'rect',
+            style_id = 'diagram_bg',
+            style = {
+                color = BODY_BG,
+                offset = { origin_x, 0, 0 },
+                size = { BODY_W, canvas_h },
+            },
+        },
+        {
+            pass_type = 'rect',
+            style_id = 'diagram_frame',
+            style = {
+                color = BODY_FRAME,
+                offset = { origin_x, 0, 1 },
+                size = { BODY_W, canvas_h },
+            },
+        },
+    }
+
+    -- Normalized coords (-1..1) scaled to the canvas.
+    local half_w = BODY_W / 2
+    local half_h = canvas_h / 2
+    for zone_key, geom in pairs(BODY_PARTS) do
+        local z = zone_by_key[zone_key]
+        local rgb = z and z.armor_color or { 120, 120, 120 }
+        local cx, cy, nw, nh = geom[1], geom[2], geom[3], geom[4]
+        local w = nw * BODY_W
+        local h = nh * canvas_h
+        local px = origin_x + half_w + cx * half_w - w / 2
+        local py = half_h + cy * half_h - h / 2
+        passes[#passes + 1] = {
+            pass_type = 'rect',
+            style_id = 'part_' .. zone_key,
+            style = {
+                color = { 255, rgb[1], rgb[2], rgb[3] },
+                offset = { px, py, 2 },
+                size = { w, h },
+            },
+        }
+    end
+
     return passes
 end
 
@@ -507,19 +585,35 @@ local function make_blueprints(width)
     blueprints.zone_table = {
         size_function = function(_, config)
             local rows = config.rows or {}
-            return { width, TABLE_HEADER_HEIGHT + #rows * TABLE_ROW_HEIGHT }
+            local table_h = TABLE_HEADER_HEIGHT + #rows * TABLE_ROW_HEIGHT
+            if config.diagram then
+                local table_w = width - BODY_W - BODY_GAP
+                return { BODY_W + BODY_GAP + table_w, table_h }
+            end
+            return { width, table_h }
         end,
         pass_template_function = function(_, config)
-            return _zone_table_passes(
-                width,
-                config.rows or {},
+            local rows = config.rows or {}
+            local table_h = TABLE_HEADER_HEIGHT + #rows * TABLE_ROW_HEIGHT
+            local table_w = config.diagram and (width - BODY_W - BODY_GAP) or width
+            local table_origin = config.diagram and (BODY_W + BODY_GAP) or 0
+            local table_passes = _zone_table_passes(
+                table_w,
+                rows,
                 config.zone_header,
                 config.armor_header,
-                config.weakspot_header
+                config.weakspot_header,
+                table_origin
             )
+            if config.diagram then
+                local diagram_passes = _body_diagram_passes(0, table_h, rows)
+                for i = 1, #diagram_passes do
+                    table_passes[#table_passes + 1] = diagram_passes[i]
+                end
+            end
+            return table_passes
         end,
     }
-
     return blueprints
 end
 

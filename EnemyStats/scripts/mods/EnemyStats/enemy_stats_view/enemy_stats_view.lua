@@ -306,6 +306,13 @@ function EnemyStatsView:_present_detail(entry)
 
         local zones = Data.hit_zones(entry.breed_name)
         if zones and #zones > 0 then
+            -- Body diagram for humanoid breeds (has torso + limbs).
+            local zone_set = {}
+            for i = 1, #zones do
+                zone_set[zones[i].zone] = true
+            end
+            local is_humanoid = zone_set.torso and zone_set.upper_left_arm and zone_set.upper_left_leg
+
             layout[#layout + 1] = {
                 widget_type = 'section',
                 text = mod:localize('header_hit_zones'),
@@ -316,7 +323,9 @@ function EnemyStatsView:_present_detail(entry)
                 armor_header = mod:localize('stat_armor'),
                 weakspot_header = mod:localize('stat_weakspots'),
                 rows = zones,
+                diagram = is_humanoid,
             }
+            layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
         end
     end
 
