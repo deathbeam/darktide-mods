@@ -103,7 +103,7 @@ local CombatStatsUtils = mod:io_dofile('CombatStats/scripts/mods/CombatStats/com
 
 ### Code Organization
 
-Use simple comment headers to organize code sections:
+Keep file layout ordered: imports first, then constants, then state, then functions. **Constants belong at the top of the file** (after imports and class definition), never scattered mid-file between functions. A lookup table that reads like a constant (`GAME_STAT_LABELS`, `ARMOR_COLOR`) is a constant — promote it to the constants block, not inline above the first function that uses it.
 ```lua
 -- Constants
 local CHECK_INTERVAL = 0.5

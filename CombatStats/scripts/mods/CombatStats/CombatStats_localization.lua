@@ -34,6 +34,11 @@ mod:add_global_localize_strings({
 })
 
 return {
+    game_loc = {
+        weakspot = 'loc_weapon_details_weakspot',
+        crit = 'loc_weapon_details_crit',
+        burn = 'loc_stats_display_burn_stat',
+    },
     mod_name = {
         en = 'Combat Stats',
         ['zh-cn'] = '战斗统计',
@@ -198,25 +203,10 @@ return {
         ['zh-cn'] = '增益',
         ['zh-tw'] = '增益',
     },
-    crit = {
-        en = 'Crit',
-        ['zh-cn'] = '暴击',
-        ['zh-tw'] = '致命一擊',
-    },
-    weakspot = {
-        en = 'Weakspot',
-        ['zh-cn'] = '弱点',
-        ['zh-tw'] = '弱點',
-    },
     bleed = {
         en = 'Bleed',
         ['zh-cn'] = '流血',
         ['zh-tw'] = '流血',
-    },
-    burn = {
-        en = 'Burn',
-        ['zh-cn'] = '燃烧',
-        ['zh-tw'] = '燃燒',
     },
     toxin = {
         en = 'Toxin',

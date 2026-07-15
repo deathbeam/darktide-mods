@@ -6,6 +6,34 @@ mod:add_global_localize_strings({
     },
 })
 return {
+    game_loc = {
+        -- Armor types
+        armor_unarmored = 'loc_weapon_stats_display_unarmored',
+        armor_armored = 'loc_weapon_stats_display_armored',
+        armor_berserker = 'loc_weapon_stats_display_berzerker',
+        armor_disgustingly_resilient = 'loc_weapon_stats_display_disgustingly_resilient',
+        armor_resistant = 'loc_glossary_armour_type_resistant',
+        armor_super_armor = 'loc_weapon_stats_display_super_armor',
+        -- Weapon stat labels
+        stat_dodge_distance = 'loc_weapon_stats_display_dodge_distance',
+        stat_stamina = 'loc_weapon_stats_display_stamina',
+        stat_block_cost = 'loc_weapon_stats_display_block_efficiency',
+        stat_push_cost = 'loc_weapon_stats_display_push_cost',
+        stat_sprint_cost = 'loc_weapon_stats_display_sprint_cost',
+        stat_sprint_speed = 'loc_weapon_stats_display_sprint_speed',
+        stat_attack_speed = 'loc_weapon_stats_display_attack_speed',
+        stat_fire_rate = 'loc_weapon_stats_display_rate_of_fire',
+        stat_damage = 'loc_weapon_stats_display_base_damage',
+        stat_stagger = 'loc_weapon_stats_display_stagger',
+        stat_spread = 'loc_weapon_stats_display_spread',
+        stat_suppression = 'loc_weapon_stats_display_suppression',
+        stat_falloff_range = 'loc_weapon_stats_display_effective_range',
+        stat_dodge_dr_start = 'loc_weapon_stats_display_effective_dodges',
+        stat_weakspot = 'loc_weapon_details_weakspot',
+        stat_crit = 'loc_weapon_details_crit',
+        stat_crit_plus_weakspot = 'loc_weapon_details_crit_hs',
+        stat_finesse_and_crit = 'loc_stats_display_finesse_stat',
+    },
     mod_name = {
         en = 'Weapon Stats',
     },
@@ -58,57 +86,6 @@ return {
     },
 
     -- Stat keys
-    stat_dodge_distance = {
-        en = 'Dodge Distance',
-    },
-    stat_dodge_dr_start = {
-        en = 'Effective Dodge Count',
-    },
-    stat_stamina = {
-        en = 'Stamina',
-    },
-    stat_block_cost = {
-        en = 'Block Cost',
-    },
-    stat_push_cost = {
-        en = 'Push Cost',
-    },
-    stat_sprint_cost = {
-        en = 'Sprint Cost',
-    },
-    stat_sprint_speed = {
-        en = 'Sprint Speed',
-    },
-    stat_fire_rate = {
-        en = 'Fire Rate',
-    },
-    stat_attack_speed = {
-        en = 'Attack Speed',
-    },
-    stat_damage = {
-        en = 'Damage',
-    },
-    stat_impact = {
-        en = 'Impact',
-    },
-    stat_cleave = {
-        en = 'Cleave',
-    },
-    stat_backstab = {
-        en = 'Backstab',
-    },
-    stat_finesse_and_crit = {
-        en = 'Finesse & Crit',
-    },
-    stat_weakspot = {
-        en = 'Weakspot',
-    },
-    stat_crit = {
-        en = 'Crit',
-    },
-    stat_crit_plus_weakspot = {
-        en = 'Crit + Weakspot',
-    },
     stat_crit_modifier = {
         en = 'Crit Chance',
     },
@@ -118,17 +95,14 @@ return {
     stat_pellets = {
         en = 'Pellets',
     },
-    stat_spread = {
-        en = 'Spread',
+    stat_backstab = {
+        en = 'Backstab',
     },
-    stat_falloff_range = {
-        en = 'Falloff Range',
+    stat_impact = {
+        en = 'Impact',
     },
-    stat_suppression = {
-        en = 'Suppression',
-    },
-    stat_stagger = {
-        en = 'Stagger',
+    stat_cleave = {
+        en = 'Cleave',
     },
     stat_type = {
         en = 'Type',
@@ -179,24 +153,6 @@ return {
     },
 
     -- Armor Types
-    armor_unarmored = {
-        en = 'Unarmored',
-    },
-    armor_armored = {
-        en = 'Flak',
-    },
-    armor_resistant = {
-        en = 'Unyielding',
-    },
-    armor_berserker = {
-        en = 'Maniac',
-    },
-    armor_super_armor = {
-        en = 'Carapace',
-    },
-    armor_disgustingly_resilient = {
-        en = 'Infested',
-    },
     armor_void_shield = {
         en = 'Void Shield',
     },

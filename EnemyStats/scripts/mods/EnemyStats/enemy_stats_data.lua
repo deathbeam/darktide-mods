@@ -220,10 +220,6 @@ end
 
 local EnemyStatsData = {}
 
-local function difficulty_name(key)
-    return mod:localize('diff_' .. key)
-end
-
 local function zone_name(zone_key)
     local s = mod:localize('zone_' .. zone_key)
     if s and not s:find('^<') then
@@ -340,7 +336,7 @@ function EnemyStatsData.difficulty_table(breed_name)
         local health = health_settings and tier_value(health_settings, challenge)
         local hm = tier_value(hit_mass_setting, challenge)
         rows[#rows + 1] = {
-            difficulty = difficulty_name(key),
+            difficulty = mod:localize('diff_' .. key),
             is_havoc = false,
             health = format_number(health),
             hit_mass = format_number(hm),
@@ -373,7 +369,7 @@ function EnemyStatsData.difficulty_table(breed_name)
             havoc_rows[#havoc_rows].rank_end = rank
         end
     end
-    local havoc_label = difficulty_name('havoc')
+    local havoc_label = mod:localize('diff_havoc')
     for i = 1, #havoc_rows do
         local r = havoc_rows[i]
         if r.rank_start == r.rank_end then

@@ -8,6 +8,21 @@ mod:add_global_localize_strings({
 })
 
 return {
+    game_loc = {
+        -- Armor types
+        armor_unarmored = 'loc_weapon_stats_display_unarmored',
+        armor_armored = 'loc_weapon_stats_display_armored',
+        armor_berserker = 'loc_weapon_stats_display_berzerker',
+        armor_disgustingly_resilient = 'loc_weapon_stats_display_disgustingly_resilient',
+        armor_resistant = 'loc_glossary_armour_type_resistant',
+        armor_super_armor = 'loc_weapon_stats_display_super_armor',
+        -- Difficulty tiers
+        diff_uprising = 'loc_mission_board_danger_low',
+        diff_malice = 'loc_mission_board_danger_medium',
+        diff_heresy = 'loc_mission_board_danger_high',
+        diff_damnation = 'loc_mission_board_danger_highest',
+        diff_havoc = 'loc_havoc_name',
+    },
     mod_name = {
         en = 'Enemy Stats',
         ['zh-cn'] = '敌人数据统计',
@@ -164,52 +179,8 @@ return {
         en = 'Sedition',
         ['zh-cn'] = '煽动N1',
     },
-    diff_uprising = {
-        en = 'Uprising',
-        ['zh-cn'] = '起义N2',
-    },
-    diff_malice = {
-        en = 'Malice',
-        ['zh-cn'] = '恶意N3',
-    },
-    diff_heresy = {
-        en = 'Heresy',
-        ['zh-cn'] = '异端N4',
-    },
-    diff_damnation = {
-        en = 'Damnation',
-        ['zh-cn'] = '诅咒N5',
-    },
-    diff_havoc = {
-        en = 'Havoc',
-        ['zh-cn'] = '浩劫',
-    },
 
     -- Armor types
-    armor_unarmored = {
-        en = 'Unarmored',
-        ['zh-cn'] = '无甲',
-    },
-    armor_armored = {
-        en = 'Flak',
-        ['zh-cn'] = '防弹甲',
-    },
-    armor_super_armor = {
-        en = 'Carapace',
-        ['zh-cn'] = '硬壳',
-    },
-    armor_berserker = {
-        en = 'Maniac',
-        ['zh-cn'] = '狂人',
-    },
-    armor_resistant = {
-        en = 'Unyielding',
-        ['zh-cn'] = '不屈',
-    },
-    armor_disgustingly_resilient = {
-        en = 'Infested',
-        ['zh-cn'] = '感染',
-    },
     armor_player = {
         en = 'Unarmored',
         ['zh-cn'] = '无甲',

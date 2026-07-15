@@ -77,10 +77,6 @@ end
 
 local WeaponStatsUtils = {}
 
-function WeaponStatsUtils.armor_name(armor_key)
-    return _label('armor_', armor_key)
-end
-
 function WeaponStatsUtils.armor_color(armor_key)
     local rgb = ARMOR_COLOR[armor_key]
     if not rgb then
