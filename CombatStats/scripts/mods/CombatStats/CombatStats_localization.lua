@@ -38,7 +38,13 @@ return {
         weakspot = 'loc_weapon_details_weakspot',
         crit = 'loc_weapon_details_crit',
         burn = 'loc_stats_display_burn_stat',
+        melee = 'loc_setting_melee',
+        ranged = 'loc_setting_ranged',
+        companion = 'loc_inventory_title_slot_companion_gear_full_new',
+        arc = 'loc_weapon_keyword_arc_weapon',
+        buff = 'loc_settings_menu_group_buff_interface_settings',
     },
+
     mod_name = {
         en = 'Combat Stats',
         ['zh-cn'] = '战斗统计',
@@ -173,35 +179,10 @@ return {
         ['zh-cn'] = '过量伤害', -- FIXME: confirm translation, translated via google translate
         ['zh-tw'] = '溢出傷害',
     },
-    melee = {
-        en = 'Melee',
-        ['zh-cn'] = '近战',
-        ['zh-tw'] = '近戰',
-    },
-    ranged = {
-        en = 'Ranged',
-        ['zh-cn'] = '远程',
-        ['zh-tw'] = '遠程',
-    },
     explosion = {
         en = 'Explosion',
         ['zh-cn'] = '爆炸',
         ['zh-tw'] = '爆炸',
-    },
-    companion = {
-        en = 'Companion',
-        ['zh-cn'] = '同伴',
-        ['zh-tw'] = '同伴',
-    },
-    arc = {
-        en = 'Arc',
-        ['zh-cn'] = '电弧', -- FIXME: confirm translation, translated via google translate
-        ['zh-tw'] = '電弧',
-    },
-    buff = {
-        en = 'Buff',
-        ['zh-cn'] = '增益',
-        ['zh-tw'] = '增益',
     },
     bleed = {
         en = 'Bleed',

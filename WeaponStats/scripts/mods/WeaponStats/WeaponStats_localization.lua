@@ -14,6 +14,8 @@ return {
         armor_disgustingly_resilient = 'loc_weapon_stats_display_disgustingly_resilient',
         armor_resistant = 'loc_glossary_armour_type_resistant',
         armor_super_armor = 'loc_weapon_stats_display_super_armor',
+        kind_ranged = 'loc_setting_ranged',
+        kind_melee = 'loc_setting_melee',
         -- Weapon stat labels
         stat_dodge_distance = 'loc_weapon_stats_display_dodge_distance',
         stat_stamina = 'loc_weapon_stats_display_stamina',
@@ -34,6 +36,7 @@ return {
         stat_crit_plus_weakspot = 'loc_weapon_details_crit_hs',
         stat_finesse_and_crit = 'loc_stats_display_finesse_stat',
     },
+
     mod_name = {
         en = 'Weapon Stats',
     },
@@ -55,13 +58,6 @@ return {
     stat_attack_type = {
         en = 'Attack Type',
     },
-    kind_ranged = {
-        en = 'Ranged',
-    },
-    kind_melee = {
-        en = 'Melee',
-    },
-
     -- Headers
     header_attack_pattern = {
         en = 'ATTACK PATTERN',

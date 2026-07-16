@@ -4,6 +4,7 @@ local ViewElementInputLegend =
     mod:original_require('scripts/ui/view_elements/view_element_input_legend/view_element_input_legend')
 local ViewElementGrid = mod:original_require('scripts/ui/view_elements/view_element_grid/view_element_grid')
 
+local SharedUtils = mod:io_dofile('CombatStats/scripts/mods/CombatStats/shared/shared_utils')
 local CombatStatsTracker = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_tracker')
 local make_list_blueprints =
     mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_view_blueprints')
@@ -23,34 +24,6 @@ local ICON_PACKAGES = {
     'packages/ui/views/talent_builder_view/talent_builder_view',
     'packages/ui/material_sets/circumstances',
 }
-
-local function _package_is_available(package_name)
-    local application = Application and Application.can_get_resource
-    if not application then
-        return false
-    end
-    local ok, exists = pcall(application, 'package', package_name)
-    return ok and exists or false
-end
-
-local function _load_icon_packages()
-    local loaded = {}
-    for _, pkg in ipairs(ICON_PACKAGES) do
-        if _package_is_available(pkg) and mod:package_status(pkg) ~= 'loaded' then
-            mod:load_package(pkg, nil, true)
-            loaded[#loaded + 1] = pkg
-        end
-    end
-    return loaded
-end
-
-local function _release_icon_packages(loaded)
-    for i = 1, #loaded do
-        if mod:package_status(loaded[i]) == 'loaded' then
-            mod:unload_package(loaded[i])
-        end
-    end
-end
 
 local CombatStatsView = class('CombatStatsView', 'BaseView')
 
@@ -75,7 +48,7 @@ end
 function CombatStatsView:on_enter()
     CombatStatsView.super.on_enter(self)
 
-    self._loaded_icon_packages = _load_icon_packages()
+    self._loaded_icon_packages = SharedUtils.load_icon_packages(mod, ICON_PACKAGES)
 
     self:_setup_input_legend()
     self:_setup_search()
@@ -802,7 +775,7 @@ function CombatStatsView:on_exit()
         self:_remove_element('detail_grid')
     end
 
-    _release_icon_packages(self._loaded_icon_packages)
+    SharedUtils.release_icon_packages(mod, self._loaded_icon_packages)
     self._loaded_icon_packages = nil
 
     CombatStatsView.super.on_exit(self)

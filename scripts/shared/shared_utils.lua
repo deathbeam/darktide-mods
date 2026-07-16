@@ -54,4 +54,37 @@ function SharedUtils.apply_game_loc(mod, game_loc)
     end
 end
 
+-- Load a list of UI packages, returning the ones actually loaded so they can be released later.
+function SharedUtils.load_icon_packages(mod, packages)
+    if not packages then
+        return {}
+    end
+    local application = Application and Application.can_get_resource
+    local loaded = {}
+    for _, pkg in ipairs(packages) do
+        local available = false
+        if application then
+            local ok, exists = pcall(application, 'package', pkg)
+            available = ok and exists or false
+        end
+        if available and mod:package_status(pkg) ~= 'loaded' then
+            mod:load_package(pkg, nil, true)
+            loaded[#loaded + 1] = pkg
+        end
+    end
+    return loaded
+end
+
+-- Release packages previously loaded by load_icon_packages.
+function SharedUtils.release_icon_packages(mod, loaded)
+    if not loaded then
+        return
+    end
+    for i = 1, #loaded do
+        if mod:package_status(loaded[i]) == 'loaded' then
+            mod:unload_package(loaded[i])
+        end
+    end
+end
+
 return SharedUtils

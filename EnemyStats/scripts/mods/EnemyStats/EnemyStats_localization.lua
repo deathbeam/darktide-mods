@@ -23,6 +23,7 @@ return {
         diff_damnation = 'loc_mission_board_danger_highest',
         diff_havoc = 'loc_havoc_name',
     },
+
     mod_name = {
         en = 'Enemy Stats',
         ['zh-cn'] = '敌人数据统计',

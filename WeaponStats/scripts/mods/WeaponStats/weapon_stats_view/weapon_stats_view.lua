@@ -8,6 +8,7 @@ local WeaponTemplates = mod:original_require('scripts/settings/equipment/weapon_
 local WeaponTemplate = mod:original_require('scripts/utilities/weapon/weapon_template')
 
 local Builder = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_builder')
+local SharedUtils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/shared/shared_utils')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
 local make_list_blueprints =
     mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_view/weapon_stats_view_blueprints')
@@ -19,35 +20,6 @@ local MAX_STAT_VALUE = 0.8
 local ICON_PACKAGES = {
     'packages/ui/hud/player_weapon/player_weapon',
 }
-
-local function _package_is_available(package_name)
-    local application = Application and Application.can_get_resource
-    if not application then
-        return false
-    end
-    local ok, exists = pcall(application, 'package', package_name)
-    return ok and exists or false
-end
-
-local function _load_icon_packages()
-    local loaded = {}
-    for _, pkg in ipairs(ICON_PACKAGES) do
-        if _package_is_available(pkg) and mod:package_status(pkg) ~= 'loaded' then
-            mod:load_package(pkg, nil, true)
-            loaded[#loaded + 1] = pkg
-        end
-    end
-    return loaded
-end
-
-local function _release_icon_packages(loaded)
-    for i = 1, #loaded do
-        if mod:package_status(loaded[i]) == 'loaded' then
-            mod:unload_package(loaded[i])
-        end
-    end
-end
-
 local WeaponStatsView = class('WeaponStatsView', 'BaseView')
 
 -- Cached on the class so re-opening the view is instant.
@@ -121,7 +93,7 @@ end
 function WeaponStatsView:on_enter()
     WeaponStatsView.super.on_enter(self)
 
-    self._loaded_icon_packages = _load_icon_packages()
+    self._loaded_icon_packages = SharedUtils.load_icon_packages(mod, ICON_PACKAGES)
 
     self:_setup_input_legend()
     self:_setup_search()
@@ -424,7 +396,7 @@ function WeaponStatsView:on_exit()
         self:_remove_element('detail_grid')
     end
 
-    _release_icon_packages(self._loaded_icon_packages)
+    SharedUtils.release_icon_packages(mod, self._loaded_icon_packages)
     self._loaded_icon_packages = nil
 
     WeaponStatsView.super.on_exit(self)
