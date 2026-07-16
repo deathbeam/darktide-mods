@@ -43,15 +43,15 @@ local function add(records, rec)
 end
 
 local function add_section(records, text)
-    add(records, { type = 'section', text = text, color = COLORS.HEADER })
+    add(records, { type = 'section', level = 1, text = text, color = COLORS.HEADER })
 end
 
 local function add_attack(records, text)
-    add(records, { type = 'attack', text = text, color = COLORS.ATTACK })
+    add(records, { type = 'section', level = 2, text = text, color = COLORS.ATTACK })
 end
 
 local function add_subheader(records, text, indent)
-    add(records, { type = 'subheader', text = text, color = COLORS.HEADER, indent = indent or 0 })
+    add(records, { type = 'section', level = 3, text = text, color = COLORS.HEADER, indent = indent or 0 })
 end
 
 local function add_stat(records, label, value, label_color, indent)

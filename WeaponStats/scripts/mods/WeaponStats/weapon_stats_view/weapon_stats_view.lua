@@ -360,6 +360,7 @@ function WeaponStatsView:_present_detail(entry)
                     color = record.color,
                     size = record.size,
                     indent = record.indent,
+                    level = record.level,
                 }
             end
         end

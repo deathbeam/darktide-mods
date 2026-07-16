@@ -13,6 +13,13 @@ local COLOR_VALUE = Color.terminal_text_header(255, true)
 local COLOR_RULE = Color.terminal_corner(120, true)
 local COLOR_STRIPE = { 120, 49, 56, 49 }
 local STRIPE_BLEED_LEFT = 20
+
+local SECTION_LEVELS = {
+    { height = 36, font_size = 22, rule = true },
+    { height = 28, font_size = 19, rule = false },
+    { height = 22, font_size = 16, rule = false },
+}
+
 local STRIPE_BLEED_RIGHT = 30
 
 local CHAIN_ICON_SIZE = 28
@@ -326,85 +333,40 @@ local function make_blueprints(width)
     }
 
     blueprints.section = {
-        size = { width, 36 },
-        pass_template = {
-            {
-                pass_type = 'text',
-                style_id = 'text',
-                value_id = 'text',
-                value = '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 22,
-                    text_vertical_alignment = 'top',
-                    text_horizontal_alignment = 'left',
-                    offset = { 0, 0, 2 },
-                    size = { width, 30 },
-                },
-            },
-            {
-                pass_type = 'rect',
-                style_id = 'rule',
-                style = {
-                    color = COLOR_RULE,
-                    offset = { 0, 30, 1 },
-                    size = { width, 2 },
-                },
-            },
-        },
-        init = function(_, widget, element)
-            widget.content.text = element.text or ''
-            local style = widget.style.text
-            if element.color then
-                style.text_color = element.color
-            end
+        size_function = function(_, config)
+            return { width, SECTION_LEVELS[config.level or 1].height }
         end,
-    }
-
-    blueprints.attack = {
-        size = { width, 28 },
-        pass_template = {
-            {
-                pass_type = 'text',
-                style_id = 'text',
-                value_id = 'text',
-                value = '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 19,
-                    text_vertical_alignment = 'top',
-                    text_horizontal_alignment = 'left',
-                    offset = { 0, 0, 2 },
-                    size = { width, 26 },
+        pass_template_function = function(_, config)
+            local level = SECTION_LEVELS[config.level or 1]
+            local passes = {
+                {
+                    pass_type = 'text',
+                    style_id = 'text',
+                    value_id = 'text',
+                    value = '',
+                    style = {
+                        font_type = 'proxima_nova_bold',
+                        font_size = level.font_size,
+                        text_vertical_alignment = 'top',
+                        text_horizontal_alignment = 'left',
+                        offset = { 0, 0, 2 },
+                        size = { width, level.height - (level.rule and 6 or 0) },
+                    },
                 },
-            },
-        },
-        init = function(_, widget, element)
-            widget.content.text = element.text or ''
-            if element.color then
-                widget.style.text.text_color = element.color
+            }
+            if level.rule then
+                passes[#passes + 1] = {
+                    pass_type = 'rect',
+                    style_id = 'rule',
+                    style = {
+                        color = COLOR_RULE,
+                        offset = { 0, level.height - 6, 1 },
+                        size = { width, 2 },
+                    },
+                }
             end
+            return passes
         end,
-    }
-
-    blueprints.subheader = {
-        size = { width, 22 },
-        pass_template = {
-            {
-                pass_type = 'text',
-                style_id = 'text',
-                value_id = 'text',
-                value = '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 16,
-                    text_vertical_alignment = 'top',
-                    text_horizontal_alignment = 'left',
-                    offset = { 0, 0, 2 },
-                    size = { width, 22 },
-                },
-            },
-        },
         init = function(_, widget, element)
             widget.content.text = element.text or ''
             local style = widget.style.text
