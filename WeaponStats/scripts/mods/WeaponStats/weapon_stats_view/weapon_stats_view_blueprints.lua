@@ -10,5 +10,7 @@ return function(width)
         text_font_size = 20,
         subtext_offset = { 10, 18, 4 },
         subtext_font_size = 14,
+        icon_size = { 96, 48 },
+        icon_margin = 8,
     })
 end

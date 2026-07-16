@@ -11,10 +11,15 @@ local ButtonPassTemplates = require('scripts/ui/pass_templates/button_pass_templ
 --   subtext_offset         - {x, y, z} for the entry subtext (default {10, 22, 4})
 --   subtext_font_size      - subtext font size (default 16)
 --   include_category_header- add a category_header widget (default false)
+--   icon_size              - {w, h} for the optional entry icon (default nil = no icon)
+--   icon_margin            - horizontal gap after the icon (default 10)
 local function make_blueprints(width, config)
     config = config or {}
     local entry_height = config.entry_height or 80
     local entry_type = config.entry_type or 'entry'
+    local icon_size = config.icon_size
+    local icon_margin = config.icon_margin or 10
+    local icon_area_w = icon_size and (icon_size[1] + icon_margin) or 0
 
     local list_button_text_style = table.clone(UIFontSettings.list_button)
     list_button_text_style.offset = config.text_offset or { 10, -10, 3 }
@@ -60,59 +65,99 @@ local function make_blueprints(width, config)
         }
     end
 
+    local pass_template = {
+        {
+            style_id = 'hotspot',
+            pass_type = 'hotspot',
+            content_id = 'hotspot',
+            content = {
+                use_is_focused = true,
+            },
+            style = list_button_hotspot_style,
+        },
+        {
+            pass_type = 'texture',
+            style_id = 'background_selected',
+            value = 'content/ui/materials/backgrounds/default_square',
+            style = {
+                color = { 255, 49, 56, 49 },
+                offset = { 0, 0, 0 },
+            },
+            change_function = function(content, style)
+                style.color[1] = 255 * content.hotspot.anim_select_progress
+            end,
+            visibility_function = ButtonPassTemplates.list_button_focused_visibility_function,
+        },
+        {
+            pass_type = 'texture',
+            style_id = 'highlight',
+            value = 'content/ui/materials/frames/hover',
+            style = {
+                hdr = true,
+                scale_to_material = true,
+                color = Color.ui_terminal(255, true),
+                offset = { 0, 0, 3 },
+                size_addition = { 0, 0 },
+            },
+            change_function = ButtonPassTemplates.list_button_highlight_change_function,
+            visibility_function = ButtonPassTemplates.list_button_focused_visibility_function,
+        },
+    }
+
+    if icon_size then
+        pass_template[#pass_template + 1] = {
+            pass_type = 'texture',
+            style_id = 'icon',
+            value_id = 'icon',
+            value = 'content/ui/materials/base/ui_default_base',
+            style = {
+                horizontal_alignment = 'left',
+                vertical_alignment = 'center',
+                size = { icon_size[1], icon_size[2] },
+                color = Color.terminal_text_body(255, true),
+                offset = { icon_margin / 2, 0, 2 },
+            },
+            visibility_function = function(content)
+                return content.icon ~= nil
+            end,
+        }
+    end
+
+    local text_style = table.clone(list_button_text_style)
+    text_style.offset = {
+        list_button_text_style.offset[1] + icon_area_w,
+        list_button_text_style.offset[2],
+        list_button_text_style.offset[3],
+    }
+    text_style.size = { width - icon_area_w - list_button_text_style.offset[1], entry_height }
+    text_style.text_overflow_mode = 'truncate'
+
+    local subtext_style = table.clone(list_button_subtext_style)
+    subtext_style.offset = {
+        list_button_subtext_style.offset[1] + icon_area_w,
+        list_button_subtext_style.offset[2],
+        list_button_subtext_style.offset[3],
+    }
+    subtext_style.size = { width - icon_area_w - list_button_subtext_style.offset[1], entry_height }
+    subtext_style.text_overflow_mode = 'truncate'
+
+    pass_template[#pass_template + 1] = {
+        pass_type = 'text',
+        style_id = 'text',
+        value_id = 'text',
+        style = text_style,
+        change_function = ButtonPassTemplates.list_button_label_change_function,
+    }
+    pass_template[#pass_template + 1] = {
+        pass_type = 'text',
+        style_id = 'subtext',
+        value_id = 'subtext',
+        style = subtext_style,
+    }
+
     blueprints[entry_type] = {
         size = { width, entry_height },
-        pass_template = {
-            {
-                style_id = 'hotspot',
-                pass_type = 'hotspot',
-                content_id = 'hotspot',
-                content = {
-                    use_is_focused = true,
-                },
-                style = list_button_hotspot_style,
-            },
-            {
-                pass_type = 'texture',
-                style_id = 'background_selected',
-                value = 'content/ui/materials/backgrounds/default_square',
-                style = {
-                    color = { 255, 49, 56, 49 },
-                    offset = { 0, 0, 0 },
-                },
-                change_function = function(content, style)
-                    style.color[1] = 255 * content.hotspot.anim_select_progress
-                end,
-                visibility_function = ButtonPassTemplates.list_button_focused_visibility_function,
-            },
-            {
-                pass_type = 'texture',
-                style_id = 'highlight',
-                value = 'content/ui/materials/frames/hover',
-                style = {
-                    hdr = true,
-                    scale_to_material = true,
-                    color = Color.ui_terminal(255, true),
-                    offset = { 0, 0, 3 },
-                    size_addition = { 0, 0 },
-                },
-                change_function = ButtonPassTemplates.list_button_highlight_change_function,
-                visibility_function = ButtonPassTemplates.list_button_focused_visibility_function,
-            },
-            {
-                pass_type = 'text',
-                style_id = 'text',
-                value_id = 'text',
-                style = table.clone(list_button_text_style),
-                change_function = ButtonPassTemplates.list_button_label_change_function,
-            },
-            {
-                pass_type = 'text',
-                style_id = 'subtext',
-                value_id = 'subtext',
-                style = table.clone(list_button_subtext_style),
-            },
-        },
+        pass_template = pass_template,
         init = function(parent, widget, entry, callback_name)
             local content = widget.content
             local style = widget.style
@@ -123,6 +168,10 @@ local function make_blueprints(width, config)
             content.subtext = entry.subtext
             content.entry = entry
             content.element = entry
+
+            if icon_size and entry.icon then
+                content.icon = entry.icon
+            end
 
             if entry.subtext_color then
                 style.subtext.text_color = entry.subtext_color

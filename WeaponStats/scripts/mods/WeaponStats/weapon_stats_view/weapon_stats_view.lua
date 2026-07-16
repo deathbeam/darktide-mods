@@ -19,6 +19,7 @@ local MAX_STAT_VALUE = 0.8
 
 local ICON_PACKAGES = {
     'packages/ui/hud/player_weapon/player_weapon',
+    'packages/ui/views/masteries_overview_view/masteries_overview_view',
 }
 local WeaponStatsView = class('WeaponStatsView', 'BaseView')
 
@@ -38,6 +39,7 @@ function WeaponStatsView:_build_weapon_list()
                 sub_display_name = sub_name,
                 weapon_template = weapon_template,
                 is_ranged = is_ranged,
+                icon = Utils.weapon_hud_icon(name),
             }
         end
     end
@@ -223,6 +225,7 @@ function WeaponStatsView:_setup_entries()
                 sub_display_name = weapon.sub_display_name,
                 weapon = weapon,
                 is_ranged = weapon.is_ranged,
+                icon = weapon.icon,
             }
             entry.subtext, entry.subtext_color = self:_format_entry_subtext(entry)
             entries[#entries + 1] = entry
@@ -298,12 +301,15 @@ function WeaponStatsView:_present_detail(entry)
 
     local layout = {}
     if entry then
+        local header_icon = entry.icon
         layout[#layout + 1] = {
-            widget_type = 'header',
+            widget_type = header_icon and 'header_icon' or 'header',
             text = entry.name,
             color = Color.terminal_text_header(255, true),
+            icon = header_icon,
+            subtext = header_icon and entry.subtext or nil,
         }
-        if entry.subtext then
+        if entry.subtext and not header_icon then
             layout[#layout + 1] = {
                 widget_type = 'subtext',
                 text = entry.subtext,

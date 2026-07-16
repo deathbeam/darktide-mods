@@ -383,6 +383,7 @@ local function _weapon_name_map()
                             family = family,
                             pattern = _lore_name(item, 'weapon_pattern_display_name'),
                             mark = _lore_name(item, 'weapon_mark_display_name'),
+                            hud_icon = item and item.hud_icon or nil,
                         }
                     end
                 end
@@ -399,6 +400,7 @@ local function _weapon_name_map()
                     family = _lore_name(item, 'weapon_family_display_name'),
                     pattern = _lore_name(item, 'weapon_pattern_display_name'),
                     mark = _lore_name(item, 'weapon_mark_display_name'),
+                    hud_icon = item.hud_icon or nil,
                 }
             end
         end
@@ -463,8 +465,13 @@ function WeaponStatsUtils.weapon_display_name(template_name)
     return display_name, sub_display_name, family
 end
 
--- Damage profile helpers
+function WeaponStatsUtils.weapon_hud_icon(template_name)
+    local map = _weapon_name_map()
+    local entry = map[template_name]
+    return entry and entry.hud_icon or nil
+end
 
+-- Damage profile helpers
 function WeaponStatsUtils.lerp_entry(entry, lerp_value)
     if type(entry) ~= 'table' then
         return entry
