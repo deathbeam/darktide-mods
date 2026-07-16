@@ -339,7 +339,7 @@ local function _zone_table_passes(width, rows, zone_header, armor_header, weaksp
                 font_size = 15,
                 text_vertical_alignment = 'center',
                 text_horizontal_alignment = 'center',
-                text_color = { 255, row.armor_color[1], row.armor_color[2], row.armor_color[3] },
+                text_color = row.armor_color,
                 offset = { origin_x + TABLE_NAME_WIDTH, y, 5 },
                 size = { col_width, row_height },
                 text_overflow_mode = 'truncate',
@@ -397,7 +397,7 @@ local function _body_diagram_passes(origin_x, canvas_h, zones)
     local half_h = canvas_h / 2
     for zone_key, geom in pairs(BODY_PARTS) do
         local z = zone_by_key[zone_key]
-        local rgb = z and z.armor_color or { 120, 120, 120 }
+        local color = z and z.armor_color or { 255, 120, 120, 120 }
         local cx, cy, nw, nh = geom[1], geom[2], geom[3], geom[4]
         local w = nw * BODY_W
         local h = nh * canvas_h
@@ -407,7 +407,7 @@ local function _body_diagram_passes(origin_x, canvas_h, zones)
             pass_type = 'rect',
             style_id = 'part_' .. zone_key,
             style = {
-                color = { 255, rgb[1], rgb[2], rgb[3] },
+                color = color,
                 offset = { px, py, 2 },
                 size = { w, h },
             },

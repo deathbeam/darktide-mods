@@ -1,8 +1,8 @@
 local mod = get_mod('CombatStats')
 
 local SharedUtils = mod:io_dofile('CombatStats/scripts/mods/CombatStats/shared/shared_utils')
-local _game_loc = mod:io_dofile('CombatStats/scripts/mods/CombatStats/CombatStats_localization').game_loc or {}
-SharedUtils.apply_game_loc(mod, _game_loc)
+local _loc = mod:io_dofile('CombatStats/scripts/mods/CombatStats/CombatStats_localization')
+SharedUtils.apply_loc_settings(mod, _loc)
 
 local Breed = mod:original_require('scripts/utilities/breed')
 

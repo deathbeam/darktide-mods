@@ -1,11 +1,9 @@
-local mod = get_mod('WeaponStats')
-
-mod:add_global_localize_strings({
-    loc_weapon_stats_menu_button = {
-        en = 'Weapon Stats',
-    },
-})
 return {
+    global_loc = {
+        loc_weapon_stats_menu_button = {
+            en = 'Weapon Stats',
+        },
+    },
     game_loc = {
         -- Armor types
         armor_unarmored = 'loc_weapon_stats_display_unarmored',

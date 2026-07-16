@@ -1,8 +1,8 @@
 local mod = get_mod('WeaponStats')
 
 local SharedUtils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/shared/shared_utils')
-local _game_loc = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/WeaponStats_localization').game_loc or {}
-SharedUtils.apply_game_loc(mod, _game_loc)
+local _loc = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/WeaponStats_localization')
+SharedUtils.apply_loc_settings(mod, _loc)
 
 -- Register Weapon Stats View
 mod:add_require_path('WeaponStats/scripts/mods/WeaponStats/weapon_stats_view/weapon_stats_view')

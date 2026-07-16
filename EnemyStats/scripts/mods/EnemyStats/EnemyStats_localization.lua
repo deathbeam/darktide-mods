@@ -1,13 +1,10 @@
-local mod = get_mod('EnemyStats')
-
-mod:add_global_localize_strings({
-    loc_enemy_stats_menu_button = {
-        en = 'Enemy Stats',
-        ['zh-cn'] = '敌人数据统计',
-    },
-})
-
 return {
+    global_loc = {
+        loc_enemy_stats_menu_button = {
+            en = 'Enemy Stats',
+            ['zh-cn'] = '敌人数据统计',
+        },
+    },
     game_loc = {
         -- Armor types
         armor_unarmored = 'loc_weapon_stats_display_unarmored',

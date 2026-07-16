@@ -7,6 +7,7 @@ local WeaponTweakTemplates = mod:original_require('scripts/extension_systems/wea
 local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settings')
 local WeaponActionData = mod:original_require('scripts/settings/equipment/weapon_action_handler_data')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
+local SharedUtils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/shared/shared_utils')
 
 local COLORS = {
     HEADER = Color.terminal_text_header(255, true),
@@ -466,7 +467,7 @@ local function _compute_adm_values(profile, target_settings, action_lerp, is_ran
 
             rows[#rows + 1] = {
                 name = mod:localize('armor_' .. armor_key),
-                name_color = Utils.armor_color(armor_key),
+                name_color = SharedUtils.armor_color(armor_key),
                 attack = normal_near,
                 attack_far = normal_far,
                 impact = normal_impact,

@@ -1,3 +1,5 @@
+local ArmorSettings = require('scripts/settings/damage/armor_settings')
+
 local SharedUtils = {}
 
 -- Localize a game loc key, returning nil on miss or when the game has no entry.
@@ -36,21 +38,31 @@ function SharedUtils.prettify(key)
     return prettified
 end
 
--- Patch mod:localize to resolve entries from `game_loc` via the game's Localize first,
--- falling back to the mod's own localization table. `game_loc` maps mod loc keys to
--- game loc keys (e.g. { stat_damage = 'loc_weapon_stats_display_base_damage' }).
-function SharedUtils.apply_game_loc(mod, game_loc)
-    local _orig_localize = mod.localize
+-- Register global localization strings (e.g. for ESC menu buttons) and patch
+-- mod:localize to resolve game_loc keys via the game's Localize first, falling
+-- back to the mod's own table. `loc_settings` is the table returned by a mod's
+-- *_localization.lua (with optional `global_loc` and `game_loc` fields).
+function SharedUtils.apply_loc_settings(mod, loc_settings)
+    if not loc_settings then
+        return
+    end
+    if loc_settings.global_loc then
+        mod:add_global_localize_strings(loc_settings.global_loc)
+    end
+    local game_loc = loc_settings.game_loc
+    if game_loc then
+        local _orig_localize = mod.localize
 
-    function mod:localize(text_id, ...)
-        local loc_id = game_loc and game_loc[text_id]
-        if loc_id then
-            local s = SharedUtils.safe_localize(loc_id)
-            if s then
-                return s
+        function mod:localize(text_id, ...)
+            local loc_id = game_loc[text_id]
+            if loc_id then
+                local s = SharedUtils.safe_localize(loc_id)
+                if s then
+                    return s
+                end
             end
+            return _orig_localize(self, text_id, ...)
         end
-        return _orig_localize(self, text_id, ...)
     end
 end
 
@@ -85,6 +97,38 @@ function SharedUtils.release_icon_packages(mod, loaded)
             mod:unload_package(loaded[i])
         end
     end
+end
+
+-- Returns the terminal-style {255, r, g, b} color for an armor type, keyed by
+-- either the string name (e.g. "unarmored") or the ArmorSettings.types value.
+function SharedUtils.armor_color(armor_key)
+    if armor_key == nil then
+        return nil
+    end
+    local name = armor_key
+    if type(armor_key) == 'number' then
+        for k, v in pairs(ArmorSettings.types) do
+            if v == armor_key then
+                name = k
+                break
+            end
+        end
+    end
+    local colors = {
+        unarmored = { 90, 195, 90 },
+        armored = { 215, 150, 50 },
+        super_armor = { 150, 155, 175 },
+        berserker = { 210, 70, 70 },
+        resistant = { 160, 95, 195 },
+        disgustingly_resilient = { 150, 185, 70 },
+        player = { 90, 195, 90 },
+        void_shield = { 80, 165, 240 },
+    }
+    local rgb = colors[name]
+    if not rgb then
+        return nil
+    end
+    return { 255, rgb[1], rgb[2], rgb[3] }
 end
 
 return SharedUtils

@@ -1,39 +1,36 @@
-local mod = get_mod('CombatStats')
-
-mod:add_global_localize_strings({
-    loc_combat_stats_reset_stats = {
-        en = 'Reset Stats',
-        ['zh-cn'] = '重置统计', -- FIXME: confirm translation, translated via google translate
-        ['zh-tw'] = '重置統計',
-    },
-    loc_combat_stats_view_history = {
-        en = 'View History',
-        ['zh-cn'] = '查看历史', -- FIXME: confirm translation, translated via google translate
-        ['zh-tw'] = '查看歷史紀錄',
-    },
-    loc_combat_stats_back_to_current = {
-        en = 'Back to Current',
-        ['zh-cn'] = '返回当前', -- FIXME: confirm translation, translated via google translate
-        ['zh-tw'] = '返回目前統計',
-    },
-    loc_combat_stats_back_to_history = {
-        en = 'Back to History',
-        ['zh-cn'] = '返回历史', -- FIXME: confirm translation, translated via google translate
-        ['zh-tw'] = '返回歷史紀錄',
-    },
-    loc_combat_stats_delete_entry = {
-        en = 'Delete Entry',
-        ['zh-cn'] = '删除条目', -- FIXME: confirm translation, translated via google translate
-        ['zh-tw'] = '刪除項目',
-    },
-    loc_combat_stats_menu_button = {
-        en = 'Combat Stats',
-        ['zh-cn'] = '战斗统计',
-        ['zh-tw'] = '戰鬥統計',
-    },
-})
-
 return {
+    global_loc = {
+        loc_combat_stats_reset_stats = {
+            en = 'Reset Stats',
+            ['zh-cn'] = '重置统计', -- FIXME: confirm translation, translated via google translate
+            ['zh-tw'] = '重置統計',
+        },
+        loc_combat_stats_view_history = {
+            en = 'View History',
+            ['zh-cn'] = '查看历史', -- FIXME: confirm translation, translated via google translate
+            ['zh-tw'] = '查看歷史紀錄',
+        },
+        loc_combat_stats_back_to_current = {
+            en = 'Back to Current',
+            ['zh-cn'] = '返回当前', -- FIXME: confirm translation, translated via google translate
+            ['zh-tw'] = '返回目前統計',
+        },
+        loc_combat_stats_back_to_history = {
+            en = 'Back to History',
+            ['zh-cn'] = '返回历史', -- FIXME: confirm translation, translated via google translate
+            ['zh-tw'] = '返回歷史紀錄',
+        },
+        loc_combat_stats_delete_entry = {
+            en = 'Delete Entry',
+            ['zh-cn'] = '删除条目', -- FIXME: confirm translation, translated via google translate
+            ['zh-tw'] = '刪除項目',
+        },
+        loc_combat_stats_menu_button = {
+            en = 'Combat Stats',
+            ['zh-cn'] = '战斗统计',
+            ['zh-tw'] = '戰鬥統計',
+        },
+    },
     game_loc = {
         weakspot = 'loc_weapon_details_weakspot',
         crit = 'loc_weapon_details_crit',

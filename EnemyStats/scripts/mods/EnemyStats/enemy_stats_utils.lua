@@ -2,24 +2,11 @@ local mod = get_mod('EnemyStats')
 local SharedUtils = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/shared/shared_utils')
 
 local Breeds = require('scripts/settings/breed/breeds')
-local ArmorSettings = require('scripts/settings/damage/armor_settings')
 local MinionDifficultySettings = require('scripts/settings/difficulty/minion_difficulty_settings')
 local HavocModifierConfig = require('scripts/settings/havoc/havoc_modifier_config')
 local HavocSettings = require('scripts/settings/havoc_settings')
-local armor_types = ArmorSettings.types
 
 local DIFFICULTY_KEYS = { 'sedition', 'uprising', 'malice', 'heresy', 'damnation' }
-
-local ARMOR_COLOR = {
-    [armor_types.unarmored] = { 90, 195, 90 },
-    [armor_types.armored] = { 215, 150, 50 },
-    [armor_types.super_armor] = { 150, 155, 175 },
-    [armor_types.berserker] = { 210, 70, 70 },
-    [armor_types.resistant] = { 160, 95, 195 },
-    [armor_types.disgustingly_resilient] = { 150, 185, 70 },
-    [armor_types.player] = { 90, 195, 90 },
-    [armor_types.void_shield] = { 80, 165, 240 },
-}
 
 local HIT_ZONE_ORDER = {
     'head',
@@ -391,7 +378,7 @@ function EnemyStatsData.hit_zones(breed_name)
                 label = zone_name(zone),
                 armor_cat = armor_cat,
                 armor_label = armor_cat and mod:localize('armor_' .. armor_cat) or '',
-                armor_color = ARMOR_COLOR[armor_cat] or { 200, 200, 200 },
+                armor_color = SharedUtils.armor_color(armor_cat) or { 200, 200, 200 },
                 weakspot = weakspot,
                 weakspot_label = weakspot and weakspot_name(weakspot) or nil,
             }
@@ -415,7 +402,7 @@ function EnemyStatsData.hit_zones(breed_name)
                 label = zone_name(zone),
                 armor_cat = armor_cat,
                 armor_label = mod:localize('armor_' .. armor_cat),
-                armor_color = ARMOR_COLOR[armor_cat] or { 200, 200, 200 },
+                armor_color = SharedUtils.armor_color(armor_cat) or { 200, 200, 200 },
                 weakspot = weakspot,
                 weakspot_label = weakspot and weakspot_name(weakspot) or nil,
             }
