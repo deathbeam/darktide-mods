@@ -7,18 +7,6 @@ return {
     options = {
         widgets = {
             {
-                setting_id = 'chemical_autostim',
-                type = 'group',
-                sub_widgets = {
-                    {
-                        setting_id = 'chemical_autostim_enabled',
-                        tooltip = 'chemical_autostim_enabled_tooltip',
-                        type = 'checkbox',
-                        default_value = false,
-                    },
-                },
-            },
-            {
                 setting_id = 'quick_deploy',
                 type = 'group',
                 sub_widgets = {
