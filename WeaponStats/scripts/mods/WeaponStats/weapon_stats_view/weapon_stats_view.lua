@@ -39,7 +39,7 @@ function WeaponStatsView:_build_weapon_list()
                 sub_display_name = sub_name,
                 weapon_template = weapon_template,
                 is_ranged = is_ranged,
-                icon = Utils.weapon_hud_icon(name),
+                icon = Utils.weapon_hud_icon(name, is_ranged),
             }
         end
     end

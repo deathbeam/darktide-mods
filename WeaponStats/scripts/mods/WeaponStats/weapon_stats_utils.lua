@@ -16,6 +16,20 @@ local WeaponTweakTemplates = mod:original_require('scripts/extension_systems/wea
 -- Constants
 local FALLBACK_LERP = 0.5
 local DEFAULT_POWER_LEVEL = 500
+local DEFAULT_MELEE_ICON = 'content/ui/materials/icons/weapons/hud/combat_blade_01'
+local DEFAULT_RANGED_ICON = 'content/ui/materials/icons/weapons/hud/autogun_01'
+
+local function _valid_material(path)
+    if not path or path == '' then
+        return false
+    end
+    local can_get = Application and Application.can_get_resource
+    if not can_get then
+        return true
+    end
+    local ok, exists = pcall(can_get, 'material', path)
+    return ok and exists or false
+end
 
 local GESTALT_TOKENS = {
     'smiter',
@@ -383,7 +397,7 @@ local function _weapon_name_map()
                             family = family,
                             pattern = _lore_name(item, 'weapon_pattern_display_name'),
                             mark = _lore_name(item, 'weapon_mark_display_name'),
-                            hud_icon = item and item.hud_icon or nil,
+                            hud_icon = _valid_material(item and item.hud_icon) and item.hud_icon or nil,
                         }
                     end
                 end
@@ -400,7 +414,7 @@ local function _weapon_name_map()
                     family = _lore_name(item, 'weapon_family_display_name'),
                     pattern = _lore_name(item, 'weapon_pattern_display_name'),
                     mark = _lore_name(item, 'weapon_mark_display_name'),
-                    hud_icon = item.hud_icon or nil,
+                    hud_icon = _valid_material(item.hud_icon) and item.hud_icon or nil,
                 }
             end
         end
@@ -464,11 +478,11 @@ function WeaponStatsUtils.weapon_display_name(template_name)
 
     return display_name, sub_display_name, family
 end
-
-function WeaponStatsUtils.weapon_hud_icon(template_name)
+function WeaponStatsUtils.weapon_hud_icon(template_name, is_ranged)
     local map = _weapon_name_map()
     local entry = map[template_name]
-    return entry and entry.hud_icon or nil
+    local hud_icon = entry and entry.hud_icon
+    return hud_icon or (is_ranged and DEFAULT_RANGED_ICON or DEFAULT_MELEE_ICON)
 end
 
 -- Damage profile helpers
