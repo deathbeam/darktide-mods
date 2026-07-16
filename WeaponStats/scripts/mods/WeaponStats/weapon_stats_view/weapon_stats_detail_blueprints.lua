@@ -525,12 +525,11 @@ local function make_blueprints(width)
 
     blueprints.table = {
         size_function = function(_, config)
-            local rows = config.record.rows or {}
+            local rows = config.rows or {}
             return { width, TABLE_HEADER_HEIGHT + #rows * TABLE_ROW_HEIGHT }
         end,
         pass_template_function = function(_, config)
-            local record = config.record
-            return _table_passes(width, record.columns or {}, record.rows or {})
+            return _table_passes(width, config.columns or {}, config.rows or {})
         end,
     }
 

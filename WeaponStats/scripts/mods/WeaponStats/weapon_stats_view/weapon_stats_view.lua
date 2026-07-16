@@ -296,6 +296,7 @@ function WeaponStatsView:_present_detail(entry)
         return
     end
 
+    self._detail_entry = entry
     local width = self:_detail_width()
     local blueprints = make_detail_blueprints(width)
 
@@ -339,7 +340,11 @@ function WeaponStatsView:_present_detail(entry)
                 stripe_count = stripe_count + 1
             elseif rtype == 'table' then
                 layout[#layout + 1] = { widget_type = 'spacer', size = 'tight' }
-                layout[#layout + 1] = { widget_type = 'table', record = record }
+                layout[#layout + 1] = {
+                    widget_type = 'table',
+                    columns = record.columns,
+                    rows = record.rows,
+                }
                 stripe_count = 0
             elseif rtype == 'chain' then
                 layout[#layout + 1] = {
@@ -361,6 +366,7 @@ function WeaponStatsView:_present_detail(entry)
     end
 
     local left_click_callback = callback(self, 'cb_on_detail_entry_left_pressed')
+    self._detail_layout = layout
     self._detail_grid:present_grid_layout(layout, blueprints, left_click_callback)
 end
 
@@ -371,6 +377,15 @@ end
 
 function WeaponStatsView:cb_on_close_pressed()
     Managers.ui:close_view(self.view_name)
+end
+
+function WeaponStatsView:cb_on_copy_pressed()
+    local entry = self._detail_entry
+    if not entry then
+        return
+    end
+    local text = SharedUtils.layout_to_markdown(entry.name, self._detail_layout)
+    SharedUtils.copy_to_clipboard(text)
 end
 
 function WeaponStatsView:update(dt, t, input_service)

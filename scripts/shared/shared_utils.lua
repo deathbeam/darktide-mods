@@ -99,6 +99,97 @@ function SharedUtils.release_icon_packages(mod, loaded)
     end
 end
 
+-- Copy text to the system clipboard, returning true on success.
+function SharedUtils.copy_to_clipboard(text)
+    if not text or text == '' then
+        return false
+    end
+    local ok = pcall(Clipboard.put, text)
+    return ok or false
+end
+
+local function _cell_text(cell)
+    if type(cell) == 'table' then
+        return cell.text or ''
+    end
+    return tostring(cell or '')
+end
+
+local function _table_to_md(columns, rows, name_column_label)
+    local parts = {}
+    local header = { name_column_label or '' }
+    for c = 1, #columns do
+        header[#header + 1] = columns[c] and columns[c].label or ''
+    end
+    parts[#parts + 1] = '| ' .. table.concat(header, ' | ') .. ' |'
+    parts[#parts + 1] = '|' .. string.rep(' --- |', #columns + 1)
+    for r = 1, #rows do
+        local row = rows[r]
+        local cells = row.cells or {}
+        local line = { row.name or '' }
+        for c = 1, #cells do
+            line[#line + 1] = _cell_text(cells[c])
+        end
+        parts[#parts + 1] = '| ' .. table.concat(line, ' | ') .. ' |'
+    end
+    return table.concat(parts, '\n')
+end
+
+-- Serialize a detail layout (list of widget_type entries shared by the stats
+-- mods) to markdown text suitable for clipboard copy.
+function SharedUtils.layout_to_markdown(title, layout)
+    if not layout or #layout == 0 then
+        return title or ''
+    end
+    local lines = {}
+    if title and title ~= '' then
+        lines[#lines + 1] = '# ' .. title
+        lines[#lines + 1] = ''
+    end
+    for i = 1, #layout do
+        local e = layout[i]
+        local wt = e and e.widget_type
+        if wt == 'header' or wt == 'header_icon' then
+            lines[#lines + 1] = '## ' .. (e.text or '')
+        elseif wt == 'subtext' then
+            lines[#lines + 1] = (e.text or '')
+        elseif wt == 'section' then
+            lines[#lines + 1] = ''
+            lines[#lines + 1] = '### ' .. (e.text or '')
+        elseif wt == 'stat' or wt == 'substat' then
+            local label = e.label or ''
+            local value = e.value or ''
+            lines[#lines + 1] = string.format('- **%s**: %s', label, value)
+        elseif wt == 'text' then
+            lines[#lines + 1] = (e.text or '')
+        elseif wt == 'table' then
+            if e.columns and e.rows then
+                lines[#lines + 1] = ''
+                lines[#lines + 1] = _table_to_md(e.columns, e.rows, e.name_column_label)
+                lines[#lines + 1] = ''
+            end
+        elseif wt == 'chain' then
+            if e.title then
+                lines[#lines + 1] = ''
+                lines[#lines + 1] = '### ' .. e.title
+            end
+            if e.chain then
+                for c = 1, #e.chain do
+                    local step = e.chain[c]
+                    if step then
+                        lines[#lines + 1] = string.format('- %s', tostring(step))
+                    end
+                end
+            end
+        elseif wt == 'progress_bar' then
+            local label = e.label or ''
+            local value = e.value or ''
+            lines[#lines + 1] = string.format('- **%s**: %s', label, value)
+        end
+    end
+    return table.concat(lines, '\n')
+end
+
 -- Returns the terminal-style {255, r, g, b} color for an armor type, keyed by
 -- either the string name (e.g. "unarmored") or the ArmorSettings.types value.
 function SharedUtils.armor_color(armor_key)

@@ -4,6 +4,9 @@ return {
             en = 'Enemy Stats',
             ['zh-cn'] = '敌人数据统计',
         },
+        loc_enemy_stats_copy = {
+            en = 'Copy to Clipboard',
+        },
     },
     game_loc = {
         -- Armor types

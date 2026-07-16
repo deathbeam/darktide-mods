@@ -4,6 +4,7 @@ local ViewElementInputLegend =
     mod:original_require('scripts/ui/view_elements/view_element_input_legend/view_element_input_legend')
 local ViewElementGrid = mod:original_require('scripts/ui/view_elements/view_element_grid/view_element_grid')
 
+local SharedUtils = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/shared/shared_utils')
 local Data = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_utils')
 local make_list_blueprints =
     mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_view_blueprints')
@@ -208,7 +209,7 @@ function EnemyStatsView:_present_detail(entry)
     if not self._detail_grid then
         return
     end
-
+    self._detail_entry = entry
     local width = self:_detail_width()
     local blueprints = make_detail_blueprints(width)
 
@@ -290,11 +291,11 @@ function EnemyStatsView:_present_detail(entry)
                 text = mod:localize('header_health'),
             }
             layout[#layout + 1] = {
-                widget_type = 'stat_table',
-                difficulty_header = mod:localize('stat_difficulty'),
+                widget_type = 'table',
+                name_column_label = mod:localize('stat_difficulty'),
                 columns = {
-                    { label = mod:localize('stat_health'), width = 0.0 },
-                    { label = mod:localize('stat_hit_mass'), width = 0.0 },
+                    { label = mod:localize('stat_health') },
+                    { label = mod:localize('stat_hit_mass') },
                 },
                 rows = diff_rows,
             }
@@ -315,10 +316,12 @@ function EnemyStatsView:_present_detail(entry)
                 text = mod:localize('header_hit_zones'),
             }
             layout[#layout + 1] = {
-                widget_type = 'zone_table',
-                zone_header = mod:localize('stat_zone'),
-                armor_header = mod:localize('stat_armor'),
-                weakspot_header = mod:localize('stat_weakspots'),
+                widget_type = 'table',
+                name_column_label = mod:localize('stat_zone'),
+                columns = {
+                    { label = mod:localize('stat_armor') },
+                    { label = mod:localize('stat_weakspots') },
+                },
                 rows = zones,
                 diagram = is_humanoid,
             }
@@ -327,6 +330,7 @@ function EnemyStatsView:_present_detail(entry)
     end
 
     local left_click_callback = callback(self, 'cb_on_detail_entry_left_pressed')
+    self._detail_layout = layout
     self._detail_grid:present_grid_layout(layout, blueprints, left_click_callback)
 end
 
@@ -336,6 +340,15 @@ end
 
 function EnemyStatsView:cb_on_close_pressed()
     Managers.ui:close_view(self.view_name)
+end
+
+function EnemyStatsView:cb_on_copy_pressed()
+    local entry = self._detail_entry
+    if not entry then
+        return
+    end
+    local text = SharedUtils.layout_to_markdown(entry.name, self._detail_layout)
+    SharedUtils.copy_to_clipboard(text)
 end
 
 function EnemyStatsView:update(dt, t, input_service)
