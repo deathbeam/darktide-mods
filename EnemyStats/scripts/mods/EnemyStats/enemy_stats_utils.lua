@@ -8,6 +8,14 @@ local HavocSettings = require('scripts/settings/havoc_settings')
 
 local DIFFICULTY_KEYS = { 'sedition', 'uprising', 'malice', 'heresy', 'damnation' }
 
+local function difficulty_label(key)
+    local base = mod:localize('diff_' .. key)
+    if key == 'damnation' then
+        return base .. ' / ' .. mod:localize('diff_auric')
+    end
+    return base
+end
+
 local HIT_ZONE_ORDER = {
     'head',
     'torso',
@@ -310,7 +318,7 @@ function EnemyStatsData.difficulty_table(breed_name)
         local health = health_settings and tier_value(health_settings, challenge)
         local hm = tier_value(hit_mass_setting, challenge)
         rows[#rows + 1] = {
-            name = mod:localize('diff_' .. key),
+            name = difficulty_label(key),
             is_havoc = false,
             cells = {
                 { text = format_number(health) },
@@ -347,13 +355,12 @@ function EnemyStatsData.difficulty_table(breed_name)
             havoc_rows[#havoc_rows].rank_end = rank
         end
     end
-    local havoc_label = mod:localize('diff_havoc')
     for i = 1, #havoc_rows do
         local r = havoc_rows[i]
         if r.rank_start == r.rank_end then
-            r.name = havoc_label .. ' ' .. r.rank_start
+            r.name = difficulty_label('havoc') .. ' ' .. r.rank_start
         else
-            r.name = havoc_label .. ' ' .. r.rank_start .. '-' .. r.rank_end
+            r.name = difficulty_label('havoc') .. ' ' .. r.rank_start .. '-' .. r.rank_end
         end
         rows[#rows + 1] = r
     end

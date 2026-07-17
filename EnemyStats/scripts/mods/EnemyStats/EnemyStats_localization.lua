@@ -21,6 +21,7 @@ return {
         diff_malice = 'loc_mission_board_danger_medium',
         diff_heresy = 'loc_mission_board_danger_high',
         diff_damnation = 'loc_mission_board_danger_highest',
+        diff_auric = 'loc_group_finder_difficulty_auric',
         diff_havoc = 'loc_havoc_name',
     },
 
