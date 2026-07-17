@@ -62,7 +62,9 @@ mod:hook(CLASS.SystemView, '_setup_content_widgets', function(func, self, conten
                     break
                 end
             end
-            table.insert(cloned, insert_at, ENEMY_STATS_MENU_BUTTON)
+            if mod:get('add_to_esc_menu') then
+                table.insert(cloned, insert_at, ENEMY_STATS_MENU_BUTTON)
+            end
             patched[state_key] = cloned
         end
     end

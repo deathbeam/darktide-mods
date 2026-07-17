@@ -39,6 +39,10 @@ return {
         en = 'Toggle Stats View',
         ['zh-cn'] = '切换统计视图',
     },
+    add_to_esc_menu = {
+        en = 'Show in Options Menu',
+        ['zh-cn'] = '在选项菜单中显示',
+    },
 
     -- Section headers
     header_info = {

@@ -7,6 +7,11 @@ return {
     options = {
         widgets = {
             {
+                setting_id = 'add_to_esc_menu',
+                type = 'checkbox',
+                default_value = true,
+            },
+            {
                 setting_id = 'toggle_view_keybind',
                 type = 'keybind',
                 default_value = {},

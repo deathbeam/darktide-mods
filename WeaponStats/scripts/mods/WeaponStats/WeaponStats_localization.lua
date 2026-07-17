@@ -51,6 +51,11 @@ return {
         ['zh-cn'] = '切换统计视图',
         ['zh-tw'] = '切換統計檢視',
     },
+    add_to_esc_menu = {
+        en = 'Show in Options Menu',
+        ['zh-cn'] = '在选项菜单中显示',
+        ['zh-tw'] = '在選項選單中顯示',
+    },
 
     -- Window
     search_placeholder = {
