@@ -611,7 +611,7 @@ local function render_profile(records, ctx)
 
     if profile.backstab_bonus and profile.backstab_bonus ~= 0 then
         local bonus = Utils.lerp_entry(profile.backstab_bonus)
-        add_stat(records, mod:localize('stat_backstab'), string.format('%.0f%%', bonus * 100), COLORS.CRIT)
+        add_stat(records, mod:localize('stat_backstab'), string.format('%+.0f%%', bonus * 100), COLORS.CRIT)
     end
 
     -- Ranged weapon specifics
