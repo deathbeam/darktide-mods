@@ -15,6 +15,7 @@ return {
         armor_disgustingly_resilient = 'loc_weapon_stats_display_disgustingly_resilient',
         armor_resistant = 'loc_glossary_armour_type_resistant',
         armor_super_armor = 'loc_weapon_stats_display_super_armor',
+        -- Weapon kind
         kind_ranged = 'loc_setting_ranged',
         kind_melee = 'loc_setting_melee',
         -- Weapon stat labels
@@ -443,15 +444,6 @@ return {
     },
     stagger_sticky = {
         en = 'Sticky',
-    },
-    stagger_heavy = {
-        en = 'Heavy',
-    },
-    stagger_light = {
-        en = 'Light',
-    },
-    stagger_medium = {
-        en = 'Medium',
     },
     stagger_electrocuted = {
         en = 'Electrocuted',

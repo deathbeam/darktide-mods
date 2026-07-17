@@ -32,11 +32,16 @@ return {
         },
     },
     game_loc = {
+        -- Damage types
+        damage = 'loc_stats_display_damage_stat',
+        burn = 'loc_stats_display_burn_stat',
+        -- Hit types
         weakspot = 'loc_weapon_details_weakspot',
         crit = 'loc_weapon_details_crit',
-        burn = 'loc_stats_display_burn_stat',
+        -- Attack range
         melee = 'loc_setting_melee',
         ranged = 'loc_setting_ranged',
+        -- Other
         companion = 'loc_inventory_title_slot_companion_gear_full_new',
         arc = 'loc_weapon_keyword_arc_weapon',
         buff = 'loc_settings_menu_group_buff_interface_settings',
@@ -159,11 +164,6 @@ return {
         en = 'DPS',
         ['zh-cn'] = 'DPS',
         ['zh-tw'] = 'DPS',
-    },
-    damage = {
-        en = 'Damage',
-        ['zh-cn'] = '伤害',
-        ['zh-tw'] = '傷害',
     },
     hits = {
         en = 'Hits',

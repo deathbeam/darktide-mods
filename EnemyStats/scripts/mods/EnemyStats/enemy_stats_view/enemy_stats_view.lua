@@ -6,6 +6,7 @@ local ViewElementGrid = mod:original_require('scripts/ui/view_elements/view_elem
 
 local SharedUtils = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/shared/shared_utils')
 local Data = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_utils')
+local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settings')
 local make_list_blueprints =
     mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_view_blueprints')
 local make_detail_blueprints =
@@ -253,6 +254,25 @@ function EnemyStatsView:_present_detail(entry)
                 label = mod:localize('stat_faction'),
                 value = mod:localize('faction_' .. info.faction),
             }
+            if info.armor_type then
+                local armor_key = info.armor_type
+                if type(armor_key) == 'number' then
+                    for k, v in pairs(ArmorSettings.types) do
+                        if v == armor_key then
+                            armor_key = k
+                            break
+                        end
+                    end
+                end
+                if type(armor_key) == 'string' then
+                    layout[#layout + 1] = {
+                        widget_type = 'stat',
+                        label = mod:localize('stat_armor'),
+                        value = mod:localize('armor_' .. armor_key),
+                        value_color = SharedUtils.armor_color(info.armor_type),
+                    }
+                end
+            end
             if info.challenge_rating then
                 layout[#layout + 1] = {
                     widget_type = 'stat',
@@ -281,25 +301,21 @@ function EnemyStatsView:_present_detail(entry)
                     value = string.format('%.1f', info.run_speed),
                 }
             end
+            if info.walk_speed then
+                layout[#layout + 1] = {
+                    widget_type = 'stat',
+                    label = mod:localize('stat_walk_speed'),
+                    value = string.format('%.1f', info.walk_speed),
+                }
+            end
+            if info.detection_radius then
+                layout[#layout + 1] = {
+                    widget_type = 'stat',
+                    label = mod:localize('stat_detection_radius'),
+                    value = string.format('%.0f', info.detection_radius),
+                }
+            end
             layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
-        end
-
-        local diff_rows = Data.difficulty_table(entry.breed_name)
-        if diff_rows and #diff_rows > 0 then
-            layout[#layout + 1] = {
-                widget_type = 'section',
-                text = mod:localize('header_health'),
-            }
-            layout[#layout + 1] = {
-                widget_type = 'table',
-                name_column_label = mod:localize('stat_difficulty'),
-                columns = {
-                    { label = mod:localize('stat_health') },
-                    { label = mod:localize('stat_hit_mass') },
-                },
-                rows = diff_rows,
-            }
-            layout[#layout + 1] = { widget_type = 'spacer', size = 'tight' }
         end
 
         local zones = Data.hit_zones(entry.breed_name)
@@ -324,6 +340,41 @@ function EnemyStatsView:_present_detail(entry)
                 },
                 rows = zones,
                 diagram = is_humanoid,
+            }
+            layout[#layout + 1] = { widget_type = 'spacer', size = 'tight' }
+        end
+
+        local diff_rows = Data.difficulty_table(entry.breed_name)
+        if diff_rows and #diff_rows > 0 then
+            layout[#layout + 1] = {
+                widget_type = 'section',
+                text = mod:localize('header_health'),
+            }
+            layout[#layout + 1] = {
+                widget_type = 'table',
+                name_column_label = mod:localize('stat_difficulty'),
+                columns = {
+                    { label = mod:localize('stat_health') },
+                    { label = mod:localize('stat_hit_mass') },
+                },
+                rows = diff_rows,
+            }
+            layout[#layout + 1] = { widget_type = 'spacer', size = 'tight' }
+        end
+
+        local stagger_rows = Data.stagger_table(entry.breed_name)
+        if stagger_rows and #stagger_rows > 0 then
+            layout[#layout + 1] = {
+                widget_type = 'section',
+                text = mod:localize('header_stagger'),
+            }
+            layout[#layout + 1] = {
+                widget_type = 'table',
+                name_column_label = mod:localize('stat_stagger_type'),
+                columns = {
+                    { label = mod:localize('stat_stagger_duration') },
+                },
+                rows = stagger_rows,
             }
             layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
         end

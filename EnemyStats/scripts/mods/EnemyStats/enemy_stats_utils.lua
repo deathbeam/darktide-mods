@@ -5,8 +5,22 @@ local Breeds = require('scripts/settings/breed/breeds')
 local MinionDifficultySettings = require('scripts/settings/difficulty/minion_difficulty_settings')
 local HavocModifierConfig = require('scripts/settings/havoc/havoc_modifier_config')
 local HavocSettings = require('scripts/settings/havoc_settings')
+local ArmorSettings = require('scripts/settings/damage/armor_settings')
+local StaggerSettings = require('scripts/settings/damage/stagger_settings')
 
 local DIFFICULTY_KEYS = { 'sedition', 'uprising', 'malice', 'heresy', 'damnation' }
+
+-- Stagger types in display order; values are the enum numbers from StaggerSettings.
+local STAGGER_TYPE_ORDER = {
+    { key = 'light', label = 'stagger_light' },
+    { key = 'medium', label = 'stagger_medium' },
+    { key = 'heavy', label = 'stagger_heavy' },
+    { key = 'light_ranged', label = 'stagger_light_ranged' },
+    { key = 'explosion', label = 'stagger_explosion' },
+    { key = 'killshot', label = 'stagger_killshot' },
+    { key = 'sticky', label = 'stagger_sticky' },
+    { key = 'electrocuted', label = 'stagger_electrocuted' },
+}
 
 local function difficulty_label(key)
     local base = mod:localize('diff_' .. key)
@@ -437,6 +451,37 @@ function EnemyStatsData.hit_zones(breed_name)
     return zones
 end
 
+-- Per-stagger-type duration table (seconds) for the detail view.
+function EnemyStatsData.stagger_table(breed_name)
+    local breed = Breeds[breed_name]
+    if not breed then
+        return nil
+    end
+    local durations = breed.stagger_durations
+    if not durations then
+        return nil
+    end
+    local stagger_types = StaggerSettings.stagger_types
+    local rows = {}
+    for i = 1, #STAGGER_TYPE_ORDER do
+        local entry = STAGGER_TYPE_ORDER[i]
+        local type_id = stagger_types[entry.key]
+        local duration = durations[type_id]
+        if duration then
+            rows[#rows + 1] = {
+                name = mod:localize(entry.label),
+                cells = {
+                    { text = string.format('%.2fs', duration) },
+                },
+            }
+        end
+    end
+    if #rows == 0 then
+        return nil
+    end
+    return rows
+end
+
 function EnemyStatsData.breed_info(breed_name)
     local breed = Breeds[breed_name]
     if not breed then
@@ -451,10 +496,12 @@ function EnemyStatsData.breed_info(breed_name)
         size = size,
         is_ranged = breed_is_ranged(breed),
         faction = breed_faction(breed),
+        armor_type = breed.armor_type,
         stagger_resistance = breed.stagger_resistance,
         stagger_reduction = breed.stagger_reduction,
         run_speed = breed.run_speed,
         walk_speed = breed.walk_speed,
+        detection_radius = breed.detection_radius,
         challenge_rating = breed.challenge_rating,
         tags = tags,
     }

@@ -23,6 +23,14 @@ return {
         diff_damnation = 'loc_mission_board_danger_highest',
         diff_auric = 'loc_group_finder_difficulty_auric',
         diff_havoc = 'loc_havoc_name',
+        -- Stagger
+        stat_stagger_duration = 'loc_weapon_stats_display_stagger_duration',
+        stat_stagger_type = 'loc_stagger',
+        -- Combat role
+        role_melee = 'loc_contract_task_weapon_type_melee',
+        role_ranged = 'loc_contract_task_weapon_type_ranged',
+        -- Weakspot
+        weakspot_weakspot = 'loc_weapon_details_weakspot',
     },
 
     mod_name = {
@@ -56,6 +64,10 @@ return {
     header_hit_zones = {
         en = 'HIT ZONES',
         ['zh-cn'] = '命中区域',
+    },
+    header_stagger = {
+        en = 'STAGGER',
+        ['zh-cn'] = '硬直',
     },
 
     -- View
@@ -92,16 +104,6 @@ return {
     size_monster = {
         en = 'Monster',
         ['zh-cn'] = '怪物',
-    },
-
-    -- Combat role
-    role_melee = {
-        en = 'Melee',
-        ['zh-cn'] = '近战',
-    },
-    role_ranged = {
-        en = 'Ranged',
-        ['zh-cn'] = '远程',
     },
 
     -- Faction
@@ -178,6 +180,48 @@ return {
     stat_run_speed = {
         en = 'Run Speed',
         ['zh-cn'] = '奔跑速度',
+    },
+    stat_walk_speed = {
+        en = 'Walk Speed',
+        ['zh-cn'] = '行走速度',
+    },
+    stat_detection_radius = {
+        en = 'Detection Radius',
+        ['zh-cn'] = '侦测半径',
+    },
+
+    -- Stagger types
+    stagger_light = {
+        en = 'Light',
+        ['zh-cn'] = '轻型',
+    },
+    stagger_medium = {
+        en = 'Medium',
+        ['zh-cn'] = '中型',
+    },
+    stagger_heavy = {
+        en = 'Heavy',
+        ['zh-cn'] = '重型',
+    },
+    stagger_light_ranged = {
+        en = 'Light (Ranged)',
+        ['zh-cn'] = '轻型(远程)',
+    },
+    stagger_explosion = {
+        en = 'Explosion',
+        ['zh-cn'] = '爆炸',
+    },
+    stagger_killshot = {
+        en = 'Knockback',
+        ['zh-cn'] = '击退',
+    },
+    stagger_sticky = {
+        en = 'Sticky',
+        ['zh-cn'] = '粘滞',
+    },
+    stagger_electrocuted = {
+        en = 'Electrocuted',
+        ['zh-cn'] = '电击',
     },
 
     -- Difficulty tiers
@@ -290,10 +334,6 @@ return {
     weakspot_headshot = {
         en = 'Headshot',
         ['zh-cn'] = '爆头',
-    },
-    weakspot_weakspot = {
-        en = 'Weakspot',
-        ['zh-cn'] = '弱点',
     },
     weakspot_protected = {
         en = 'Protected',
