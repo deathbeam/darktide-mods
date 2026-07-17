@@ -159,9 +159,12 @@ function SharedUtils.layout_to_markdown(title, layout)
         local e = layout[i]
         local wt = e and e.widget_type
         if wt == 'header' or wt == 'header_icon' then
-            lines[#lines + 1] = '## ' .. (e.text or '')
+            lines[#lines + 1] = '## ' .. _strip_rich_text(e.text or '')
+            if e.subtext and e.subtext ~= '' then
+                lines[#lines + 1] = '*' .. _strip_rich_text(e.subtext) .. '*'
+            end
         elseif wt == 'subtext' then
-            lines[#lines + 1] = (e.text or '')
+            lines[#lines + 1] = _strip_rich_text(e.text or '')
         elseif wt == 'section' then
             local depth = e.level == 2 and 4 or (e.level == 3 and 5 or 3)
             lines[#lines + 1] = ''
