@@ -328,15 +328,18 @@ function WeaponStatsView:_present_detail(entry)
             local record = records[i]
             local rtype = record.type
             if rtype == 'stat' then
-                local grid_entry = {
+                layout[#layout + 1] = {
                     widget_type = 'stat',
                     label = record.label,
                     value = record.value,
                     label_color = record.label_color,
+                    value_color = record.value_color,
                     indent = record.indent or 0,
+                    wrap = record.wrap,
+                    icon = record.icon,
+                    icon_frame = record.icon_frame,
                     stripe = stripe_count % 2 == 1,
                 }
-                layout[#layout + 1] = grid_entry
                 stripe_count = stripe_count + 1
             elseif rtype == 'table' then
                 layout[#layout + 1] = { widget_type = 'spacer', size = 'tight' }

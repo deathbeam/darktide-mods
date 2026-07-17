@@ -7,6 +7,7 @@ local WeaponTweakTemplates = mod:original_require('scripts/extension_systems/wea
 local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settings')
 local WeaponActionData = mod:original_require('scripts/settings/equipment/weapon_action_handler_data')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
+local Items = mod:original_require('scripts/utilities/items')
 local SharedUtils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/shared/shared_utils')
 
 local COLORS = {
@@ -993,6 +994,25 @@ local function build_stats(item)
     local records = {}
     build_chain_overview(records, weapon_template)
     build_mobility_stats(records, weapon_tweak_templates)
+    local blessings = Utils.weapon_blessings(item)
+    if blessings and #blessings > 0 then
+        add_section(records, mod:localize('header_blessings'))
+        for i = 1, #blessings do
+            local trait_item = blessings[i]
+            local name = trait_item.display_name and Localize(trait_item.display_name) or trait_item.name
+            local desc = Utils.trait_description(trait_item)
+            local icon, icon_frame = Items.trait_textures(trait_item, Utils.MAX_TRAIT_RANK)
+            add(records, {
+                type = 'stat',
+                label = name,
+                value = desc or '',
+                wrap = true,
+                icon = icon,
+                icon_frame = icon_frame,
+            })
+        end
+        add_spacer(records, 'group')
+    end
     for _, category in ipairs({ 'ranged', 'light', 'heavy', 'special', 'special_active' }) do
         local category_attacks = attacks[category]
         if category_attacks and #category_attacks > 0 then

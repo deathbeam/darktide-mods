@@ -66,6 +66,9 @@ return {
     header_mobility = {
         en = 'MOBILITY',
     },
+    header_blessings = {
+        en = 'BLESSINGS',
+    },
     header_ranged_attacks = {
         en = 'RANGED ATTACKS',
     },

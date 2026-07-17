@@ -1,3 +1,6 @@
+local mod = get_mod('WeaponStats')
+local Text = mod:original_require('scripts/utilities/ui/text')
+local UIFontSettings = mod:original_require('scripts/managers/ui/ui_font_settings')
 local INDENT_PX = 18
 local STAT_ROW_HEIGHT = 21
 local TABLE_HEADER_HEIGHT = 26
@@ -11,16 +14,19 @@ local TABLE_GRID_COLOR = Color.terminal_frame(50, true)
 local COLOR_LABEL = Color.terminal_text_header(255, true)
 local COLOR_VALUE = Color.terminal_text_header(255, true)
 local COLOR_RULE = Color.terminal_corner(120, true)
-local COLOR_STRIPE = { 120, 49, 56, 49 }
-local STRIPE_BLEED_LEFT = 20
+local COLOR_STRIPE = Color.terminal_grid_background(60, true)
+local STAT_LABEL_FONT_SIZE = 16
+local STAT_VALUE_FONT_SIZE = 16
+local STAT_ICON_SIZE = 32
+local STAT_ICON_GAP = 8
+local STAT_VALUE_TOP_OFFSET = 20
+local STAT_WRAP_PAD = 6
 
 local SECTION_LEVELS = {
     { height = 36, font_size = 22, rule = true },
     { height = 28, font_size = 19, rule = false },
     { height = 22, font_size = 16, rule = false },
 }
-
-local STRIPE_BLEED_RIGHT = 30
 
 local CHAIN_ICON_SIZE = 28
 local CHAIN_ICON_SPACING = 6
@@ -377,63 +383,140 @@ local function make_blueprints(width)
         end,
     }
 
+    local function _measure_text(ui_renderer, text, font_size, max_width)
+        if not ui_renderer or text == '' then
+            return 0
+        end
+        local style = table.clone(UIFontSettings.body)
+        style.font_size = font_size
+        style.size = { max_width, 1000 }
+        style.text_horizontal_alignment = 'left'
+        style.text_vertical_alignment = 'top'
+        style.offset = { 0, 0, 0 }
+        local ok, h = pcall(Text.text_height, ui_renderer, text, style, nil, true)
+        return ok and h or 0
+    end
+
     blueprints.stat = {
-        size = { width, STAT_ROW_HEIGHT },
-        pass_template = {
-            {
-                pass_type = 'rect',
-                style_id = 'stripe',
-                style = {
-                    color = COLOR_STRIPE,
-                    offset = { -STRIPE_BLEED_LEFT, 0, 0 },
-                    size = { width + STRIPE_BLEED_LEFT + STRIPE_BLEED_RIGHT, STAT_ROW_HEIGHT },
+        size_function = function(_, config, ui_renderer)
+            if not config.wrap then
+                return { width, STAT_ROW_HEIGHT }
+            end
+            local content_x = config.icon and (STAT_ICON_SIZE + STAT_ICON_GAP) or 0
+            local value_w = width - content_x
+            local value_h = _measure_text(ui_renderer, config.value or '', STAT_VALUE_FONT_SIZE, value_w)
+            local h = STAT_VALUE_TOP_OFFSET + math.max(STAT_VALUE_FONT_SIZE, value_h) + STAT_WRAP_PAD
+            return { width, math.max(STAT_ROW_HEIGHT, h) }
+        end,
+        pass_template_function = function(_, config)
+            local content_x = config.icon and (STAT_ICON_SIZE + STAT_ICON_GAP) or 0
+            local value_w = width - content_x
+            local passes = {
+                {
+                    pass_type = 'rect',
+                    style_id = 'stripe',
+                    style = {
+                        color = COLOR_STRIPE,
+                        offset = { 0, 0, 0 },
+                    },
+                    visibility_function = function(content)
+                        return content.stripe == true
+                    end,
                 },
-                visibility_function = function(content)
-                    return content.stripe == true
-                end,
-            },
-            {
+            }
+            if config.icon then
+                passes[#passes + 1] = {
+                    pass_type = 'texture',
+                    style_id = 'icon',
+                    value = 'content/ui/materials/icons/traits/traits_container',
+                    style = {
+                        horizontal_alignment = 'left',
+                        vertical_alignment = 'top',
+                        size = { STAT_ICON_SIZE, STAT_ICON_SIZE },
+                        offset = { 0, 0, 3 },
+                        color = Color.terminal_icon(255, true),
+                        material_values = { icon = 'content/ui/textures/icons/traits/weapon_trait_unknown' },
+                    },
+                    visibility_function = function(content)
+                        return content.has_icon == true
+                    end,
+                }
+            end
+            local label_style = table.clone(UIFontSettings.header_3)
+            label_style.font_size = STAT_LABEL_FONT_SIZE
+            label_style.text_vertical_alignment = 'top'
+            label_style.text_horizontal_alignment = 'left'
+            label_style.text_color = COLOR_LABEL
+            label_style.offset = { content_x, 0, 2 }
+            label_style.size = { value_w, STAT_LABEL_FONT_SIZE }
+            label_style.text_overflow_mode = 'truncate'
+            passes[#passes + 1] = {
                 pass_type = 'text',
                 style_id = 'label',
                 value_id = 'label',
                 value = '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 16,
-                    text_vertical_alignment = 'center',
-                    text_horizontal_alignment = 'left',
-                    text_color = COLOR_LABEL,
-                    offset = { 0, 0, 2 },
-                    size = { width * 0.55, STAT_ROW_HEIGHT },
-                    text_overflow_mode = 'truncate',
-                },
-            },
-            {
-                pass_type = 'text',
-                style_id = 'value',
-                value_id = 'value',
-                value = '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 16,
-                    text_vertical_alignment = 'center',
-                    text_horizontal_alignment = 'left',
-                    text_color = COLOR_VALUE,
-                    offset = { width * 0.55, 0, 2 },
-                    size = { width * 0.45, STAT_ROW_HEIGHT },
-                    text_overflow_mode = 'truncate',
-                },
-            },
-        },
+                style = label_style,
+            }
+            if config.wrap then
+                local value_style = table.clone(UIFontSettings.body)
+                value_style.font_size = STAT_VALUE_FONT_SIZE
+                value_style.text_vertical_alignment = 'top'
+                value_style.text_horizontal_alignment = 'left'
+                value_style.text_color = COLOR_VALUE
+                value_style.offset = { content_x, STAT_VALUE_TOP_OFFSET, 2 }
+                value_style.size = { value_w, 1000 }
+                value_style.text_overflow_mode = 'wrap'
+                passes[#passes + 1] = {
+                    pass_type = 'text',
+                    style_id = 'value',
+                    value_id = 'value',
+                    value = '',
+                    style = value_style,
+                }
+            else
+                local value_style = table.clone(UIFontSettings.header_3)
+                value_style.font_size = STAT_VALUE_FONT_SIZE
+                value_style.text_vertical_alignment = 'center'
+                value_style.text_horizontal_alignment = 'left'
+                value_style.text_color = COLOR_VALUE
+                value_style.offset = { width * 0.55, 0, 2 }
+                value_style.size = { width * 0.45, STAT_ROW_HEIGHT }
+                value_style.text_overflow_mode = 'truncate'
+                passes[#passes + 1] = {
+                    pass_type = 'text',
+                    style_id = 'value',
+                    value_id = 'value',
+                    value = '',
+                    style = value_style,
+                }
+            end
+            return passes
+        end,
         init = function(_, widget, element)
             local content = widget.content
             content.label = element.label or ''
             content.value = element.value or ''
             content.stripe = element.stripe == true
             local style = widget.style
-            style.label.offset[1] = (element.indent or 0) * INDENT_PX
+            local indent_x = (element.indent or 0) * INDENT_PX
+            style.label.offset[1] = indent_x + (element.icon and (STAT_ICON_SIZE + STAT_ICON_GAP) or 0)
+            if not element.wrap then
+                style.value.offset[1] = indent_x + width * 0.55
+            else
+                style.value.offset[1] = style.label.offset[1]
+            end
             if element.label_color then
                 style.label.text_color = element.label_color
+            end
+            if element.value_color then
+                style.value.text_color = element.value_color
+            end
+            if element.icon then
+                content.has_icon = true
+                style.icon.material_values.icon = element.icon
+                if element.icon_frame then
+                    style.icon.material_values.frame = element.icon_frame
+                end
             end
         end,
     }

@@ -8,6 +8,7 @@ local PowerLevelSettings = mod:original_require('scripts/settings/damage/power_l
 local PowerLevel = mod:original_require('scripts/utilities/attack/power_level')
 local Action = mod:original_require('scripts/utilities/action/action')
 local MasterItems = mod:original_require('scripts/backend/master_items')
+local Items = mod:original_require('scripts/utilities/items')
 local UISettings = mod:original_require('scripts/settings/ui/ui_settings')
 local WeaponHandlingTemplates =
     mod:original_require('scripts/settings/equipment/weapon_handling_templates/weapon_handling_templates')
@@ -18,6 +19,7 @@ local FALLBACK_LERP = 0.5
 local DEFAULT_POWER_LEVEL = 500
 local DEFAULT_MELEE_ICON = 'content/ui/materials/icons/weapons/hud/combat_blade_01'
 local DEFAULT_RANGED_ICON = 'content/ui/materials/icons/weapons/hud/autogun_01'
+local MAX_TRAIT_RANK = 4
 
 local function _valid_material(path)
     if not path or path == '' then
@@ -72,7 +74,9 @@ local function _label(prefix, key)
     return _localize_or_prettify(prefix .. tostring(key), key)
 end
 
-local WeaponStatsUtils = {}
+local WeaponStatsUtils = {
+    MAX_TRAIT_RANK = MAX_TRAIT_RANK,
+}
 
 function WeaponStatsUtils.damage_type_name(damage_type)
     if damage_type == nil then
@@ -464,6 +468,45 @@ function WeaponStatsUtils.weapon_hud_icon(template_name, is_ranged)
     local entry = map[template_name]
     local hud_icon = entry and entry.hud_icon
     return hud_icon or (is_ranged and DEFAULT_RANGED_ICON or DEFAULT_MELEE_ICON)
+end
+
+-- Returns the available blessing (trait) items for a weapon item, sorted by
+-- display name. Filters master items for item_type == 'TRAIT' matching the
+-- weapon's trait_category.
+function WeaponStatsUtils.weapon_blessings(item)
+    if not item then
+        return nil
+    end
+    local category = Items.trait_category(item)
+    if not category then
+        return nil
+    end
+    local cached = MasterItems.get_cached()
+    if not cached then
+        return nil
+    end
+    local blessings = {}
+    for _id, trait_item in pairs(cached) do
+        if trait_item.item_type == 'TRAIT' and Items.trait_category(trait_item) == category then
+            blessings[#blessings + 1] = trait_item
+        end
+    end
+    if #blessings == 0 then
+        return nil
+    end
+    table.sort(blessings, function(a, b)
+        return (a.display_name or a.name) < (b.display_name or b.name)
+    end)
+    return blessings
+end
+
+-- Returns the description text for a trait at the highest rank.
+function WeaponStatsUtils.trait_description(trait_item)
+    if not trait_item then
+        return nil
+    end
+    local success, desc = pcall(Items.trait_description, trait_item, MAX_TRAIT_RANK, nil)
+    return success and desc or nil
 end
 
 -- Damage profile helpers
