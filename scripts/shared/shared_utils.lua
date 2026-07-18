@@ -2,6 +2,13 @@ local ArmorSettings = require('scripts/settings/damage/armor_settings')
 
 local SharedUtils = {}
 
+-- View names registered via register_stats_view. Lives on _G because each mod loads
+-- its own copy of this file (via io_dofile), so a SharedUtils field would be per-mod
+-- and never see the sibling mods' views. Opening one stats view closes the others.
+local stats_view_names = rawget(_G, 'dmf_stats_view_names') or {}
+_G.dmf_stats_view_names = stats_view_names
+SharedUtils.stats_view_names = stats_view_names
+
 -- Localize a game loc key, returning nil on miss or when the game has no entry.
 function SharedUtils.safe_localize(text)
     if not text or text == '' or text == 'n/a' then
@@ -253,6 +260,7 @@ end
 -- it. `button_text_loc` is the localization key for the button label; the button
 -- honors the mod's `add_to_esc_menu` setting.
 function SharedUtils.register_stats_view(mod, view_name, class_name, path, button_text_loc)
+    stats_view_names[#stats_view_names + 1] = view_name
     mod:add_require_path(path)
     mod:register_view({
         view_name = view_name,

@@ -37,6 +37,18 @@ local function make_view(mod, config)
     function View:on_enter()
         View.super.on_enter(self)
 
+        -- Close any other stats view that's open so these don't stack. The registry is
+        -- shared on _G (see shared_utils) since each mod loads its own copy of it.
+        local ui_manager = Managers.ui
+        if ui_manager then
+            local names = SharedUtils.stats_view_names
+            for i = 1, #names do
+                local name = names[i]
+                if name ~= self.view_name and ui_manager:view_active(name) then
+                    ui_manager:close_view(name)
+                end
+            end
+        end
         if icon_packages then
             self._loaded_icon_packages = SharedUtils.load_icon_packages(mod, icon_packages)
         end
