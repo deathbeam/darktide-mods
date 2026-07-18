@@ -10,10 +10,10 @@ on:
         type: choice
         options:
           - ''
-          - AutoAbilities
-          - CombatStats
-          - SimpleMinimap
+          - SimpleAbilities
           - SimpleMovement
+          - CombatStats
+          - EnemyStats
           - WeaponStats
         default: ''
       dry_run:

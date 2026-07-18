@@ -2,16 +2,22 @@
 
 Darktide mods made by me
 
-## [AutoAbilities](mods/AutoAbilities)
+## [SimpleAbilities](mods/SimpleAbilities)
 
-Automatically uses blitzes and stimms when equipped or when you have Chemical Dependency with Hive Scum. Combination of various mods but works better together and uses same logic.
+Automatically uses blitzes and stimms when equipped. Combination of various mods but works better together and uses same logic.
+
+## [SimpleMovement](mods/SimpleMovement)
+
+Auto run, CTRL to walk, hold to dodge etc
 
 ## [CombatStats](mods/CombatStats)
 
 Track detailed combat statistics including damage, kills, buff uptime, and more
 
-<img width="931" height="411" alt="image" src="https://github.com/user-attachments/assets/7fe294b4-06c4-4d7f-a4db-6bc2b15bbcca" />
+## [EnemyStats](mods/EnemyStats)
 
-## WeaponStats
+Show enemy stats
+
+## [WeaponStats](mods/WeaponStats)
 
 Show weapon stats
