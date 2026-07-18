@@ -1,4 +1,4 @@
-local mod = get_mod('AutoAbilities')
+local mod = get_mod('SimpleAbilities')
 
 -- Constants
 local ACTION_STAGES = {
