@@ -1,127 +1,23 @@
 local mod = get_mod('EnemyStats')
 
-local ViewElementInputLegend =
-    mod:original_require('scripts/ui/view_elements/view_element_input_legend/view_element_input_legend')
-local ViewElementGrid = mod:original_require('scripts/ui/view_elements/view_element_grid/view_element_grid')
-
 local SharedUtils = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/shared/shared_utils')
 local Data = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_utils')
 local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settings')
+local make_view = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/shared/shared_view_base')
 local make_list_blueprints =
     mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_view_blueprints')
 local make_detail_blueprints =
     mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_detail_blueprints')
 
-local EnemyStatsView = class('EnemyStatsView', 'BaseView')
+local EnemyStatsView = make_view(mod, {
+    class_name = 'EnemyStatsView',
+    prefix = 'enemy_stats',
+    shared_utils = SharedUtils,
+    definitions_path = 'EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_view_definitions',
+})
 
-function EnemyStatsView:init(settings, context)
-    self._definitions =
-        mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_view_definitions')
-
-    EnemyStatsView.super.init(self, self._definitions, settings)
-
-    self._pass_draw = false
+function EnemyStatsView:_on_init(settings, context)
     self._enemy_groups = Data.build_enemy_list()
-    self._last_search_text = ''
-end
-
-function EnemyStatsView:on_enter()
-    EnemyStatsView.super.on_enter(self)
-
-    self:_setup_input_legend()
-    self:_setup_search()
-    self:_setup_list_grid()
-    self:_setup_detail_grid()
-    self:_setup_entries()
-end
-
-function EnemyStatsView:_setup_search()
-    local search_widget = self._widgets_by_name.enemy_stats_search
-    if search_widget then
-        search_widget.content.input_text = ''
-        search_widget.content.placeholder_text = mod:localize('search_placeholder')
-
-        local style = search_widget.style
-        if style then
-            style.background.color = { 255, 30, 30, 30 }
-            style.baseline.color = Color.terminal_text_body(100, true)
-        end
-    end
-end
-
-function EnemyStatsView:_setup_input_legend()
-    self._input_legend_element = self:_add_element(ViewElementInputLegend, 'input_legend', 10)
-    local legend_inputs = self._definitions.legend_inputs
-
-    for i = 1, #legend_inputs do
-        local legend_input = legend_inputs[i]
-        local on_pressed_callback = legend_input.on_pressed_callback
-            and callback(self, legend_input.on_pressed_callback)
-
-        self._input_legend_element:add_entry(
-            legend_input.display_name,
-            legend_input.input_action,
-            legend_input.visibility_function,
-            on_pressed_callback,
-            legend_input.alignment
-        )
-    end
-end
-
--- Grid elements ----------------------------------------------------------
-
-function EnemyStatsView:_setup_list_grid()
-    if self._list_grid then
-        self._list_grid = nil
-        self:_remove_element('list_grid')
-    end
-
-    local grid_settings = self._definitions.list_grid_settings
-    self._list_grid = self:_add_element(ViewElementGrid, 'list_grid', 10, grid_settings)
-    self:_update_list_grid_position()
-end
-
-function EnemyStatsView:_setup_detail_grid()
-    if self._detail_grid then
-        self._detail_grid = nil
-        self:_remove_element('detail_grid')
-    end
-
-    local grid_settings = self._definitions.detail_grid_settings
-    self._detail_grid = self:_add_element(ViewElementGrid, 'detail_grid', 10, grid_settings)
-    self:_update_detail_grid_position()
-end
-
-function EnemyStatsView:_update_list_grid_position()
-    if not self._list_grid then
-        return
-    end
-
-    local position = self:_scenegraph_world_position('enemy_stats_list_content')
-    if position then
-        self._list_grid:set_pivot_offset(position[1], position[2])
-    end
-end
-
-function EnemyStatsView:_update_detail_grid_position()
-    if not self._detail_grid then
-        return
-    end
-
-    local position = self:_scenegraph_world_position('enemy_stats_detail_content')
-    if position then
-        self._detail_grid:set_pivot_offset(position[1], position[2])
-    end
-end
-
-function EnemyStatsView:_list_width()
-    local grid_settings = self._definitions.list_grid_settings
-    return grid_settings and grid_settings.grid_size[1] or 480
-end
-
-function EnemyStatsView:_detail_width()
-    local grid_settings = self._definitions.detail_grid_settings
-    return grid_settings and grid_settings.grid_size[1] or 600
 end
 
 -- Enemy list ------------------------------------------------------------
@@ -177,31 +73,6 @@ function EnemyStatsView:_format_list_subtext(entry)
     local category_label = mod:localize('kind_' .. entry.category)
     local faction_label = mod:localize('faction_' .. entry.faction)
     return string.format('%s | %s | %s', role_label, category_label, faction_label)
-end
-
-function EnemyStatsView:_cb_on_list_presented()
-    local entries = self._filtered_list
-    if not entries or #entries == 0 then
-        self:_present_detail(nil)
-        return
-    end
-
-    self._list_grid:select_grid_index(1)
-    self:_select_entry(entries[1])
-end
-
-function EnemyStatsView:cb_on_list_entry_left_pressed(widget, element)
-    self:_select_entry(element)
-end
-
-function EnemyStatsView:_select_entry(entry)
-    if entry then
-        local index = self._list_grid:index_by_element(entry)
-        if index then
-            self._list_grid:select_grid_index(index)
-        end
-    end
-    self:_present_detail(entry)
 end
 
 -- Detail panel -----------------------------------------------------------
@@ -383,55 +254,6 @@ function EnemyStatsView:_present_detail(entry)
     local left_click_callback = callback(self, 'cb_on_detail_entry_left_pressed')
     self._detail_layout = layout
     self._detail_grid:present_grid_layout(layout, blueprints, left_click_callback)
-end
-
-function EnemyStatsView:cb_on_detail_entry_left_pressed(widget, element)
-    return
-end
-
-function EnemyStatsView:cb_on_close_pressed()
-    Managers.ui:close_view(self.view_name)
-end
-
-function EnemyStatsView:cb_on_copy_pressed()
-    local entry = self._detail_entry
-    if not entry then
-        return
-    end
-    local text = SharedUtils.layout_to_markdown(entry.name, self._detail_layout)
-    SharedUtils.copy_to_clipboard(text)
-end
-
-function EnemyStatsView:update(dt, t, input_service)
-    local search_widget = self._widgets_by_name.enemy_stats_search
-    if search_widget then
-        local current_search = search_widget.content.input_text or ''
-        if current_search ~= self._last_search_text then
-            self._last_search_text = current_search
-            self:_setup_entries()
-        end
-    end
-
-    return EnemyStatsView.super.update(self, dt, t, input_service)
-end
-
-function EnemyStatsView:on_exit()
-    if self._input_legend_element then
-        self._input_legend_element = nil
-        self:_remove_element('input_legend')
-    end
-
-    if self._list_grid then
-        self._list_grid = nil
-        self:_remove_element('list_grid')
-    end
-
-    if self._detail_grid then
-        self._detail_grid = nil
-        self:_remove_element('detail_grid')
-    end
-
-    EnemyStatsView.super.on_exit(self)
 end
 
 return EnemyStatsView
