@@ -1,112 +1,17 @@
+local mod = get_mod('CombatStats')
+
+local Shared = mod:io_dofile('CombatStats/scripts/mods/CombatStats/shared/shared_detail_blueprints')
+
 local BAR_HEIGHT = 20
 local BAR_WIDGET_HEIGHT = 30
 local ICON_SIZE = 24
 local ICON_SPACING = 5
 local TEXT_PADDING = 10
 
-local COLOR_LABEL = Color.terminal_text_body(255, true)
 local COLOR_BAR_BG = { 100, 50, 50, 50 }
-local COLOR_RULE = Color.terminal_corner(120, true)
 
 local function make_blueprints(width)
-    local blueprints = {}
-
-    blueprints.spacer = {
-        size_function = function(_, config)
-            return { width, config.height or 10 }
-        end,
-        pass_template = {
-            {
-                pass_type = 'rect',
-                style = { color = { 0, 0, 0, 0 } },
-            },
-        },
-    }
-
-    blueprints.header = {
-        size_function = function(_, config)
-            return { width, (config.font_size or 26) + TEXT_PADDING }
-        end,
-        pass_template_function = function(_, config)
-            local font_size = config.font_size or 26
-            return {
-                {
-                    pass_type = 'text',
-                    style_id = 'text',
-                    value_id = 'text',
-                    value = config.text or '',
-                    style = {
-                        font_type = 'proxima_nova_bold',
-                        font_size = font_size,
-                        text_vertical_alignment = 'top',
-                        text_horizontal_alignment = 'left',
-                        text_color = config.color or Color.terminal_text_body(255, true),
-                        offset = { 0, 0, 2 },
-                        size = { width, font_size + TEXT_PADDING },
-                    },
-                },
-            }
-        end,
-    }
-
-    blueprints.subtext = {
-        size_function = function(_, config)
-            return { width, (config.font_size or 18) + TEXT_PADDING }
-        end,
-        pass_template_function = function(_, config)
-            local font_size = config.font_size or 18
-            return {
-                {
-                    pass_type = 'text',
-                    style_id = 'text',
-                    value_id = 'text',
-                    value = config.text or '',
-                    style = {
-                        font_type = 'proxima_nova_bold',
-                        font_size = font_size,
-                        text_vertical_alignment = 'top',
-                        text_horizontal_alignment = 'left',
-                        text_color = config.color or Color.terminal_text_body_sub_header(255, true),
-                        offset = { 0, 0, 2 },
-                        size = { width, font_size + TEXT_PADDING },
-                    },
-                },
-            }
-        end,
-    }
-
-    blueprints.section = {
-        size = { width, 36 },
-        pass_template = {
-            {
-                pass_type = 'text',
-                style_id = 'text',
-                value_id = 'text',
-                value = '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 20,
-                    text_vertical_alignment = 'top',
-                    text_horizontal_alignment = 'left',
-                    text_color = Color.terminal_text_header(255, true),
-                    offset = { 0, 0, 2 },
-                    size = { width, 30 },
-                },
-            },
-            {
-                pass_type = 'rect',
-                style_id = 'rule',
-                style = {
-                    color = COLOR_RULE,
-                    offset = { 0, 30, 1 },
-                    size = { width, 2 },
-                },
-            },
-        },
-        init = function(_, widget, element)
-            widget.content.text = element.text or ''
-        end,
-    }
+    local blueprints = Shared.make_blueprints(width)
 
     blueprints.text = {
         size_function = function(_, config)
@@ -125,7 +30,7 @@ local function make_blueprints(width)
                         font_size = font_size,
                         text_vertical_alignment = 'top',
                         text_horizontal_alignment = 'left',
-                        text_color = config.color or COLOR_LABEL,
+                        text_color = config.color or Shared.colors.label,
                         offset = { 0, 0, 2 },
                         size = { width, font_size + TEXT_PADDING },
                     },
@@ -199,7 +104,7 @@ local function make_blueprints(width)
                     font_size = 16,
                     text_vertical_alignment = 'center',
                     text_horizontal_alignment = 'left',
-                    text_color = COLOR_LABEL,
+                    text_color = Shared.colors.label,
                     offset = { icon_size + icon_spacing, 0, 2 },
                     size = { label_width, BAR_HEIGHT },
                     text_overflow_mode = 'truncate',

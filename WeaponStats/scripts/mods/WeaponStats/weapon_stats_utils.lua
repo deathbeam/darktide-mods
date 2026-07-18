@@ -59,19 +59,8 @@ local MODE_SWAP_PATTERNS = { '_activate', '_deactivate' }
 
 local _TARGET_SETTINGS_NO_LERP_VALUES = {}
 
-local function _localize_or_prettify(loc_id, key)
-    local localized = mod:localize(loc_id)
-    if localized and not localized:find('^<') then
-        return localized
-    end
-    return SharedUtils.prettify(key)
-end
-
 local function _label(prefix, key)
-    if key == nil then
-        return nil
-    end
-    return _localize_or_prettify(prefix .. tostring(key), key)
+    return SharedUtils.localize_or_prettify(mod, prefix, key)
 end
 
 local WeaponStatsUtils = {
@@ -102,11 +91,7 @@ function WeaponStatsUtils.friendly_action_label(action_name)
         return localized
     end
     key = key:gsub('^light_', 'light '):gsub('^heavy_', 'heavy '):gsub('^special_', 'special ')
-    local prettified = key:gsub('_', ' ')
-    prettified = prettified:gsub('(%a)(%a+)', function(first, rest)
-        return first:upper() .. rest
-    end)
-    return prettified
+    return SharedUtils.prettify(key)
 end
 
 -- Combo action numbering

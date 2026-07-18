@@ -1,20 +1,8 @@
-local STAT_ROW_HEIGHT = 21
-local TABLE_HEADER_HEIGHT = 26
-local TABLE_ROW_HEIGHT = 22
-local TABLE_NAME_WIDTH = 150
-local TABLE_FRAME_COLOR = Color.terminal_frame(180, true)
-local TABLE_CORNER_COLOR = Color.terminal_frame(180, true)
-local TABLE_BG_COLOR = Color.terminal_grid_background(90, true)
-local TABLE_HEADER_BG_COLOR = Color.terminal_grid_background(160, true)
-local TABLE_GRID_COLOR = Color.terminal_frame(50, true)
-local COLOR_LABEL = Color.terminal_text_body(255, true)
-local COLOR_VALUE = Color.terminal_text_header(255, true)
-local COLOR_RULE = Color.terminal_frame(120, true)
+local mod = get_mod('EnemyStats')
 
-local SPACER_HEIGHT = {
-    group = 10,
-    tight = 4,
-}
+local Shared = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/shared/shared_detail_blueprints')
+
+local STAT_ROW_HEIGHT = 21
 
 -- Humanoid body diagram: rect passes laid out as a silhouette, each part colored
 -- by its zone armor type. Shown beside the hit-zone table for humanoid breeds.
@@ -22,7 +10,6 @@ local BODY_W = 180
 local BODY_GAP = 10
 local BODY_BG = { 80, 18, 18, 18 }
 local BODY_FRAME = Color.terminal_frame(100, true)
-local PART_BORDER = { 120, 0, 0, 0 }
 
 -- Zone key to { cx, cy, w, h }: center coordinates relative to the canvas center,
 -- scaled to a -1..1 range so the silhouette stretches to the diagram height.
@@ -39,169 +26,6 @@ local BODY_PARTS = {
     upper_right_leg = { 0.18, 0.0, 0.16, 0.18 },
     lower_right_leg = { 0.18, 0.36, 0.14, 0.18 },
 }
-
--- Generic table: name column + N value columns, sized to its content.
--- origin_x shifts the table right so it can sit beside the body diagram.
-local function _table_passes(width, columns, rows, name_column_label, origin_x)
-    origin_x = origin_x or 0
-    local num_columns = #columns
-    local cell_area_width = width - TABLE_NAME_WIDTH
-    local col_width = num_columns > 0 and math.floor(cell_area_width / num_columns) or 0
-    local header_height = TABLE_HEADER_HEIGHT
-    local row_height = TABLE_ROW_HEIGHT
-    local total_height = header_height + #rows * row_height
-    local passes = {}
-
-    passes[#passes + 1] = {
-        pass_type = 'rect',
-        style_id = 'background',
-        style = {
-            color = TABLE_BG_COLOR,
-            offset = { origin_x, 0, 0 },
-            size = { width, total_height },
-        },
-    }
-    passes[#passes + 1] = {
-        pass_type = 'texture',
-        style_id = 'frame',
-        value = 'content/ui/materials/frames/frame_tile_2px',
-        style = {
-            scale_to_material = true,
-            color = TABLE_FRAME_COLOR,
-            offset = { origin_x, 0, 3 },
-            size = { width, total_height },
-        },
-    }
-    passes[#passes + 1] = {
-        pass_type = 'texture',
-        style_id = 'corner',
-        value = 'content/ui/materials/frames/frame_corner_2px',
-        style = {
-            scale_to_material = true,
-            color = TABLE_CORNER_COLOR,
-            offset = { origin_x, 0, 4 },
-            size = { width, total_height },
-        },
-    }
-    passes[#passes + 1] = {
-        pass_type = 'rect',
-        style_id = 'header_band',
-        style = {
-            color = TABLE_HEADER_BG_COLOR,
-            offset = { origin_x, 0, 1 },
-            size = { width, header_height },
-        },
-    }
-    passes[#passes + 1] = {
-        pass_type = 'rect',
-        style_id = 'header_separator',
-        style = {
-            color = TABLE_GRID_COLOR,
-            offset = { origin_x, header_height - 1, 2 },
-            size = { width, 2 },
-        },
-    }
-    passes[#passes + 1] = {
-        pass_type = 'rect',
-        style_id = 'name_separator',
-        style = {
-            color = TABLE_GRID_COLOR,
-            offset = { origin_x + TABLE_NAME_WIDTH - 1, 0, 2 },
-            size = { 2, total_height },
-        },
-    }
-    for col_index = 1, num_columns - 1 do
-        local x = TABLE_NAME_WIDTH + col_index * col_width - 1
-        passes[#passes + 1] = {
-            pass_type = 'rect',
-            style_id = 'col_sep_' .. col_index,
-            style = {
-                color = TABLE_GRID_COLOR,
-                offset = { origin_x + x, 0, 2 },
-                size = { 2, total_height },
-            },
-        }
-    end
-
-    passes[#passes + 1] = {
-        pass_type = 'text',
-        style_id = 'col_name',
-        value_id = 'col_name',
-        value = name_column_label or '',
-        style = {
-            font_type = 'proxima_nova_bold',
-            font_size = 15,
-            text_vertical_alignment = 'center',
-            text_horizontal_alignment = 'left',
-            text_color = COLOR_LABEL,
-            offset = { origin_x + 6, 0, 5 },
-            size = { TABLE_NAME_WIDTH - 12, header_height },
-            text_overflow_mode = 'truncate',
-        },
-    }
-    for col_index = 1, num_columns do
-        local column = columns[col_index]
-        local x = TABLE_NAME_WIDTH + (col_index - 1) * col_width
-        passes[#passes + 1] = {
-            pass_type = 'text',
-            style_id = 'col_' .. col_index,
-            value_id = 'col_' .. col_index,
-            value = column and column.label or '',
-            style = {
-                font_type = 'proxima_nova_bold',
-                font_size = 15,
-                text_vertical_alignment = 'center',
-                text_horizontal_alignment = 'center',
-                text_color = (column and column.color) or COLOR_LABEL,
-                offset = { origin_x + x, 0, 5 },
-                size = { col_width, header_height },
-                text_overflow_mode = 'truncate',
-            },
-        }
-    end
-    for row_index = 1, #rows do
-        local row = rows[row_index]
-        local cells = row.cells or {}
-        local y = header_height + (row_index - 1) * row_height
-        passes[#passes + 1] = {
-            pass_type = 'text',
-            style_id = 'name_' .. row_index,
-            value_id = 'name_' .. row_index,
-            value = row.name or '',
-            style = {
-                font_type = 'proxima_nova_bold',
-                font_size = 15,
-                text_vertical_alignment = 'center',
-                text_horizontal_alignment = 'left',
-                text_color = row.name_color or COLOR_LABEL,
-                offset = { origin_x + 6, y, 5 },
-                size = { TABLE_NAME_WIDTH - 12, row_height },
-                text_overflow_mode = 'truncate',
-            },
-        }
-        for col_index = 1, num_columns do
-            local cell = cells[col_index] or {}
-            local x = TABLE_NAME_WIDTH + (col_index - 1) * col_width
-            passes[#passes + 1] = {
-                pass_type = 'text',
-                style_id = 'cell_' .. row_index .. '_' .. col_index,
-                value_id = 'cell_' .. row_index .. '_' .. col_index,
-                value = cell.text or '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 15,
-                    text_vertical_alignment = 'center',
-                    text_horizontal_alignment = 'center',
-                    text_color = cell.color or COLOR_VALUE,
-                    offset = { origin_x + x, y, 5 },
-                    size = { col_width, row_height },
-                    text_overflow_mode = 'truncate',
-                },
-            }
-        end
-    end
-    return passes
-end
 
 local function _body_diagram_passes(origin_x, canvas_h, zones)
     local zone_by_key = {}
@@ -256,75 +80,7 @@ local function _body_diagram_passes(origin_x, canvas_h, zones)
 end
 
 local function make_blueprints(width)
-    local blueprints = {}
-
-    blueprints.spacer = {
-        size_function = function(_, config)
-            return { width, SPACER_HEIGHT[config.size or 'tight'] or 8 }
-        end,
-        pass_template = {
-            {
-                pass_type = 'rect',
-                style = { color = { 0, 0, 0, 0 } },
-            },
-        },
-    }
-
-    blueprints.header = {
-        size = { width, 42 },
-        pass_template = {
-            {
-                pass_type = 'text',
-                style_id = 'text',
-                value_id = 'text',
-                value = '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 26,
-                    text_vertical_alignment = 'top',
-                    text_horizontal_alignment = 'left',
-                    text_color = Color.terminal_text_header(255, true),
-                    offset = { 0, 0, 2 },
-                    size = { width, 38 },
-                    text_overflow_mode = 'truncate',
-                },
-            },
-        },
-        init = function(_, widget, element)
-            widget.content.text = element.text or ''
-            if element.color then
-                widget.style.text.text_color = element.color
-            end
-        end,
-    }
-
-    blueprints.subtext = {
-        size = { width, 22 },
-        pass_template = {
-            {
-                pass_type = 'text',
-                style_id = 'text',
-                value_id = 'text',
-                value = '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 16,
-                    text_vertical_alignment = 'top',
-                    text_horizontal_alignment = 'left',
-                    text_color = Color.terminal_text_body_sub_header(255, true),
-                    offset = { 0, 0, 2 },
-                    size = { width, 22 },
-                    text_overflow_mode = 'truncate',
-                },
-            },
-        },
-        init = function(_, widget, element)
-            widget.content.text = element.text or ''
-            if element.color then
-                widget.style.text.text_color = element.color
-            end
-        end,
-    }
+    local blueprints = Shared.make_blueprints(width)
 
     blueprints.stat = {
         size = { width, STAT_ROW_HEIGHT },
@@ -339,7 +95,7 @@ local function make_blueprints(width)
                     font_size = 16,
                     text_vertical_alignment = 'center',
                     text_horizontal_alignment = 'left',
-                    text_color = COLOR_LABEL,
+                    text_color = Shared.colors.label,
                     offset = { 0, 0, 2 },
                     size = { width * 0.55, STAT_ROW_HEIGHT },
                     text_overflow_mode = 'truncate',
@@ -355,7 +111,7 @@ local function make_blueprints(width)
                     font_size = 16,
                     text_vertical_alignment = 'center',
                     text_horizontal_alignment = 'left',
-                    text_color = COLOR_VALUE,
+                    text_color = Shared.colors.value,
                     offset = { width * 0.55, 0, 2 },
                     size = { width * 0.45, STAT_ROW_HEIGHT },
                     text_overflow_mode = 'truncate',
@@ -373,47 +129,11 @@ local function make_blueprints(width)
             end
         end,
     }
-    blueprints.section = {
-        size = { width, 36 },
-        pass_template = {
-            {
-                pass_type = 'text',
-                style_id = 'text',
-                value_id = 'text',
-                value = '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 22,
-                    text_vertical_alignment = 'top',
-                    text_horizontal_alignment = 'left',
-                    text_color = Color.terminal_text_header(255, true),
-                    offset = { 0, 0, 2 },
-                    size = { width, 30 },
-                },
-            },
-            {
-                pass_type = 'rect',
-                style_id = 'rule',
-                style = {
-                    color = COLOR_RULE,
-                    offset = { 0, 30, 1 },
-                    size = { width, 2 },
-                },
-            },
-        },
-        init = function(_, widget, element)
-            widget.content.text = element.text or ''
-            local style = widget.style.text
-            if element.color then
-                style.text_color = element.color
-            end
-        end,
-    }
 
     blueprints.table = {
         size_function = function(_, config)
             local rows = config.rows or {}
-            local table_h = TABLE_HEADER_HEIGHT + #rows * TABLE_ROW_HEIGHT
+            local table_h = Shared.table_height(#rows)
             if config.diagram then
                 local table_w = (width - BODY_W - BODY_GAP)
                 return { BODY_W + BODY_GAP + table_w, table_h }
@@ -423,10 +143,13 @@ local function make_blueprints(width)
         pass_template_function = function(_, config)
             local rows = config.rows or {}
             local columns = config.columns or {}
-            local table_h = TABLE_HEADER_HEIGHT + #rows * TABLE_ROW_HEIGHT
+            local table_h = Shared.table_height(#rows)
             local table_w = config.diagram and (width - BODY_W - BODY_GAP) or width
             local table_origin = config.diagram and (BODY_W + BODY_GAP) or 0
-            local table_passes = _table_passes(table_w, columns, rows, config.name_column_label, table_origin)
+            local table_passes = Shared.make_table_passes(table_w, columns, rows, {
+                name_column_label = config.name_column_label,
+                origin_x = table_origin,
+            })
             if config.diagram then
                 local diagram_passes = _body_diagram_passes(0, table_h, rows)
                 for i = 1, #diagram_passes do
@@ -436,6 +159,7 @@ local function make_blueprints(width)
             return table_passes
         end,
     }
+
     return blueprints
 end
 

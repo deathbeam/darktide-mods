@@ -219,11 +219,7 @@ end
 local EnemyStatsData = {}
 
 local function zone_name(zone_key)
-    local s = mod:localize('zone_' .. zone_key)
-    if s and not s:find('^<') then
-        return s
-    end
-    return SharedUtils.prettify(zone_key)
+    return SharedUtils.localize_or_prettify(mod, 'zone_', zone_key)
 end
 
 local function weakspot_name(type_key)

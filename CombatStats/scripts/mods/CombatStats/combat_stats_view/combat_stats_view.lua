@@ -255,7 +255,7 @@ function CombatStatsView:_present_detail(entry)
 
     local layout = {}
     if entry and not entry.disabled then
-        layout[#layout + 1] = { widget_type = 'spacer', height = 10 }
+        layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
         layout[#layout + 1] = {
             widget_type = 'header',
             text = entry.name,
@@ -273,7 +273,7 @@ function CombatStatsView:_present_detail(entry)
 
         -- Enemy Stats (session only)
         if entry.is_session and stats.damage_by_type and next(stats.damage_by_type) then
-            layout[#layout + 1] = { widget_type = 'spacer', height = 10 }
+            layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
             layout[#layout + 1] = { widget_type = 'section', text = mod:localize('enemy_stats') }
 
             local sorted_types = {}
@@ -318,7 +318,7 @@ function CombatStatsView:_present_detail(entry)
 
         -- Damage Stats
         if stats.total_damage > 0 then
-            layout[#layout + 1] = { widget_type = 'spacer', height = 10 }
+            layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
             layout[#layout + 1] = { widget_type = 'section', text = mod:localize('damage_stats') }
 
             layout[#layout + 1] = {
@@ -409,7 +409,7 @@ function CombatStatsView:_present_detail(entry)
 
         -- Hit Stats
         if stats.total_hits > 0 then
-            layout[#layout + 1] = { widget_type = 'spacer', height = 10 }
+            layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
             layout[#layout + 1] = { widget_type = 'section', text = mod:localize('hit_stats') }
             layout[#layout + 1] = {
                 widget_type = 'text',
@@ -467,7 +467,7 @@ function CombatStatsView:_present_detail(entry)
             end)
 
             if #buff_array > 0 then
-                layout[#layout + 1] = { widget_type = 'spacer', height = 10 }
+                layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
                 layout[#layout + 1] = { widget_type = 'section', text = mod:localize('buff_uptime') }
 
                 for i = 1, #buff_array do
