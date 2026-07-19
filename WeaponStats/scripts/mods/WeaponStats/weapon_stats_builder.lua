@@ -277,91 +277,114 @@ local function profiles_equivalent(a, b)
 end
 -- Render -----------------------------------------------------------------
 
--- damage_window_end for attacks, total_time for kinds with no damage window.
-local function _action_total_time(action)
-    if not action then
+-- chain_time of the named outbound chain on `action`. For array-form chains
+-- (start_attack on chainaxe etc.) the earliest entry is returned, since that is the
+-- soonest the next swing can begin. nil when the chain is absent or ungated.
+local function _outbound_chain_time(action, chain_name)
+    local chains = action and action.allowed_chain_actions
+    local match = type(chains) == 'table' and chains[chain_name]
+    if type(match) ~= 'table' then
         return nil
     end
 
-    local t = action.damage_window_end or action.total_time
-
-    if type(t) ~= 'number' or t == math.huge or t == -math.huge then
-        return nil
+    if type(match.chain_time) == 'number' then
+        return match.chain_time
     end
-    return t
+
+    local earliest
+    for _, entry in ipairs(match) do
+        local t = type(entry) == 'table' and entry.chain_time
+        if type(t) == 'number' then
+            earliest = not earliest and t or math.min(earliest, t)
+        end
+    end
+    return earliest
+end
+
+-- Minimum hold before `action_name` can release from a preceding windup, plus the
+-- name of that windup so its own time_scale can be resolved. Windups gate their
+-- heavy_attack chain by chain_time (the charge), light_attack at 0 (instant).
+local function _windup_charge(actions, action_name)
+    local charge, source_name
+    for name, source in pairs(actions or {}) do
+        if type(source) == 'table' and source.kind == 'windup' then
+            local chains = source.allowed_chain_actions
+            if type(chains) == 'table' then
+                for _, chain in pairs(chains) do
+                    local t = type(chain) == 'table'
+                        and chain.action_name == action_name
+                        and type(chain.chain_time) == 'number'
+                        and chain.chain_time
+                    if t and (not charge or t < charge) then
+                        charge, source_name = t, name
+                    end
+                end
+            end
+        end
+    end
+    return charge or 0, source_name
+end
+
+-- Per-action time_scale, resolved to its lerp midpoint. Matches ActionHandler:
+-- each action's chains validate against its own weapon_handling_template, so charge
+-- and recovery are scaled by their source action's scale, not the sweep's.
+local function _time_scale_for(weapon_template, weapon_tweak_templates, action_name)
+    local tmpl = handling_template_for_action(weapon_template, weapon_tweak_templates, action_name)
+    local scale = Utils.resolve_lerpable(tmpl and tmpl.time_scale)
+    if type(scale) ~= 'number' or scale <= 0 then
+        return 1
+    end
+    return scale
 end
 
 local function render_timing(records, action, weapon_template, weapon_tweak_templates, action_name)
-    local fire_rate_shown = false
-
-    -- Lerpable time_scale resolves to its midpoint.
     local tmpl = handling_template_for_action(weapon_template, weapon_tweak_templates, action_name)
-    local raw_time_scale = tmpl and tmpl.time_scale
-    local time_scale = Utils.resolve_lerpable(raw_time_scale)
-    if type(time_scale) ~= 'number' or time_scale <= 0 then
-        time_scale = 1
-    end
+    local auto_fire_time = tmpl and tmpl.fire_rate and tmpl.fire_rate.auto_fire_time
 
-    if tmpl then
-        local auto_fire_time = tmpl.fire_rate and tmpl.fire_rate.auto_fire_time
-        if type(auto_fire_time) == 'number' and auto_fire_time > 0 then
-            add_stat(
-                records,
-                mod:localize('stat_fire_rate'),
-                string.format('%.2f/s', 1 / auto_fire_time),
-                COLORS.TIMING
-            )
-            fire_rate_shown = true
-        end
-    end
-
-    if fire_rate_shown then
+    if type(auto_fire_time) == 'number' and auto_fire_time > 0 then
+        add_stat(records, mod:localize('stat_fire_rate'), string.format('%.2f/s', 1 / auto_fire_time), COLORS.TIMING)
         return
     end
 
-    -- Chain time from the action's self-loop or start_attack/shoot chain.
-    local chain_time
-    local chains = action.allowed_chain_actions
-    if chains then
-        for _, chain_data in pairs(chains) do
-            if type(chain_data) == 'table' and chain_data.action_name == action_name and chain_data.chain_time then
-                chain_time = chain_data.chain_time
-                break
-            end
-        end
-        if not chain_time then
-            chain_time = (chains.shoot_pressed and chains.shoot_pressed.chain_time)
+    local actions = weapon_template and weapon_template.actions
+    local cycle_time
+
+    if action.kind == 'sweep' then
+        -- Per-swing cycle: the charge paid in the windup plus the recovery gate on
+        -- the sweep. chain_time is a cancel/charge gate (ActionHandler), not an anim
+        -- length, so neither damage_window_end nor total_time would represent it.
+        local charge, windup_name = _windup_charge(actions, action_name)
+        local recovery = _outbound_chain_time(action, 'start_attack') or 0
+        local sweep_scale = _time_scale_for(weapon_template, weapon_tweak_templates, action_name)
+        -- Charge happens in the windup, which can carry its own weapon_handling_template
+        -- (chainaxe etc.); fall back to the sweep scale when it does not.
+        local windup_scale = windup_name and _time_scale_for(weapon_template, weapon_tweak_templates, windup_name)
+            or sweep_scale
+        cycle_time = (charge / windup_scale) + (recovery / sweep_scale)
+    else
+        -- Ranged: self-loop / shoot chain_time is the real per-shot interval.
+        cycle_time = _outbound_chain_time(action, action_name)
+        if not cycle_time then
+            local chains = action.allowed_chain_actions or {}
+            cycle_time = (chains.shoot_pressed and chains.shoot_pressed.chain_time)
                 or (chains.start_attack and chains.start_attack.chain_time)
                 or (chains.shoot and chains.shoot.chain_time)
         end
-    end
-
-    -- Fall back to the action's own duration when no chain time is declared.
-    if not chain_time then
-        local total_time = _action_total_time(action)
-        if total_time and total_time > 0 and total_time < 1000 then
-            chain_time = total_time
+        local scale = _time_scale_for(weapon_template, weapon_tweak_templates, action_name)
+        if WeaponActionData.action_kinds_with_inverted_timescale[action.kind] and scale < 1 then
+            cycle_time = cycle_time and cycle_time * scale
+        else
+            cycle_time = cycle_time and cycle_time / scale
         end
     end
 
-    if not chain_time or chain_time <= 0 then
+    if not cycle_time or cycle_time <= 0 then
         return
     end
 
-    local scaled_time
-    if time_scale < 1 and WeaponActionData.action_kinds_with_inverted_timescale[action.kind] then
-        scaled_time = chain_time * time_scale
-    else
-        scaled_time = chain_time / time_scale
-    end
-
-    if scaled_time <= 0 then
-        return
-    end
-
-    local lbl = (action.kind == 'shoot_hit_scan' or action.kind == 'shoot_pellets') and mod:localize('stat_fire_rate')
-        or mod:localize('stat_attack_speed')
-    add_stat(records, lbl, string.format('%.2f/s', 1 / scaled_time), COLORS.TIMING)
+    local is_shoot = action.kind == 'shoot_hit_scan' or action.kind == 'shoot_pellets'
+    local label = is_shoot and mod:localize('stat_fire_rate') or mod:localize('stat_attack_speed')
+    add_stat(records, label, string.format('%.2f/s', 1 / cycle_time), COLORS.TIMING)
 end
 
 -- Armor damage modifiers as a single table: attack and impact, each normal and crit.
