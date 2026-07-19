@@ -301,30 +301,6 @@ local function _outbound_chain_time(action, chain_name)
     return earliest
 end
 
--- Minimum hold before `action_name` can release from a preceding windup, plus the
--- name of that windup so its own time_scale can be resolved. Windups gate their
--- heavy_attack chain by chain_time (the charge), light_attack at 0 (instant).
-local function _windup_charge(actions, action_name)
-    local charge, source_name
-    for name, source in pairs(actions or {}) do
-        if type(source) == 'table' and source.kind == 'windup' then
-            local chains = source.allowed_chain_actions
-            if type(chains) == 'table' then
-                for _, chain in pairs(chains) do
-                    local t = type(chain) == 'table'
-                        and chain.action_name == action_name
-                        and type(chain.chain_time) == 'number'
-                        and chain.chain_time
-                    if t and (not charge or t < charge) then
-                        charge, source_name = t, name
-                    end
-                end
-            end
-        end
-    end
-    return charge or 0, source_name
-end
-
 -- Per-action time_scale, resolved to its lerp midpoint. Matches ActionHandler:
 -- each action's chains validate against its own weapon_handling_template, so charge
 -- and recovery are scaled by their source action's scale, not the sweep's.
@@ -350,17 +326,32 @@ local function render_timing(records, action, weapon_template, weapon_tweak_temp
     local cycle_time
 
     if action.kind == 'sweep' then
-        -- Per-swing cycle: the charge paid in the windup plus the recovery gate on
-        -- the sweep. chain_time is a cancel/charge gate (ActionHandler), not an anim
-        -- length, so neither damage_window_end nor total_time would represent it.
-        local charge, windup_name = _windup_charge(actions, action_name)
+        -- Charge: shortest chain_time of a windup's inbound chain to this sweep.
+        -- light_attack chains at 0 (instant release), heavy_attack at the charge gate.
+        local charge, windup_name
+        for src_name, src in pairs(actions or {}) do
+            if type(src) == 'table' and src.kind == 'windup' then
+                local chains = src.allowed_chain_actions
+                if type(chains) == 'table' then
+                    for _, chain in pairs(chains) do
+                        local t = type(chain) == 'table'
+                            and chain.action_name == action_name
+                            and type(chain.chain_time) == 'number'
+                            and chain.chain_time
+                        if t and (not charge or t < charge) then
+                            charge, windup_name = t, src_name
+                        end
+                    end
+                end
+            end
+        end
         local recovery = _outbound_chain_time(action, 'start_attack') or 0
         local sweep_scale = _time_scale_for(weapon_template, weapon_tweak_templates, action_name)
         -- Charge happens in the windup, which can carry its own weapon_handling_template
         -- (chainaxe etc.); fall back to the sweep scale when it does not.
         local windup_scale = windup_name and _time_scale_for(weapon_template, weapon_tweak_templates, windup_name)
             or sweep_scale
-        cycle_time = (charge / windup_scale) + (recovery / sweep_scale)
+        cycle_time = ((charge or 0) / windup_scale) + (recovery / sweep_scale)
     else
         -- Ranged: self-loop / shoot chain_time is the real per-shot interval.
         cycle_time = _outbound_chain_time(action, action_name)
