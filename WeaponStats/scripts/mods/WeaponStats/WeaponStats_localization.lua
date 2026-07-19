@@ -33,6 +33,7 @@ return {
         stat_suppression = 'loc_weapon_stats_display_suppression',
         stat_falloff_range = 'loc_weapon_stats_display_effective_range',
         stat_dodge_dr_start = 'loc_weapon_stats_display_effective_dodges',
+        stat_dodge_speed = 'loc_weapon_stats_display_dodge_speed',
         stat_weakspot = 'loc_weapon_details_weakspot',
         stat_crit = 'loc_weapon_details_crit',
         stat_crit_plus_weakspot = 'loc_weapon_details_crit_hs',

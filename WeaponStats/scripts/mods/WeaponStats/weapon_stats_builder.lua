@@ -635,11 +635,26 @@ local function render_profile(records, ctx)
         add_stat(records, mod:localize('stat_falloff_range'), string.format('%.0f - %.0f m', min_r, max_r), COLORS.META)
     end
 
+    local per_hit_sup
     if profile.suppression_value ~= nil then
         local sup = Utils.lerp_entry(profile.suppression_value, Utils.lerp_from_path(action_lerp, 'suppression_value'))
         if sup and math.abs(sup) > 0.01 then
-            add_stat(records, mod:localize('stat_suppression'), fmt_num(sup), COLORS.META)
+            per_hit_sup = fmt_num(sup)
         end
+    end
+    local aoe_sup, aoe_radius = Utils.explosion_suppression(ctx.action, ctx.template_index)
+    local aoe_sup_text
+    if aoe_sup then
+        aoe_sup_text = fmt_num(aoe_sup)
+        if aoe_radius then
+            aoe_sup_text = aoe_sup_text .. ' (' .. fmt_num(aoe_radius) .. 'm)'
+        end
+    end
+    if per_hit_sup or aoe_sup_text then
+        local value = per_hit_sup and aoe_sup_text and (per_hit_sup .. ' / ' .. aoe_sup_text)
+            or per_hit_sup
+            or aoe_sup_text
+        add_stat(records, mod:localize('stat_suppression'), value, COLORS.META)
     end
 
     local stagger = Utils.stagger_name(profile.stagger_category)
@@ -803,6 +818,7 @@ local function render_attack(
             power_level = power_level,
             ranged_extra = prof_info.ranged_extra,
             extra_entries = prof_info.extra_entries,
+            template_index = prof_info.template_index,
             weapon_tweak_templates = weapon_tweak_templates,
             weapon_template = weapon_template,
         }
@@ -840,6 +856,7 @@ local function build_mobility_stats(records, weapon_tweak_templates)
 
     if dodge then
         add_num('stat_dodge_distance', dodge.distance_scale and (dodge.distance_scale - 1) * 100, '%+.2f%%')
+        add_num('stat_dodge_speed', dodge.speed_modifier and (dodge.speed_modifier - 1) * 100, '%+.2f%%')
         add_num(
             'stat_dodge_dr_start',
             dodge.diminishing_return_start and math.floor(dodge.diminishing_return_start),
