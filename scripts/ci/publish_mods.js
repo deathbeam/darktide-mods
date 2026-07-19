@@ -26,6 +26,7 @@
  * Optional environment variables:
  *     NEXUSMODS_GAME_DOMAIN   Nexus Mods game domain slug (default: warhammer40kdarktide)
  *     NEXUSMODS_API_BASE      Default: https://api.nexusmods.com/v3
+ *     NEXUSMODS_AUTHOR_NAME   Fallback author name if /users/validate fails (default: deathbeam)
  *     NEXUSMODS_COLLECTION_SUMMARY     Collection summary text
  *     NEXUSMODS_COLLECTION_DESCRIPTION  Collection description text
  */
@@ -195,13 +196,17 @@ async function getPublishedFile(modId, apiKey) {
   const main = files.find(
     (f) => f.category_name === "MAIN" || f.category_id === 1,
   );
-  if (main) return { version: main.version, file_id: main.file_id };
-
-  const sorted = [...files].sort(
+  const f = main || [...files].sort(
     (a, b) =>
       new Date(b.uploaded_time).getTime() - new Date(a.uploaded_time).getTime(),
-  );
-  return { version: sorted[0].version || null, file_id: sorted[0].file_id };
+  )[0];
+  // size/size_kb are both in kilobytes; file_name is the logical filename.
+  return {
+    version: f.version || null,
+    file_id: f.file_id,
+    file_size_kb: f.size_kb ?? f.size ?? null,
+    logical_filename: f.file_name || null,
+  };
 }
 
 // Resolve the file-update group id (where new versions get uploaded).
@@ -343,9 +348,9 @@ async function uploadMod(modName, zipPath, version, fileGroupId, apiKey) {
 async function getAuthorInfo(apiKey) {
   try {
     const data = await v1Request("GET", "/users/validate.json", apiKey);
-    return { name: data.name, user_id: data.user_id };
+    return { name: data.name };
   } catch (e) {
-    return { name: process.env.NEXUSMODS_AUTHOR_NAME || "deathbeam", user_id: null };
+    return { name: process.env.NEXUSMODS_AUTHOR_NAME || "deathbeam" };
   }
 }
 
@@ -381,6 +386,8 @@ function buildCollectionManifest(mods, authorName, authorUrl, name, summary, des
         type: "nexus",
         mod_id: String(m.mod_id),
         file_id: String(m.file_id),
+        file_size: m.file_size_kb,
+        logical_filename: m.logical_filename,
         update_policy: "exact",
       },
     })),
@@ -423,6 +430,17 @@ async function editCollection(collectionId, patch, apiKey) {
   await v3Request("PATCH", `/collections/${collectionId}`, apiKey, patch);
 }
 
+// Pack the manifest into a .7z archive, upload it, and clean up.
+async function uploadCollectionArchive(manifest, apiKey) {
+  const archivePath = path.resolve("collection.7z");
+  createCollectionArchive(manifest, archivePath);
+  try {
+    return await uploadFile(archivePath, apiKey);
+  } finally {
+    if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath);
+  }
+}
+
 async function syncCollection(name, uploadedMods, apiKey, dryRun, force) {
   console.log(`\n--- Collection: ${name} ---`);
 
@@ -442,6 +460,8 @@ async function syncCollection(name, uploadedMods, apiKey, dryRun, force) {
           version: file.version,
           mod_id: info.mod_id,
           file_id: file.file_id,
+          file_size_kb: file.file_size_kb,
+          logical_filename: file.logical_filename,
         });
       } else {
         console.log(`  ${modName}: no published file, excluding`);
@@ -481,49 +501,39 @@ async function syncCollection(name, uploadedMods, apiKey, dryRun, force) {
   const myCollections = await getMyCollections(apiKey, GAME_DOMAIN);
   const existing = myCollections.find((c) => c.name === name);
 
-  if (existing) {
-    if (uploadedMods.length === 0 && !force) {
-      console.log(`  "${name}" exists, no mods uploaded — skipping (use --force to revise)`);
-      return;
-    }
-    if (dryRun) {
+  if (existing && uploadedMods.length === 0 && !force) {
+    console.log(`  "${name}" exists, no mods uploaded — skipping (use --force to revise)`);
+    return;
+  }
+
+  if (dryRun) {
+    if (existing) {
       console.log(`  would create new revision on "${name}" (slug: ${existing.slug})`);
-      return;
-    }
-    console.log(`  creating new revision on "${name}" (slug: ${existing.slug})`);
-    const archivePath = path.resolve("collection.7z");
-    createCollectionArchive(manifest, archivePath);
-    try {
-      const uploadId = await uploadFile(archivePath, apiKey);
-      try {
-        await editCollection(existing.id, { name, summary, description }, apiKey);
-      } catch (e) {
-        console.log(`  warning: could not sync metadata: ${e.message}`);
-      }
-      const result = await createCollectionRevision(existing.id, uploadId, collectionData, apiKey);
-      console.log(`  revision ${result.revision_number} created (status: ${result.revision_status})`);
-      console.log(`  publish at: https://www.nexusmods.com/${GAME_DOMAIN}/collections/${existing.slug}`);
-    } finally {
-      if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath);
-    }
-  } else {
-    if (dryRun) {
+    } else {
       console.log(`  would create new collection "${name}"`);
-      return;
     }
-    console.log(`  creating new collection "${name}"`);
-    const archivePath = path.resolve("collection.7z");
-    createCollectionArchive(manifest, archivePath);
+    return;
+  }
+
+  const uploadId = await uploadCollectionArchive(manifest, apiKey);
+
+  if (existing) {
+    console.log(`  creating new revision on "${name}" (slug: ${existing.slug})`);
     try {
-      const uploadId = await uploadFile(archivePath, apiKey);
-      const result = await createCollection(uploadId, collectionData, apiKey);
-      console.log(
-        `  collection created (slug: ${result.slug}, revision ${result.revision_number}, status: ${result.revision_status})`,
-      );
-      console.log(`  publish at: https://www.nexusmods.com/${GAME_DOMAIN}/collections/${result.slug}`);
-    } finally {
-      if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath);
+      await editCollection(existing.id, { name, summary, description }, apiKey);
+    } catch (e) {
+      console.log(`  warning: could not sync metadata: ${e.message}`);
     }
+    const result = await createCollectionRevision(existing.id, uploadId, collectionData, apiKey);
+    console.log(`  revision ${result.revision_number} created (status: ${result.revision_status})`);
+    console.log(`  publish at: https://www.nexusmods.com/${GAME_DOMAIN}/collections/${existing.slug}`);
+  } else {
+    console.log(`  creating new collection "${name}"`);
+    const result = await createCollection(uploadId, collectionData, apiKey);
+    console.log(
+      `  collection created (slug: ${result.slug}, revision ${result.revision_number}, status: ${result.revision_status})`,
+    );
+    console.log(`  publish at: https://www.nexusmods.com/${GAME_DOMAIN}/collections/${result.slug}`);
   }
 }
 
