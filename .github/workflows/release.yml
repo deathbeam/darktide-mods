@@ -24,6 +24,10 @@ on:
         description: 'Upload even if the version matches Nexus Mods'
         type: boolean
         default: false
+      collection:
+        description: 'Sync a Nexus Mods collection with this name (create if missing, revise if it exists)'
+        type: string
+        default: 'deathbeam-darktide-mods'
 
 concurrency:
   group: release-${{ github.ref }}
@@ -35,14 +39,17 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      # inputs.* are empty on push events, so fall back to the default name.
+      COLLECTION_NAME: ${{ inputs.collection || 'deathbeam-darktide-mods' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install zip
+      - name: Install zip and 7zip
         run: |
           sudo apt-get update
-          sudo apt-get install -y zip
+          sudo apt-get install -y zip p7zip-full
 
       - name: Upload changed mods
         env:
@@ -58,4 +65,5 @@ jobs:
           if [ "${{ inputs.force }}" = "true" ]; then
             ARGS+=("--force")
           fi
+          ARGS+=("--collection" "$COLLECTION_NAME")
           make publish ARGS="${ARGS[*]}"

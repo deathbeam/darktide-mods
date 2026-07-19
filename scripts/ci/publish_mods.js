@@ -11,8 +11,14 @@
  * `mod_id` is the NexusMods mod id (the number in the mod's URL). The
  * file_group_id is resolved automatically from the API.
  *
+ * With --collection <Name>, after uploading mods the script also syncs a Nexus
+ * Mods collection that references every published mod by mod_id + file_id. The
+ * collection is created on first run and gets a new draft revision whenever a
+ * mod was uploaded (or --force). Revisions stay in draft until published on the
+ * website.
+ *
  * Usage:
- *     node scripts/ci/publish_mods.js [--dry-run] [--force] [--mod <Name>]
+ *     node scripts/ci/publish_mods.js [--dry-run] [--force] [--mod <Name>] [--collection <Name>]
  *
  * Required environment variables (unless --dry-run):
  *     NEXUSMODS_APIKEY        Your Nexus Mods API key
@@ -20,18 +26,22 @@
  * Optional environment variables:
  *     NEXUSMODS_GAME_DOMAIN   Nexus Mods game domain slug (default: warhammer40kdarktide)
  *     NEXUSMODS_API_BASE      Default: https://api.nexusmods.com/v3
+ *     NEXUSMODS_COLLECTION_SUMMARY     Collection summary text
+ *     NEXUSMODS_COLLECTION_DESCRIPTION  Collection description text
  */
 
 "use strict";
 
 const { spawnSync } = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
 const API_BASE = (
   process.env.NEXUSMODS_API_BASE || "https://api.nexusmods.com/v3"
 ).replace(/\/$/, "");
 const V1_BASE = "https://api.nexusmods.com/v1";
+const GRAPHQL_BASE = "https://api.nexusmods.com/v2/graphql";
 const GAME_DOMAIN = process.env.NEXUSMODS_GAME_DOMAIN || "warhammer40kdarktide";
 
 function execCmd(args) {
@@ -40,15 +50,17 @@ function execCmd(args) {
 }
 
 function parseArgs(argv) {
-  const out = { dryRun: false, force: false, mod: null };
+  const out = { dryRun: false, force: false, mod: null, collection: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--dry-run") out.dryRun = true;
     else if (a === "--force") out.force = true;
     else if (a === "--mod") out.mod = argv[++i];
     else if (a.startsWith("--mod=")) out.mod = a.slice("--mod=".length);
+    else if (a === "--collection") out.collection = argv[++i];
+    else if (a.startsWith("--collection=")) out.collection = a.slice("--collection=".length);
     else if (a === "-h" || a === "--help") {
-      console.log("Usage: publish_mods.js [--dry-run] [--force] [--mod <Name>]");
+      console.log("Usage: publish_mods.js [--dry-run] [--force] [--mod <Name>] [--collection <Name>]");
       process.exit(0);
     }
   }
@@ -94,7 +106,6 @@ function zipMod(modName, zipName) {
   return result.status === 0 && fs.existsSync(zipName);
 }
 
-
 // ---------------------------------------------------------------------------
 // Nexus Mods API
 // ---------------------------------------------------------------------------
@@ -117,6 +128,7 @@ async function v3Request(method, urlPath, apiKey, body) {
   if (!resp.ok) {
     throw new Error(`HTTP ${resp.status} from ${method} ${url}: ${text}`);
   }
+  if (!text) return null;
   const parsed = JSON.parse(text);
   return parsed.data ?? parsed;
 }
@@ -137,6 +149,25 @@ async function v1Request(method, urlPath, apiKey) {
   return JSON.parse(text);
 }
 
+async function graphqlRequest(query, variables, apiKey) {
+  const resp = await fetch(GRAPHQL_BASE, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: apiKey,
+      "User-Agent": "deathbeam/darktide-mods publish script",
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+  const text = await resp.text();
+  const parsed = JSON.parse(text);
+  if (!resp.ok || parsed.errors) {
+    const msg = parsed.errors ? parsed.errors.map((e) => e.message).join("; ") : text;
+    throw new Error(`GraphQL error: ${msg}`);
+  }
+  return parsed.data;
+}
+
 // Resolve the mod's UUID from its game-scoped mod_id.
 async function resolveModUuid(modId, apiKey) {
   const info = await v3Request(
@@ -150,10 +181,9 @@ async function resolveModUuid(modId, apiKey) {
   return info.id;
 }
 
-// Fetch the currently published version from the v1 files list.
-// The "current" version is the file whose category is MAIN (or, as a fallback,
-// the most recently uploaded file).
-async function getPublishedVersion(modId, apiKey) {
+// Fetch the currently published MAIN file from the v1 files list.
+// Falls back to the most recently uploaded file when no MAIN category exists.
+async function getPublishedFile(modId, apiKey) {
   const data = await v1Request(
     "GET",
     `/games/${GAME_DOMAIN}/mods/${modId}/files.json`,
@@ -165,14 +195,13 @@ async function getPublishedVersion(modId, apiKey) {
   const main = files.find(
     (f) => f.category_name === "MAIN" || f.category_id === 1,
   );
-  if (main) return main.version;
+  if (main) return { version: main.version, file_id: main.file_id };
 
-  // Fallback: most recently uploaded file.
   const sorted = [...files].sort(
     (a, b) =>
       new Date(b.uploaded_time).getTime() - new Date(a.uploaded_time).getTime(),
   );
-  return sorted[0].version || null;
+  return { version: sorted[0].version || null, file_id: sorted[0].file_id };
 }
 
 // Resolve the file-update group id (where new versions get uploaded).
@@ -227,26 +256,28 @@ async function pollUntilAvailable(uploadId, apiKey) {
   throw new Error(`timed out waiting for upload ${uploadId} to become available`);
 }
 
-async function uploadMod(modName, zipPath, version, fileGroupId, apiKey) {
-  const fileSize = fs.statSync(zipPath).size;
-  const zipBasename = path.basename(zipPath);
-  let uploadId;
+// Upload a file via the v3 multipart flow and wait for it to be processed.
+// Returns the finalised upload_id, ready to be claimed by a mod file version
+// or a collection/revision.
+async function uploadFile(filePath, apiKey) {
+  const fileSize = fs.statSync(filePath).size;
+  const fileBasename = path.basename(filePath);
 
   // Multipart upload for all sizes; the single `/uploads` endpoint signs
   // `content-disposition`, which R2 rejects unless echoed byte-for-byte.
   const uploadInfo = await v3Request("POST", "/uploads/multipart", apiKey, {
-    filename: zipBasename,
+    filename: fileBasename,
     size_bytes: fileSize,
   });
-  uploadId = uploadInfo.id;
+  const uploadId = uploadInfo.id;
   const partUrls = uploadInfo.part_presigned_urls || uploadInfo.parts_presigned_url;
   const partSize = uploadInfo.part_size_bytes || uploadInfo.parts_size;
   const completeUrl = uploadInfo.complete_presigned_url;
   console.log(
-    `  Uploading ${zipBasename} (${fileSize} bytes), ${partUrls.length} part(s)`,
+    `  Uploading ${fileBasename} (${fileSize} bytes), ${partUrls.length} part(s)`,
   );
 
-  const fd = fs.openSync(zipPath, "r");
+  const fd = fs.openSync(filePath, "r");
   const parts = [];
   for (let i = 0; i < partUrls.length; i++) {
     const partNumber = i + 1;
@@ -282,6 +313,11 @@ async function uploadMod(modName, zipPath, version, fileGroupId, apiKey) {
   await v3Request("POST", `/uploads/${uploadId}/finalise`, apiKey);
   console.log("  Waiting for processing");
   await pollUntilAvailable(uploadId, apiKey);
+  return uploadId;
+}
+
+async function uploadMod(modName, zipPath, version, fileGroupId, apiKey) {
+  const uploadId = await uploadFile(zipPath, apiKey);
   console.log(`  Creating version ${version} for mod file ${fileGroupId}`);
   const result = await v3Request(
     "POST",
@@ -298,6 +334,197 @@ async function uploadMod(modName, zipPath, version, fileGroupId, apiKey) {
   );
   const versionId = result.version && result.version.id;
   console.log(`  uploaded, version id ${versionId || result.id || "?"}`);
+}
+
+// ---------------------------------------------------------------------------
+// Collections
+// ---------------------------------------------------------------------------
+
+async function getAuthorInfo(apiKey) {
+  try {
+    const data = await v1Request("GET", "/users/validate.json", apiKey);
+    return { name: data.name, user_id: data.user_id };
+  } catch (e) {
+    return { name: process.env.NEXUSMODS_AUTHOR_NAME || "deathbeam", user_id: null };
+  }
+}
+
+// List the authenticated user's collections, filtered to the target game.
+async function getMyCollections(apiKey, gameDomain) {
+  const query = `query {
+    myCollections(viewAdultContent: true, viewUnderModeration: true, viewUnlisted: true) {
+      nodes { id slug name game { domainName } }
+    }
+  }`;
+  const data = await graphqlRequest(query, {}, apiKey);
+  const nodes = (data.myCollections && data.myCollections.nodes) || [];
+  return nodes.filter((c) => c.game && c.game.domainName === gameDomain);
+}
+
+function buildCollectionManifest(mods, authorName, authorUrl, name, summary, description) {
+  return {
+    info: {
+      author: authorName,
+      author_url: authorUrl,
+      name,
+      summary: summary || null,
+      description: description || null,
+      domain_name: GAME_DOMAIN,
+    },
+    mods: mods.map((m) => ({
+      name: m.name,
+      version: m.version,
+      optional: false,
+      domain_name: GAME_DOMAIN,
+      author: authorName,
+      source: {
+        type: "nexus",
+        mod_id: String(m.mod_id),
+        file_id: String(m.file_id),
+        update_policy: "exact",
+      },
+    })),
+  };
+}
+
+// Pack the manifest into a .7z archive (Nexus expects 7z for collections).
+function createCollectionArchive(manifest, outPath) {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "nx-collection-"));
+  const manifestPath = path.join(tmpDir, "collection.json");
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+  const result = spawnSync("7z", ["a", "-t7z", "-mx=9", outPath, "collection.json"], {
+    cwd: tmpDir,
+    encoding: "utf8",
+  });
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+  if (result.status !== 0 || !fs.existsSync(outPath)) {
+    throw new Error(
+      `7z failed (status ${result.status}): ${(result.stderr || "").trim()}. Is p7zip-full installed?`,
+    );
+  }
+}
+
+async function createCollection(uploadId, collectionData, apiKey) {
+  return v3Request("POST", "/collections", apiKey, {
+    upload_id: uploadId,
+    collection_data: collectionData,
+  });
+}
+
+async function createCollectionRevision(collectionId, uploadId, collectionData, apiKey) {
+  return v3Request("POST", `/collections/${collectionId}/revisions`, apiKey, {
+    upload_id: uploadId,
+    collection_data: collectionData,
+  });
+}
+
+// Best-effort metadata sync; failures are non-fatal.
+async function editCollection(collectionId, patch, apiKey) {
+  await v3Request("PATCH", `/collections/${collectionId}`, apiKey, patch);
+}
+
+async function syncCollection(name, uploadedMods, apiKey, dryRun, force) {
+  console.log(`\n--- Collection: ${name} ---`);
+
+  const author = await getAuthorInfo(apiKey);
+  const authorUrl = `https://next.nexusmods.com/profile/${author.name}`;
+
+  // Resolve the current file_id for every published mod.
+  const collectionMods = [];
+  for (const modName of findModFolders()) {
+    const info = extractModInfo(`${modName}/${modName}.mod`);
+    if (!info || !info.version || !info.mod_id) continue;
+    try {
+      const file = await getPublishedFile(info.mod_id, apiKey);
+      if (file && file.file_id) {
+        collectionMods.push({
+          name: modName,
+          version: file.version,
+          mod_id: info.mod_id,
+          file_id: file.file_id,
+        });
+      } else {
+        console.log(`  ${modName}: no published file, excluding`);
+      }
+    } catch (e) {
+      console.log(`  ${modName}: could not resolve file (${e.message}), excluding`);
+    }
+  }
+
+  if (collectionMods.length === 0) {
+    console.log("  no publishable mods found, skipping collection");
+    return;
+  }
+
+  console.log(`  mods: ${collectionMods.map((m) => `${m.name} v${m.version}`).join(", ")}`);
+
+  const summary =
+    process.env.NEXUSMODS_COLLECTION_SUMMARY ||
+    `${collectionMods.length} Darktide mods by ${author.name}`;
+  const description =
+    process.env.NEXUSMODS_COLLECTION_DESCRIPTION ||
+    collectionMods.map((m) => `${m.name} v${m.version}`).join("\n");
+  const manifest = buildCollectionManifest(
+    collectionMods,
+    author.name,
+    authorUrl,
+    name,
+    summary,
+    description,
+  );
+  const collectionData = {
+    adult_content: false,
+    collection_manifest: manifest,
+    collection_schema_id: 1,
+  };
+
+  const myCollections = await getMyCollections(apiKey, GAME_DOMAIN);
+  const existing = myCollections.find((c) => c.name === name);
+
+  if (existing) {
+    if (uploadedMods.length === 0 && !force) {
+      console.log(`  "${name}" exists, no mods uploaded — skipping (use --force to revise)`);
+      return;
+    }
+    if (dryRun) {
+      console.log(`  would create new revision on "${name}" (slug: ${existing.slug})`);
+      return;
+    }
+    console.log(`  creating new revision on "${name}" (slug: ${existing.slug})`);
+    const archivePath = path.resolve("collection.7z");
+    createCollectionArchive(manifest, archivePath);
+    try {
+      const uploadId = await uploadFile(archivePath, apiKey);
+      try {
+        await editCollection(existing.id, { name, summary, description }, apiKey);
+      } catch (e) {
+        console.log(`  warning: could not sync metadata: ${e.message}`);
+      }
+      const result = await createCollectionRevision(existing.id, uploadId, collectionData, apiKey);
+      console.log(`  revision ${result.revision_number} created (status: ${result.revision_status})`);
+      console.log(`  publish at: https://www.nexusmods.com/${GAME_DOMAIN}/collections/${existing.slug}`);
+    } finally {
+      if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath);
+    }
+  } else {
+    if (dryRun) {
+      console.log(`  would create new collection "${name}"`);
+      return;
+    }
+    console.log(`  creating new collection "${name}"`);
+    const archivePath = path.resolve("collection.7z");
+    createCollectionArchive(manifest, archivePath);
+    try {
+      const uploadId = await uploadFile(archivePath, apiKey);
+      const result = await createCollection(uploadId, collectionData, apiKey);
+      console.log(
+        `  collection created (slug: ${result.slug}, revision ${result.revision_number}, status: ${result.revision_status})`,
+      );
+      console.log(`  publish at: https://www.nexusmods.com/${GAME_DOMAIN}/collections/${result.slug}`);
+    } finally {
+      if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -344,9 +571,9 @@ async function main() {
       continue;
     }
 
-    let publishedVersion;
+    let publishedFile;
     try {
-      publishedVersion = await getPublishedVersion(cur.mod_id, apiKey);
+      publishedFile = await getPublishedFile(cur.mod_id, apiKey);
     } catch (e) {
       console.log(
         `${modName} v${cur.version}: could not fetch published version (${e.message}), failed`,
@@ -354,6 +581,7 @@ async function main() {
       failed.push(modName);
       continue;
     }
+    const publishedVersion = publishedFile ? publishedFile.version : null;
 
     const pub = publishedVersion ? `v${publishedVersion}` : "none";
     if (!args.force && cur.version === publishedVersion) {
@@ -408,6 +636,18 @@ async function main() {
   }
   if (failed.length > 0) {
     console.log(`Failed ${failed.length} mod(s): ${failed.join(", ")}`);
+  }
+
+  if (args.collection) {
+    if (!apiKey) {
+      console.log("\nCollection sync skipped: NEXUSMODS_APIKEY required for collection lookups");
+    } else {
+      try {
+        await syncCollection(args.collection, uploaded, apiKey, dryRun, args.force);
+      } catch (e) {
+        console.log(`\nCollection sync failed: ${e.message}`);
+      }
+    }
   }
 
   process.exit(failed.length > 0 ? 1 : 0);
