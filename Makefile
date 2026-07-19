@@ -21,11 +21,11 @@ format:
 check:
 	stylua --check .
 
-# Publish mods to Nexus Mods (see scripts/ci/publish_mods.js for options).
+# Publish mods to Nexus Mods (see scripts/ci/publish_mods.py for options).
 # Syncs shared files first, then uploads, then cleans up.
 publish:
 	$(MAKE) sync-shared
-	node scripts/ci/publish_mods.js $(ARGS)
+	python3 scripts/ci/publish_mods.py $(ARGS)
 	$(MAKE) clean
 
 # Remove copied shared files from mod folders.
