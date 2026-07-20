@@ -1,4 +1,3 @@
-local ArmorSettings = require('scripts/settings/damage/armor_settings')
 local Breeds = require('scripts/settings/breed/breeds')
 
 local SharedUtils = {}
@@ -9,6 +8,22 @@ local SharedUtils = {}
 local stats_view_names = rawget(_G, 'dmf_stats_view_names') or {}
 _G.dmf_stats_view_names = stats_view_names
 SharedUtils.stats_view_names = stats_view_names
+
+-- Terminal-style {255, r, g, b} color per armor type name. Singletons: callers
+-- store the reference but never mutate it.
+local ARMOR_COLORS = {
+    unarmored = { 255, 90, 195, 90 },
+    armored = { 255, 215, 150, 50 },
+    super_armor = { 255, 150, 155, 175 },
+    berserker = { 255, 210, 70, 70 },
+    resistant = { 255, 160, 95, 195 },
+    disgustingly_resilient = { 255, 150, 185, 70 },
+    player = { 255, 90, 195, 90 },
+    void_shield = { 255, 80, 165, 240 },
+}
+
+-- Fallback for armor types without a known color mapping.
+local ARMOR_COLOR_FALLBACK = { 255, 200, 200, 200 }
 
 -- Localize a game loc key, returning nil on miss or when the game has no entry.
 function SharedUtils.safe_localize(text)
@@ -236,36 +251,8 @@ function SharedUtils.layout_to_markdown(title, layout)
     return table.concat(lines, '\n')
 end
 
--- Returns the terminal-style {255, r, g, b} color for an armor type, keyed by
--- either the string name (e.g. "unarmored") or the ArmorSettings.types value.
 function SharedUtils.armor_color(armor_key)
-    if armor_key == nil then
-        return nil
-    end
-    local name = armor_key
-    if type(armor_key) == 'number' then
-        for k, v in pairs(ArmorSettings.types) do
-            if v == armor_key then
-                name = k
-                break
-            end
-        end
-    end
-    local colors = {
-        unarmored = { 90, 195, 90 },
-        armored = { 215, 150, 50 },
-        super_armor = { 150, 155, 175 },
-        berserker = { 210, 70, 70 },
-        resistant = { 160, 95, 195 },
-        disgustingly_resilient = { 150, 185, 70 },
-        player = { 90, 195, 90 },
-        void_shield = { 80, 165, 240 },
-    }
-    local rgb = colors[name]
-    if not rgb then
-        return nil
-    end
-    return { 255, rgb[1], rgb[2], rgb[3] }
+    return ARMOR_COLORS[armor_key] or ARMOR_COLOR_FALLBACK
 end
 
 -- Register a stats view with the framework and add an ESC-menu button that opens

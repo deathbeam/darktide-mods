@@ -366,6 +366,28 @@ function EnemyStatsData.difficulty_table(breed_name)
 end
 
 -- Per hit-zone armor breakdown with weakspot flags.
+local function _build_zone(zone, breed, weakspot_types)
+    local armor_cat = zone_armor(breed, zone)
+    local weakspot = weakspot_types[zone]
+    local weakspot_color = weakspot and Color.ui_terminal(255, true) or Color.terminal_text_body(255, true)
+    local armor_color = SharedUtils.armor_color(armor_cat)
+    local armor_label = armor_cat and mod:localize('armor_' .. armor_cat) or ''
+    return {
+        zone = zone,
+        name = zone_name(zone),
+        label = zone_name(zone),
+        armor_cat = armor_cat,
+        armor_label = armor_label,
+        armor_color = armor_color,
+        weakspot = weakspot,
+        weakspot_label = weakspot and weakspot_name(weakspot) or nil,
+        cells = {
+            { text = armor_label, color = armor_color },
+            { text = weakspot and weakspot_name(weakspot) or '', color = weakspot_color },
+        },
+    }
+end
+
 function EnemyStatsData.hit_zones(breed_name)
     local breed = Breeds[breed_name]
     if not breed then
@@ -375,59 +397,20 @@ function EnemyStatsData.hit_zones(breed_name)
     local zoneset = breed_zone_lookup(breed)
     local weakspot_types = breed.hit_zone_weakspot_types or {}
     local zones = {}
+    local seen = {}
 
     for i = 1, #HIT_ZONE_ORDER do
         local zone = HIT_ZONE_ORDER[i]
         if zoneset[zone] then
-            local armor_cat = zone_armor(breed, zone)
-            local weakspot = weakspot_types[zone]
-            local weakspot_color = weakspot and Color.ui_terminal(255, true) or Color.terminal_text_body(255, true)
-            local armor_color = SharedUtils.armor_color(armor_cat) or { 200, 200, 200 }
-            zones[#zones + 1] = {
-                zone = zone,
-                name = zone_name(zone),
-                label = zone_name(zone),
-                armor_cat = armor_cat,
-                armor_label = armor_cat and mod:localize('armor_' .. armor_cat) or '',
-                armor_color = armor_color,
-                weakspot = weakspot,
-                weakspot_label = weakspot and weakspot_name(weakspot) or nil,
-                cells = {
-                    { text = armor_cat and mod:localize('armor_' .. armor_cat) or '', color = armor_color },
-                    { text = weakspot and weakspot_name(weakspot) or '', color = weakspot_color },
-                },
-            }
+            seen[zone] = true
+            zones[#zones + 1] = _build_zone(zone, breed, weakspot_types)
         end
     end
 
     -- Catch any zones not in the predefined order.
     for zone in pairs(zoneset) do
-        local found = false
-        for i = 1, #HIT_ZONE_ORDER do
-            if HIT_ZONE_ORDER[i] == zone then
-                found = true
-                break
-            end
-        end
-        if not found then
-            local armor_cat = zone_armor(breed, zone)
-            local weakspot = weakspot_types[zone]
-            local weakspot_color = weakspot and Color.ui_terminal(255, true) or Color.terminal_text_body(255, true)
-            local armor_color = SharedUtils.armor_color(armor_cat) or { 200, 200, 200 }
-            zones[#zones + 1] = {
-                zone = zone,
-                name = zone_name(zone),
-                label = zone_name(zone),
-                armor_cat = armor_cat,
-                armor_label = mod:localize('armor_' .. armor_cat),
-                armor_color = armor_color,
-                weakspot = weakspot,
-                weakspot_label = weakspot and weakspot_name(weakspot) or nil,
-                cells = {
-                    { text = mod:localize('armor_' .. armor_cat), color = armor_color },
-                    { text = weakspot and weakspot_name(weakspot) or '', color = weakspot_color },
-                },
-            }
+        if not seen[zone] then
+            zones[#zones + 1] = _build_zone(zone, breed, weakspot_types)
         end
     end
 

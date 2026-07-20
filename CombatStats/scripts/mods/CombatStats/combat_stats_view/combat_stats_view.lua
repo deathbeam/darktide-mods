@@ -28,6 +28,7 @@ local CombatStatsView = make_view(mod, {
     shared_utils = SharedUtils,
     icon_packages = ICON_PACKAGES,
     definitions_path = 'CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_view_definitions',
+    list_blueprints_path = 'CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_view_blueprints',
 })
 
 function CombatStatsView:_on_init(settings, context)
@@ -198,23 +199,6 @@ function CombatStatsView:_setup_entries()
 
     self._filtered_list = entries
     self:_present_list(entries)
-end
-
-function CombatStatsView:_present_list(entries)
-    local blueprints = make_list_blueprints(self:_list_width())
-    local left_click_callback = callback(self, 'cb_on_list_entry_left_pressed')
-    local on_present_callback = callback(self, '_cb_on_list_presented')
-    local grow_direction = 'down'
-
-    self._list_grid:present_grid_layout(
-        entries,
-        blueprints,
-        left_click_callback,
-        nil,
-        nil,
-        grow_direction,
-        on_present_callback
-    )
 end
 
 function CombatStatsView:_cb_on_list_presented()

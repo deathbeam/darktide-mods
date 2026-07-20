@@ -25,6 +25,7 @@ local WeaponStatsView = make_view(mod, {
     shared_utils = SharedUtils,
     icon_packages = ICON_PACKAGES,
     definitions_path = 'WeaponStats/scripts/mods/WeaponStats/weapon_stats_view/weapon_stats_view_definitions',
+    list_blueprints_path = 'WeaponStats/scripts/mods/WeaponStats/weapon_stats_view/weapon_stats_view_blueprints',
 })
 
 -- Cached on the class so re-opening the view is instant.
@@ -124,25 +125,8 @@ function WeaponStatsView:_setup_entries()
         end
     end
 
-    self._filtered_list = entries
-
-    local blueprints = make_list_blueprints(self:_list_width())
-    local left_click_callback = callback(self, 'cb_on_list_entry_left_pressed')
-    local on_present_callback = callback(self, '_cb_on_list_presented')
-    local display_name = nil
-    local grow_direction = 'down'
-
-    self._list_grid:present_grid_layout(
-        entries,
-        blueprints,
-        left_click_callback,
-        nil,
-        display_name,
-        grow_direction,
-        on_present_callback
-    )
+    self:_present_list(entries)
 end
-
 function WeaponStatsView:_cb_on_list_presented()
     local entries = self._filtered_list
     if not entries or #entries == 0 then

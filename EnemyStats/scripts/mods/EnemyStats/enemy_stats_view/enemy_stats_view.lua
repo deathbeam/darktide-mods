@@ -13,6 +13,7 @@ local EnemyStatsView = make_view(mod, {
     prefix = 'enemy_stats',
     shared_utils = SharedUtils,
     definitions_path = 'EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_view_definitions',
+    list_blueprints_path = 'EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_view_blueprints',
 })
 
 function EnemyStatsView:_on_init(settings, context)
@@ -48,23 +49,7 @@ function EnemyStatsView:_setup_entries()
         end
     end
 
-    self._filtered_list = entries
-
-    local blueprints = make_list_blueprints(self:_list_width())
-    local left_click_callback = callback(self, 'cb_on_list_entry_left_pressed')
-    local on_present_callback = callback(self, '_cb_on_list_presented')
-    local display_name = nil
-    local grow_direction = 'down'
-
-    self._list_grid:present_grid_layout(
-        entries,
-        blueprints,
-        left_click_callback,
-        nil,
-        display_name,
-        grow_direction,
-        on_present_callback
-    )
+    self:_present_list(entries)
 end
 
 function EnemyStatsView:_format_list_subtext(entry)

@@ -9,6 +9,7 @@ local function make_view(mod, config)
     local SharedUtils = config.shared_utils
     local icon_packages = config.icon_packages
     local definitions_path = config.definitions_path
+    local list_blueprints_path = config.list_blueprints_path
 
     local ViewElementInputLegend =
         mod:original_require('scripts/ui/view_elements/view_element_input_legend/view_element_input_legend')
@@ -58,6 +59,24 @@ local function make_view(mod, config)
         self:_setup_list_grid()
         self:_setup_detail_grid()
         self:_setup_entries()
+    end
+
+    function View:_present_list(entries)
+        self._filtered_list = entries
+
+        local blueprints = mod:io_dofile(list_blueprints_path)(self:_list_width())
+        local left_click_callback = callback(self, 'cb_on_list_entry_left_pressed')
+        local on_present_callback = callback(self, '_cb_on_list_presented')
+
+        self._list_grid:present_grid_layout(
+            entries,
+            blueprints,
+            left_click_callback,
+            nil,
+            nil,
+            'down',
+            on_present_callback
+        )
     end
 
     function View:_setup_search()
