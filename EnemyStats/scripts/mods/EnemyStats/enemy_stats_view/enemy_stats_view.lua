@@ -40,6 +40,7 @@ function EnemyStatsView:_setup_entries()
                 name = label,
                 subtext = self:_format_list_subtext(entry),
                 subtext_color = Color.terminal_text_body_sub_header(255, true),
+                icon = entry.icon,
                 breed_name = entry.breed_name,
                 category = entry.category,
                 size = entry.size,
@@ -71,12 +72,17 @@ function EnemyStatsView:_present_detail(entry)
 
     local layout = {}
     if entry then
+        local info = Data.breed_info(entry.breed_name)
+        local header_icon = info and info.category_icon or nil
         layout[#layout + 1] = {
-            widget_type = 'header',
+            widget_type = header_icon and 'header_icon' or 'header',
             text = entry.name,
+            icon = header_icon,
+            icon_size = { 80, 80 },
+            subtext = header_icon and entry.subtext or nil,
             color = Color.terminal_text_header(255, true),
         }
-        if entry.subtext then
+        if entry.subtext and not header_icon then
             layout[#layout + 1] = {
                 widget_type = 'subtext',
                 text = entry.subtext,

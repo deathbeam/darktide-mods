@@ -274,6 +274,79 @@ local function make_blueprints(width)
         end,
     }
 
+    blueprints.header_icon = {
+        size = { width, 130 },
+        pass_template = {
+            {
+                pass_type = 'texture',
+                style_id = 'icon',
+                value_id = 'icon',
+                value = 'content/ui/materials/base/ui_default_base',
+                style = {
+                    horizontal_alignment = 'left',
+                    vertical_alignment = 'center',
+                    size = { 192, 96 },
+                    color = Color.terminal_text_body(255, true),
+                    offset = { 10, 0, 2 },
+                },
+                visibility_function = function(content)
+                    return content.icon ~= nil
+                end,
+            },
+            {
+                pass_type = 'text',
+                style_id = 'text',
+                value_id = 'text',
+                value = '',
+                style = {
+                    font_type = 'proxima_nova_bold',
+                    font_size = 26,
+                    text_vertical_alignment = 'bottom',
+                    text_horizontal_alignment = 'left',
+                    text_color = colors.header,
+                    offset = { 200, 0, 2 },
+                    size = { width - 200, 80 },
+                    text_overflow_mode = 'truncate',
+                },
+            },
+            {
+                pass_type = 'text',
+                style_id = 'subtext',
+                value_id = 'subtext',
+                value = '',
+                style = {
+                    font_type = 'proxima_nova_bold',
+                    font_size = 18,
+                    text_vertical_alignment = 'top',
+                    text_horizontal_alignment = 'left',
+                    text_color = colors.subtext,
+                    offset = { 200, 78, 3 },
+                    size = { width - 200, 50 },
+                    text_overflow_mode = 'truncate',
+                },
+            },
+        },
+        init = function(_, widget, element)
+            widget.content.text = element.text or ''
+            widget.content.icon = element.icon
+            widget.content.subtext = element.subtext or ''
+
+            local icon_size = element.icon_size or { 192, 96 }
+            local icon_margin = 10
+            local text_x = icon_size[1] + icon_margin
+
+            widget.style.icon.size = icon_size
+            widget.style.text.offset[1] = text_x
+            widget.style.text.size[1] = width - text_x
+            widget.style.subtext.offset[1] = text_x
+            widget.style.subtext.size[1] = width - text_x
+
+            if element.color then
+                widget.style.text.text_color = element.color
+            end
+        end,
+    }
+
     blueprints.section = {
         size_function = function(_, config)
             return { width, SECTION_LEVELS[config.level or 1].height }

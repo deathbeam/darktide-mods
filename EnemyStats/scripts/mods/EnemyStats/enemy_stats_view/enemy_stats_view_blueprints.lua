@@ -7,5 +7,7 @@ return function(width)
         entry_type = 'enemy_entry',
         entry_height = 80,
         include_category_header = true,
+        icon_size = { 60, 60 },
+        icon_margin = 10,
     })
 end

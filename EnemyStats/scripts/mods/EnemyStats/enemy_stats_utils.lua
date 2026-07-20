@@ -9,6 +9,14 @@ local StaggerSettings = require('scripts/settings/damage/stagger_settings')
 
 local DIFFICULTY_KEYS = { 'sedition', 'uprising', 'malice', 'heresy', 'damnation' }
 
+-- Flat difficulty-skull icons per enemy category, escalating with threat.
+local CATEGORY_ICONS = {
+    regular = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_uprising',
+    specialist = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
+    elite = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_heresy',
+    boss = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_damnation',
+}
+
 -- Stagger types in display order; values are the enum numbers from StaggerSettings.
 local STAGGER_TYPE_ORDER = {
     { key = 'light', label = 'stagger_light' },
@@ -242,6 +250,8 @@ function EnemyStatsData.build_enemy_list()
                 breed_name = breed_name,
                 label = SharedUtils.breed_display_name(breed_name),
                 category = breed_category(breed),
+                category_icon = CATEGORY_ICONS[breed_category(breed)],
+                icon = CATEGORY_ICONS[breed_category(breed)],
                 size = breed_size(breed),
                 is_ranged = breed_is_ranged(breed),
                 faction = breed_faction(breed),
@@ -459,6 +469,7 @@ function EnemyStatsData.breed_info(breed_name)
     return {
         breed_name = breed_name,
         category = breed_category(breed),
+        category_icon = CATEGORY_ICONS[breed_category(breed)],
         size = size,
         is_ranged = breed_is_ranged(breed),
         faction = breed_faction(breed),

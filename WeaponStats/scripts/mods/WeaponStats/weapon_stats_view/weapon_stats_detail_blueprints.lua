@@ -41,68 +41,6 @@ local GESTALT_ICONS = {
 local function make_blueprints(width)
     local blueprints = Shared.make_blueprints(width)
 
-    blueprints.header_icon = {
-        size = { width, 130 },
-        pass_template = {
-            {
-                pass_type = 'texture',
-                style_id = 'icon',
-                value_id = 'icon',
-                value = 'content/ui/materials/base/ui_default_base',
-                style = {
-                    horizontal_alignment = 'left',
-                    vertical_alignment = 'center',
-                    size = { 192, 96 },
-                    color = Color.terminal_text_body(255, true),
-                    offset = { 10, 0, 2 },
-                },
-                visibility_function = function(content)
-                    return content.icon ~= nil
-                end,
-            },
-            {
-                pass_type = 'text',
-                style_id = 'text',
-                value_id = 'text',
-                value = '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 26,
-                    text_vertical_alignment = 'bottom',
-                    text_horizontal_alignment = 'left',
-                    text_color = Color.terminal_text_header(255, true),
-                    offset = { 200, 0, 2 },
-                    size = { width - 200, 80 },
-                    text_overflow_mode = 'truncate',
-                },
-            },
-            {
-                pass_type = 'text',
-                style_id = 'subtext',
-                value_id = 'subtext',
-                value = '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 18,
-                    text_vertical_alignment = 'top',
-                    text_horizontal_alignment = 'left',
-                    text_color = Color.terminal_text_body_sub_header(255, true),
-                    offset = { 200, 78, 3 },
-                    size = { width - 200, 50 },
-                    text_overflow_mode = 'truncate',
-                },
-            },
-        },
-        init = function(_, widget, element)
-            widget.content.text = element.text or ''
-            widget.content.icon = element.icon
-            widget.content.subtext = element.subtext or ''
-            if element.color then
-                widget.style.text.text_color = element.color
-            end
-        end,
-    }
-
     local function _measure_text(ui_renderer, text, font_size, max_width)
         if not ui_renderer or text == '' then
             return 0
