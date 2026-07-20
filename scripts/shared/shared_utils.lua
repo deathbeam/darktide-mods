@@ -1,4 +1,5 @@
 local ArmorSettings = require('scripts/settings/damage/armor_settings')
+local Breeds = require('scripts/settings/breed/breeds')
 
 local SharedUtils = {}
 
@@ -57,6 +58,17 @@ function SharedUtils.localize_or_prettify(mod, prefix, key)
         return localized
     end
     return SharedUtils.prettify(key)
+end
+
+-- Localized breed display name: resolves `breed.display_name` via the game's
+-- Localize, falling back to prettify(breed_name) when the breed or its loc key
+-- is missing. Returns nil only when breed_name itself is nil.
+function SharedUtils.breed_display_name(breed_name)
+    if not breed_name then
+        return nil
+    end
+    local breed = Breeds[breed_name]
+    return (breed and SharedUtils.safe_localize(breed.display_name)) or SharedUtils.prettify(breed_name)
 end
 
 -- Register global localization strings (e.g. for ESC menu buttons) and patch

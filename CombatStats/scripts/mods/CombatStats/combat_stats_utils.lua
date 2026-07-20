@@ -1,7 +1,6 @@
 local mod = get_mod('CombatStats')
 local SharedUtils = mod:io_dofile('CombatStats/scripts/mods/CombatStats/shared/shared_utils')
 
-local Breeds = mod:original_require('scripts/settings/breed/breeds')
 local BuffTemplates = mod:original_require('scripts/settings/buff/buff_templates')
 local ArchetypeTalents = mod:original_require('scripts/settings/ability/archetype_talents/archetype_talents')
 local Archetypes = mod:original_require('scripts/settings/archetype/archetypes')
@@ -78,37 +77,7 @@ function CombatStatsUtils:get_breed_display_name(breed_name)
         return self._breed_cache[breed_name]
     end
 
-    local result = breed_name
-    local breed = Breeds[breed_name]
-    if breed then
-        if breed.display_name then
-            local localized = SharedUtils.safe_localize(breed.display_name)
-            if localized then
-                result = localized
-                self._breed_cache[breed_name] = result
-                return result
-            end
-        end
-
-        if breed.boss_display_name then
-            if type(breed.boss_display_name) == 'table' and #breed.boss_display_name > 0 then
-                local localized = SharedUtils.safe_localize(breed.boss_display_name[1])
-                if localized then
-                    result = localized
-                    self._breed_cache[breed_name] = result
-                    return result
-                end
-            elseif type(breed.boss_display_name) == 'string' then
-                local localized = SharedUtils.safe_localize(breed.boss_display_name)
-                if localized then
-                    result = localized
-                    self._breed_cache[breed_name] = result
-                    return result
-                end
-            end
-        end
-    end
-
+    local result = SharedUtils.breed_display_name(breed_name)
     self._breed_cache[breed_name] = result
     return result
 end

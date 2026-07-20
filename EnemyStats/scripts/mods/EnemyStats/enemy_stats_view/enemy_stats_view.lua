@@ -2,7 +2,6 @@ local mod = get_mod('EnemyStats')
 
 local SharedUtils = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/shared/shared_utils')
 local Data = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_utils')
-local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settings')
 local make_view = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/shared/shared_view_base')
 local make_list_blueprints =
     mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_view_blueprints')
@@ -126,23 +125,12 @@ function EnemyStatsView:_present_detail(entry)
                 value = mod:localize('faction_' .. info.faction),
             }
             if info.armor_type then
-                local armor_key = info.armor_type
-                if type(armor_key) == 'number' then
-                    for k, v in pairs(ArmorSettings.types) do
-                        if v == armor_key then
-                            armor_key = k
-                            break
-                        end
-                    end
-                end
-                if type(armor_key) == 'string' then
-                    layout[#layout + 1] = {
-                        widget_type = 'stat',
-                        label = mod:localize('stat_armor'),
-                        value = mod:localize('armor_' .. armor_key),
-                        value_color = SharedUtils.armor_color(info.armor_type),
-                    }
-                end
+                layout[#layout + 1] = {
+                    widget_type = 'stat',
+                    label = mod:localize('stat_armor'),
+                    value = mod:localize('armor_' .. info.armor_type),
+                    value_color = SharedUtils.armor_color(info.armor_type),
+                }
             end
             if info.challenge_rating then
                 layout[#layout + 1] = {

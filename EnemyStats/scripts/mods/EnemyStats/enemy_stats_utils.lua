@@ -5,7 +5,6 @@ local Breeds = require('scripts/settings/breed/breeds')
 local MinionDifficultySettings = require('scripts/settings/difficulty/minion_difficulty_settings')
 local HavocModifierConfig = require('scripts/settings/havoc/havoc_modifier_config')
 local HavocSettings = require('scripts/settings/havoc_settings')
-local ArmorSettings = require('scripts/settings/damage/armor_settings')
 local StaggerSettings = require('scripts/settings/damage/stagger_settings')
 
 local DIFFICULTY_KEYS = { 'sedition', 'uprising', 'malice', 'heresy', 'damnation' }
@@ -62,18 +61,6 @@ local SPECIALIST_TAGS = {
     sniper = true,
     interrupter = true,
 }
-
-local name_cache = {}
-
-local function breed_label(breed_name)
-    if name_cache[breed_name] then
-        return name_cache[breed_name]
-    end
-    local breed = Breeds[breed_name]
-    local label = (breed and SharedUtils.safe_localize(breed.display_name)) or SharedUtils.prettify(breed_name)
-    name_cache[breed_name] = label
-    return label
-end
 
 local function breed_category(breed)
     local tags = breed.tags or {}
@@ -253,7 +240,7 @@ function EnemyStatsData.build_enemy_list()
         if breed.tags then
             all[#all + 1] = {
                 breed_name = breed_name,
-                label = breed_label(breed_name),
+                label = SharedUtils.breed_display_name(breed_name),
                 category = breed_category(breed),
                 size = breed_size(breed),
                 is_ranged = breed_is_ranged(breed),
