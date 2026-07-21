@@ -569,13 +569,22 @@ local function _melee_rows(breed, actions)
                 local label = SharedUtils.localize_or_prettify(mod, 'action_', action_name)
 
                 local hit_min, hit_max, dur_min, dur_max
-                for anim_name, hit_t in pairs(timings) do
+                for anim_name, raw_hit in pairs(timings) do
                     local dur = durations[anim_name]
-                    if type(hit_t) == 'number' and type(dur) == 'number' and dur > 0 then
-                        hit_min = not hit_min and hit_t or math.min(hit_min, hit_t)
-                        hit_max = not hit_max and hit_t or math.max(hit_max, hit_t)
-                        dur_min = not dur_min and dur or math.min(dur_min, dur)
-                        dur_max = not dur_max and dur or math.max(dur_max, dur)
+                    if type(dur) == 'number' and dur > 0 then
+                        -- hit time may be a single number or a table of multi-hit timings
+                        -- (daemonhost/berzerker combos); use the first and last hit for the range.
+                        local first, last = raw_hit, raw_hit
+                        if type(raw_hit) == 'table' then
+                            first = raw_hit[1]
+                            last = raw_hit[#raw_hit]
+                        end
+                        if type(first) == 'number' and type(last) == 'number' then
+                            hit_min = not hit_min and first or math.min(hit_min, first)
+                            hit_max = not hit_max and last or math.max(hit_max, last)
+                            dur_min = not dur_min and dur or math.min(dur_min, dur)
+                            dur_max = not dur_max and dur or math.max(dur_max, dur)
+                        end
                     end
                 end
 
