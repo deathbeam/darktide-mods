@@ -10,8 +10,11 @@ local SESSION_STAT_KEYS = {
     'ranged_crit_damage',
     'ranged_weakspot_damage',
     'explosion_damage',
+    'explosion_hits',
     'companion_damage',
+    'companion_hits',
     'arc_damage',
+    'arc_hits',
     'buff_damage',
     'bleed_damage',
     'burn_damage',
@@ -24,7 +27,6 @@ local SESSION_STAT_KEYS = {
     'ranged_crit_hits',
     'ranged_weakspot_hits',
 }
-
 local function new_stats(base)
     local stats = base or {}
 
@@ -65,11 +67,17 @@ local function add_damage(stats, actual_damage, overkill_damage, attack_type, is
             stats.ranged_weakspot_hits = stats.ranged_weakspot_hits + 1
         end
     elseif attack_type == 'explosion' then
+        stats.total_hits = stats.total_hits + 1
         stats.explosion_damage = stats.explosion_damage + actual_damage
+        stats.explosion_hits = stats.explosion_hits + 1
     elseif attack_type == 'companion' then
+        stats.total_hits = stats.total_hits + 1
         stats.companion_damage = stats.companion_damage + actual_damage
+        stats.companion_hits = stats.companion_hits + 1
     elseif attack_type == 'arc' then
+        stats.total_hits = stats.total_hits + 1
         stats.arc_damage = stats.arc_damage + actual_damage
+        stats.arc_hits = stats.arc_hits + 1
     elseif attack_type == 'buff' then
         stats.buff_damage = stats.buff_damage + actual_damage
     end

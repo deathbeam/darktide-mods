@@ -425,6 +425,36 @@ function CombatStatsView:_present_detail(entry)
                     { key = 'weakspot', value = stats.ranged_weakspot_hits },
                 })
             end
+
+            if stats.explosion_hits and stats.explosion_hits > 0 then
+                layout[#layout + 1] = {
+                    widget_type = 'progress_bar',
+                    label = string.format('%s: %d', mod:localize('explosion'), stats.explosion_hits),
+                    value = stats.explosion_hits,
+                    max_value = stats.total_hits,
+                    color = COLOR_EXPLOSION,
+                }
+            end
+
+            if stats.companion_hits and stats.companion_hits > 0 then
+                layout[#layout + 1] = {
+                    widget_type = 'progress_bar',
+                    label = string.format('%s: %d', mod:localize('companion'), stats.companion_hits),
+                    value = stats.companion_hits,
+                    max_value = stats.total_hits,
+                    color = COLOR_COMPANION,
+                }
+            end
+
+            if stats.arc_hits and stats.arc_hits > 0 then
+                layout[#layout + 1] = {
+                    widget_type = 'progress_bar',
+                    label = string.format('%s: %d', mod:localize('arc'), stats.arc_hits),
+                    value = stats.arc_hits,
+                    max_value = stats.total_hits,
+                    color = COLOR_ARC,
+                }
+            end
         end
 
         -- Buff Uptime
