@@ -3,8 +3,6 @@ local mod = get_mod('CombatStats')
 local SharedUtils = mod:io_dofile('CombatStats/scripts/mods/CombatStats/shared/shared_utils')
 local CombatStatsTracker = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_tracker')
 local make_view = mod:io_dofile('CombatStats/scripts/mods/CombatStats/shared/shared_view_base')
-local make_list_blueprints =
-    mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_view_blueprints')
 local make_detail_blueprints =
     mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_detail_blueprints')
 

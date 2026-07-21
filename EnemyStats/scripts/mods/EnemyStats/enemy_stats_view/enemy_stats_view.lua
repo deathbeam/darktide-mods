@@ -3,8 +3,6 @@ local mod = get_mod('EnemyStats')
 local SharedUtils = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/shared/shared_utils')
 local Data = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_utils')
 local make_view = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/shared/shared_view_base')
-local make_list_blueprints =
-    mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_view_blueprints')
 local make_detail_blueprints =
     mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_detail_blueprints')
 

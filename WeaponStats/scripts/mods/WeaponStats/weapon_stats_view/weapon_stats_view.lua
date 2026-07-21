@@ -7,8 +7,6 @@ local Builder = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats
 local SharedUtils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/shared/shared_utils')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
 local make_view = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/shared/shared_view_base')
-local make_list_blueprints =
-    mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_view/weapon_stats_view_blueprints')
 local make_detail_blueprints =
     mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_view/weapon_stats_detail_blueprints')
 
