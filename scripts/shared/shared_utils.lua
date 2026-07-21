@@ -25,6 +25,27 @@ local ARMOR_COLORS = {
 -- Fallback for armor types without a known color mapping.
 local ARMOR_COLOR_FALLBACK = { 255, 200, 200, 200 }
 
+-- Flat difficulty-skull icons per enemy category, escalating with threat.
+-- Shared across EnemyStats (regular/specialist/elite/boss) and CombatStats
+-- (horde/special/disabler/elite/monster). Mods map their category names to
+-- these via their own lookup; this is just the icon set.
+local CATEGORY_ICONS = {
+    regular = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_uprising',
+    horde = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_uprising',
+    unknown = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_uprising',
+    specialist = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
+    special = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
+    disabler = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
+    ritualist = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
+    elite = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_heresy',
+    boss = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_damnation',
+    monster = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_damnation',
+}
+
+function SharedUtils.category_icon(category)
+    return CATEGORY_ICONS[category]
+end
+
 -- Localize a game loc key, returning nil on miss or when the game has no entry.
 function SharedUtils.safe_localize(text)
     if not text or text == '' or text == 'n/a' then
@@ -206,13 +227,12 @@ function SharedUtils.layout_to_markdown(title, layout)
     for i = 1, #layout do
         local e = layout[i]
         local wt = e and e.widget_type
-        if wt == 'header' or wt == 'header_icon' then
+        if wt == 'header_icon' then
             lines[#lines + 1] = '## ' .. _strip_rich_text(e.text or '')
             if e.subtext and e.subtext ~= '' then
                 lines[#lines + 1] = '*' .. _strip_rich_text(e.subtext) .. '*'
             end
-        elseif wt == 'subtext' then
-            lines[#lines + 1] = _strip_rich_text(e.text or '')
+        elseif wt == 'section' then
         elseif wt == 'section' then
             local depth = e.level == 2 and 4 or (e.level == 3 and 5 or 3)
             lines[#lines + 1] = ''

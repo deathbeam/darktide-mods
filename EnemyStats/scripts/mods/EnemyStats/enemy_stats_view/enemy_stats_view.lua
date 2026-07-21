@@ -73,22 +73,16 @@ function EnemyStatsView:_present_detail(entry)
     local layout = {}
     if entry then
         local info = Data.breed_info(entry.breed_name)
-        local header_icon = info and info.category_icon or nil
+        local category_icon = info and info.category_icon or nil
         layout[#layout + 1] = {
-            widget_type = header_icon and 'header_icon' or 'header',
+            widget_type = 'header_icon',
             text = entry.name,
-            icon = header_icon,
+            icon = category_icon,
             icon_size = { 80, 80 },
-            subtext = header_icon and entry.subtext or nil,
+            subtext = entry.subtext,
+            subtext_color = entry.subtext_color,
             color = Color.terminal_text_header(255, true),
         }
-        if entry.subtext and not header_icon then
-            layout[#layout + 1] = {
-                widget_type = 'subtext',
-                text = entry.subtext,
-                color = entry.subtext_color,
-            }
-        end
         layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
 
         local info = Data.breed_info(entry.breed_name)

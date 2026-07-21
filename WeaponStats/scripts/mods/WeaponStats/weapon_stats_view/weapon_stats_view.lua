@@ -164,21 +164,14 @@ function WeaponStatsView:_present_detail(entry)
 
     local layout = {}
     if entry then
-        local header_icon = entry.icon
         layout[#layout + 1] = {
-            widget_type = header_icon and 'header_icon' or 'header',
+            widget_type = 'header_icon',
             text = entry.name,
             color = Color.terminal_text_header(255, true),
-            icon = header_icon,
-            subtext = header_icon and entry.subtext or nil,
+            icon = entry.icon,
+            subtext = entry.subtext,
+            subtext_color = entry.subtext_color,
         }
-        if entry.subtext and not header_icon then
-            layout[#layout + 1] = {
-                widget_type = 'subtext',
-                text = entry.subtext,
-                color = entry.subtext_color,
-            }
-        end
         layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
 
         local weapon = entry.weapon

@@ -218,64 +218,8 @@ local function make_blueprints(width)
         },
     }
 
-    blueprints.header = {
-        size = { width, 42 },
-        pass_template = {
-            {
-                pass_type = 'text',
-                style_id = 'text',
-                value_id = 'text',
-                value = '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 26,
-                    text_vertical_alignment = 'top',
-                    text_horizontal_alignment = 'left',
-                    text_color = colors.header,
-                    offset = { 0, 0, 2 },
-                    size = { width, 38 },
-                    text_overflow_mode = 'truncate',
-                },
-            },
-        },
-        init = function(_, widget, element)
-            widget.content.text = element.text or ''
-            if element.color then
-                widget.style.text.text_color = element.color
-            end
-        end,
-    }
-
-    blueprints.subtext = {
-        size = { width, 22 },
-        pass_template = {
-            {
-                pass_type = 'text',
-                style_id = 'text',
-                value_id = 'text',
-                value = '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 16,
-                    text_vertical_alignment = 'top',
-                    text_horizontal_alignment = 'left',
-                    text_color = colors.subtext,
-                    offset = { 0, 0, 2 },
-                    size = { width, 22 },
-                    text_overflow_mode = 'truncate',
-                },
-            },
-        },
-        init = function(_, widget, element)
-            widget.content.text = element.text or ''
-            if element.color then
-                widget.style.text.text_color = element.color
-            end
-        end,
-    }
-
     blueprints.header_icon = {
-        size = { width, 130 },
+        size = { width, 96 },
         pass_template = {
             {
                 pass_type = 'texture',
@@ -305,7 +249,7 @@ local function make_blueprints(width)
                     text_horizontal_alignment = 'left',
                     text_color = colors.header,
                     offset = { 200, 0, 2 },
-                    size = { width - 200, 80 },
+                    size = { width - 200, 60 },
                     text_overflow_mode = 'truncate',
                 },
             },
@@ -320,8 +264,8 @@ local function make_blueprints(width)
                     text_vertical_alignment = 'top',
                     text_horizontal_alignment = 'left',
                     text_color = colors.subtext,
-                    offset = { 200, 78, 3 },
-                    size = { width - 200, 50 },
+                    offset = { 200, 58, 3 },
+                    size = { width - 200, 30 },
                     text_overflow_mode = 'truncate',
                 },
             },
@@ -333,16 +277,27 @@ local function make_blueprints(width)
 
             local icon_size = element.icon_size or { 192, 96 }
             local icon_margin = 10
-            local text_x = icon_size[1] + icon_margin
 
             widget.style.icon.size = icon_size
-            widget.style.text.offset[1] = text_x
-            widget.style.text.size[1] = width - text_x
-            widget.style.subtext.offset[1] = text_x
-            widget.style.subtext.size[1] = width - text_x
+
+            if element.icon then
+                local text_x = icon_size[1] + icon_margin
+                widget.style.text.offset[1] = text_x
+                widget.style.text.size[1] = width - text_x
+                widget.style.subtext.offset[1] = text_x
+                widget.style.subtext.size[1] = width - text_x
+            else
+                widget.style.text.offset[1] = icon_margin
+                widget.style.text.size[1] = width - icon_margin
+                widget.style.subtext.offset[1] = icon_margin
+                widget.style.subtext.size[1] = width - icon_margin
+            end
 
             if element.color then
                 widget.style.text.text_color = element.color
+            end
+            if element.subtext_color then
+                widget.style.subtext.text_color = element.subtext_color
             end
         end,
     }

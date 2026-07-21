@@ -183,6 +183,7 @@ function CombatStatsView:_setup_entries()
                         widget_type = 'stats_entry',
                         name = display_name,
                         type = engagement.type,
+                        icon = SharedUtils.category_icon(engagement.type),
                         start_time = engagement.start_time,
                         end_time = engagement.end_time,
                         duration = duration,
@@ -241,14 +242,13 @@ function CombatStatsView:_present_detail(entry)
     if entry and not entry.disabled then
         layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
         layout[#layout + 1] = {
-            widget_type = 'header',
+            widget_type = 'header_icon',
             text = entry.name,
+            icon = entry.icon,
+            icon_size = { 80, 80 },
+            subtext = entry.subtext,
+            subtext_color = entry.subtext_color,
             color = Color.terminal_text_header(255, true),
-        }
-        layout[#layout + 1] = {
-            widget_type = 'subtext',
-            text = entry.subtext,
-            color = entry.subtext_color,
         }
 
         local stats = entry.stats

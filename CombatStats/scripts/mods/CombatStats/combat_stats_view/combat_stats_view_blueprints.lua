@@ -6,5 +6,7 @@ return function(width)
     return make_shared_blueprints(width, {
         entry_type = 'stats_entry',
         entry_height = 80,
+        icon_size = { 60, 60 },
+        icon_margin = 10,
     })
 end

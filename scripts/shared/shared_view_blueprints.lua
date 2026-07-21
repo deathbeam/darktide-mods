@@ -123,22 +123,25 @@ local function make_blueprints(width, config)
         }
     end
 
+    local text_base_x = list_button_text_style.offset[1]
+    local subtext_base_x = list_button_subtext_style.offset[1]
+
     local text_style = table.clone(list_button_text_style)
     text_style.offset = {
-        list_button_text_style.offset[1] + icon_area_w,
+        text_base_x + icon_area_w,
         list_button_text_style.offset[2],
         list_button_text_style.offset[3],
     }
-    text_style.size = { width - icon_area_w - list_button_text_style.offset[1], entry_height }
+    text_style.size = { width - icon_area_w - text_base_x, entry_height }
     text_style.text_overflow_mode = 'truncate'
 
     local subtext_style = table.clone(list_button_subtext_style)
     subtext_style.offset = {
-        list_button_subtext_style.offset[1] + icon_area_w,
+        subtext_base_x + icon_area_w,
         list_button_subtext_style.offset[2],
         list_button_subtext_style.offset[3],
     }
-    subtext_style.size = { width - icon_area_w - list_button_subtext_style.offset[1], entry_height }
+    subtext_style.size = { width - icon_area_w - subtext_base_x, entry_height }
     subtext_style.text_overflow_mode = 'truncate'
 
     pass_template[#pass_template + 1] = {
@@ -169,12 +172,22 @@ local function make_blueprints(width, config)
             content.entry = entry
             content.element = entry
 
-            if icon_size and entry.icon then
-                content.icon = entry.icon
-            end
-
             if entry.subtext_color then
                 style.subtext.text_color = entry.subtext_color
+            end
+
+            if icon_size and entry.icon then
+                content.icon = entry.icon
+                style.text.offset[1] = text_base_x + icon_area_w
+                style.text.size[1] = width - icon_area_w - text_base_x
+                style.subtext.offset[1] = subtext_base_x + icon_area_w
+                style.subtext.size[1] = width - icon_area_w - subtext_base_x
+            elseif icon_size then
+                content.icon = nil
+                style.text.offset[1] = text_base_x
+                style.text.size[1] = width - text_base_x
+                style.subtext.offset[1] = subtext_base_x
+                style.subtext.size[1] = width - subtext_base_x
             end
         end,
     }
