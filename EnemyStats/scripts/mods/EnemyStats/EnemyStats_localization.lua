@@ -31,6 +31,11 @@ return {
         role_ranged = 'loc_contract_task_weapon_type_ranged',
         -- Weakspot
         weakspot_weakspot = 'loc_weapon_details_weakspot',
+        -- Attack timing
+        stat_damage = 'loc_weapon_stats_display_base_damage',
+        stat_range = 'loc_weapon_stats_display_effective_range',
+        stat_spread = 'loc_weapon_stats_display_spread',
+        stat_fire_rate = 'loc_weapon_stats_display_rate_of_fire',
     },
 
     mod_name = {
@@ -190,6 +195,42 @@ return {
     stat_detection_radius = {
         en = 'Detection Radius',
         ['zh-cn'] = '侦测半径',
+    },
+    stat_hit_time = {
+        en = 'Hit Time',
+        ['zh-cn'] = '命中时间',
+    },
+    stat_duration = {
+        en = 'Duration',
+        ['zh-cn'] = '时长',
+    },
+    stat_recovery = {
+        en = 'Recovery',
+        ['zh-cn'] = '后摇',
+    },
+    stat_weapon_reach = {
+        en = 'Weapon Reach',
+        ['zh-cn'] = '攻击距离',
+    },
+    stat_action = {
+        en = 'Action',
+        ['zh-cn'] = '动作',
+    },
+    stat_windup = {
+        en = 'Windup',
+        ['zh-cn'] = '前摇',
+    },
+    stat_shots = {
+        en = 'Shots',
+        ['zh-cn'] = '弹数',
+    },
+    header_melee_attacks = {
+        en = 'MELEE ATTACKS',
+        ['zh-cn'] = '近战攻击',
+    },
+    header_ranged_attacks = {
+        en = 'RANGED ATTACKS',
+        ['zh-cn'] = '远程攻击',
     },
 
     -- Stagger types

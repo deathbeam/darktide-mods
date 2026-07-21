@@ -220,6 +220,34 @@ function EnemyStatsView:_present_detail(entry)
             }
             layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
         end
+
+        local melee_rows, ranged_rows = Data.attack_tables(entry.breed_name)
+        if melee_rows then
+            layout[#layout + 1] = {
+                widget_type = 'section',
+                text = mod:localize('header_melee_attacks'),
+            }
+            layout[#layout + 1] = {
+                widget_type = 'table',
+                name_column_label = mod:localize('stat_action'),
+                columns = Data.melee_attack_columns(),
+                rows = melee_rows,
+            }
+            layout[#layout + 1] = { widget_type = 'spacer', size = 'tight' }
+        end
+        if ranged_rows then
+            layout[#layout + 1] = {
+                widget_type = 'section',
+                text = mod:localize('header_ranged_attacks'),
+            }
+            layout[#layout + 1] = {
+                widget_type = 'table',
+                name_column_label = mod:localize('stat_action'),
+                columns = Data.ranged_attack_columns(),
+                rows = ranged_rows,
+            }
+            layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
+        end
     end
 
     local left_click_callback = callback(self, 'cb_on_detail_entry_left_pressed')

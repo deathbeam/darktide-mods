@@ -6,6 +6,9 @@ local MinionDifficultySettings = require('scripts/settings/difficulty/minion_dif
 local HavocModifierConfig = require('scripts/settings/havoc/havoc_modifier_config')
 local HavocSettings = require('scripts/settings/havoc_settings')
 local StaggerSettings = require('scripts/settings/damage/stagger_settings')
+local BreedActions = require('scripts/settings/breed/breed_actions')
+local DamageCalculation = require('scripts/utilities/attack/damage_calculation')
+local DamageProfile = require('scripts/utilities/attack/damage_profile')
 
 local DIFFICULTY_KEYS = { 'sedition', 'uprising', 'malice', 'heresy', 'damnation' }
 
@@ -60,6 +63,25 @@ local SPECIALIST_TAGS = {
     disabler = true,
     sniper = true,
     interrupter = true,
+}
+
+local MELEE_CHALLENGE = 3 -- heresy midpoint for the representative damage value
+
+local MELEE_ATTACK_COLUMNS = {
+    { label = nil },
+    { label = nil },
+    { label = nil },
+    { label = nil },
+    { label = nil },
+}
+
+local RANGED_ATTACK_COLUMNS = {
+    { label = nil },
+    { label = nil },
+    { label = nil },
+    { label = nil },
+    { label = nil },
+    { label = nil },
 }
 
 local function breed_category(breed)
@@ -448,6 +470,233 @@ function EnemyStatsData.stagger_table(breed_name)
         return nil
     end
     return rows
+end
+
+-- Attack timing for melee and ranged actions.
+--
+-- Melee: one row per action, aggregating its animations into min/max timing ranges
+-- (fastest vs slowest swing) plus the action's computed base damage and reach.
+-- Captures every action with attack_anim_damage_timings + attack_anim_durations.
+--
+-- Ranged: one row per shooting action, with windup, burst size, fire rate, base damage,
+-- max range, and spread. Captures every action with a shoot_template.
+
+local function _fmt_time(n)
+    if type(n) ~= 'number' then
+        return '-'
+    end
+    return string.format('%.2fs', n)
+end
+
+local function _fmt_num(n)
+    if n == nil then
+        return '-'
+    end
+    if math.abs(n - math.floor(n)) < 0.05 then
+        return string.format('%d', math.floor(n + 0.5))
+    end
+    return string.format('%.1f', n)
+end
+
+-- Base damage for a minion attack at a given challenge level. Mirrors the game's
+-- base_ui_damage path (same as WeaponStats), but seeds power_level from the breed's
+-- power_level_type resolved against the action's attack-type key, exactly as
+-- DifficultyManager.get_minion_attack_power_level does. Returns nil if any piece
+-- is missing or the calc errors.
+local function _base_damage(breed, action, attack_type, challenge)
+    local profile = action.damage_profile
+    if not profile then
+        return nil
+    end
+    local breed_pl_type = breed.power_level_type
+    local pl_type = type(breed_pl_type) == 'table' and breed_pl_type[attack_type] or breed_pl_type
+    if not pl_type then
+        return nil
+    end
+    local pl_settings = MinionDifficultySettings.power_level[pl_type]
+    if not pl_settings then
+        return nil
+    end
+    local power_level = pl_settings[math.min(#pl_settings, challenge)]
+    if type(power_level) ~= 'number' then
+        return nil
+    end
+
+    local target_index = profile.targets and (profile.targets[1] and 1 or 'default_target') or 1
+    local target_settings = DamageProfile.target_settings(profile, target_index)
+    if not target_settings then
+        return nil
+    end
+    -- base_ui_damage indexes lerp_values.current_target_settings_lerp_values; pass an
+    -- empty table so the default lerp fallbacks apply instead of crashing on nil.
+    local lerp_values = { current_target_settings_lerp_values = {} }
+    local ok, attack =
+        pcall(DamageCalculation.base_ui_damage, profile, target_settings, power_level, 1, false, lerp_values)
+    if not ok or type(attack) ~= 'number' then
+        return nil
+    end
+    return attack
+end
+
+-- Format a min/max pair as a range string. Single value collapses to that value.
+local function _fmt_range(lo, hi)
+    if lo == nil then
+        return '-'
+    end
+    if hi == nil or math.abs(hi - lo) < 0.005 then
+        return string.format('%.2fs', lo)
+    end
+    return string.format('%.2fs–%.2fs', lo, hi)
+end
+
+-- One row per action, aggregating its animations into min/max timing ranges. The range
+-- span (fastest vs slowest swing) is the useful "reaction window" signal; the per-anim
+-- breakdown that WeaponStats merges would just be noise here since damage/reach are
+-- shared across an action's anims. Sorted by fastest hit time (most dangerous first).
+local function _melee_rows(breed, actions)
+    local rows = {}
+    for action_name, action in pairs(actions) do
+        if type(action) == 'table' then
+            local timings = action.attack_anim_damage_timings
+            local durations = action.attack_anim_durations
+            if type(timings) == 'table' and type(durations) == 'table' then
+                local attack_type = action.power_level_type or 'melee'
+                local damage = _base_damage(breed, action, attack_type, MELEE_CHALLENGE)
+                local raw_reach = action.weapon_reach
+                -- weapon_reach may be a number or a {default=X, attack_reach_up=Y} table;
+                -- the default is the representative reach.
+                local reach = type(raw_reach) == 'table' and (raw_reach.default or raw_reach[1]) or raw_reach
+                local label = SharedUtils.localize_or_prettify(mod, 'action_', action_name)
+
+                local hit_min, hit_max, dur_min, dur_max
+                for anim_name, hit_t in pairs(timings) do
+                    local dur = durations[anim_name]
+                    if type(hit_t) == 'number' and type(dur) == 'number' and dur > 0 then
+                        hit_min = not hit_min and hit_t or math.min(hit_min, hit_t)
+                        hit_max = not hit_max and hit_t or math.max(hit_max, hit_t)
+                        dur_min = not dur_min and dur or math.min(dur_min, dur)
+                        dur_max = not dur_max and dur or math.max(dur_max, dur)
+                    end
+                end
+
+                if hit_min then
+                    local rec_min, rec_max = dur_min - hit_max, dur_max - hit_min
+                    rows[#rows + 1] = {
+                        name = label,
+                        sort_hit = hit_min,
+                        cells = {
+                            { text = _fmt_range(hit_min, hit_max), color = Color.ui_terminal(255, true) },
+                            { text = _fmt_range(dur_min, dur_max) },
+                            { text = _fmt_range(rec_min, rec_max) },
+                            { text = _fmt_num(damage), color = Color.ui_orange_medium(255, true) },
+                            { text = reach and string.format('%.1f', reach) or '-' },
+                        },
+                    }
+                end
+            end
+        end
+    end
+    table.sort(rows, function(a, b)
+        return a.sort_hit < b.sort_hit
+    end)
+    return #rows > 0 and rows or nil
+end
+
+-- A ranged stat field may be a plain number or a difficulty-scaled table shaped as
+-- { [diff]= {lo, hi}, ... } (1..5 = sedition..damnation). Resolve to a single
+-- representative number: heresy (diff 3) midpoint. Returns nil if not resolvable.
+local function _resolve_ranged_stat(value)
+    if type(value) == 'number' then
+        return value
+    end
+    if type(value) ~= 'table' then
+        return nil
+    end
+    local entry = value[3] or value[1] or value[#value]
+    if type(entry) == 'number' then
+        return entry
+    end
+    if type(entry) == 'table' then
+        local lo, hi = entry[1], entry[2]
+        if type(lo) == 'number' and type(hi) == 'number' then
+            return (lo + hi) / 2
+        end
+        if type(lo) == 'number' then
+            return lo
+        end
+    end
+    return nil
+end
+
+local function _ranged_rows(breed, actions)
+    local rows = {}
+    for action_name, action in pairs(actions) do
+        if type(action) == 'table' and action.shoot_template then
+            local windup = _resolve_ranged_stat(action.aim_duration or action.peek_duration)
+            local num_shots = _resolve_ranged_stat(action.num_shots)
+            local time_per_shot = _resolve_ranged_stat(action.time_per_shot)
+            local max_range = action.max_distance_to_target
+            local spread
+            local shoot = action.shoot_template
+            if type(shoot) == 'table' and type(shoot.spread) == 'number' then
+                spread = math.radians_to_degrees(shoot.spread)
+            end
+            -- Ranged damage lives on hit_scan_template.damage.impact.damage_profile;
+            -- ranged power_level_type from the breed.
+            local damage
+            local hit_scan = shoot and shoot.hit_scan_template
+            local impact = hit_scan and hit_scan.damage and hit_scan.damage.impact
+            if impact and impact.damage_profile then
+                local ranged_action = { damage_profile = impact.damage_profile }
+                damage = _base_damage(breed, ranged_action, 'ranged', MELEE_CHALLENGE)
+            end
+            rows[#rows + 1] = {
+                name = SharedUtils.localize_or_prettify(mod, 'action_', action_name),
+                sort_name = action_name,
+                cells = {
+                    { text = _fmt_time(windup), color = Color.ui_terminal(255, true) },
+                    { text = num_shots and string.format('%d', num_shots) or '-' },
+                    { text = _fmt_time(time_per_shot) },
+                    { text = _fmt_num(damage), color = Color.ui_orange_medium(255, true) },
+                    { text = max_range and string.format('%.0f', max_range) or '-' },
+                    { text = spread and string.format('%.1f°', spread) or '-' },
+                },
+            }
+        end
+    end
+    table.sort(rows, function(a, b)
+        return a.sort_name < b.sort_name
+    end)
+    return #rows > 0 and rows or nil
+end
+
+-- Returns melee_rows, ranged_rows for a breed. Each is nil when the breed has no actions
+-- of that category.
+function EnemyStatsData.attack_tables(breed_name)
+    local breed = Breeds[breed_name]
+    local actions = breed and BreedActions[breed_name]
+    if not actions then
+        return nil, nil
+    end
+    MELEE_ATTACK_COLUMNS[1].label = mod:localize('stat_hit_time')
+    MELEE_ATTACK_COLUMNS[2].label = mod:localize('stat_duration')
+    MELEE_ATTACK_COLUMNS[3].label = mod:localize('stat_recovery')
+    MELEE_ATTACK_COLUMNS[4].label = mod:localize('stat_damage')
+    MELEE_ATTACK_COLUMNS[5].label = mod:localize('stat_weapon_reach')
+    RANGED_ATTACK_COLUMNS[1].label = mod:localize('stat_windup')
+    RANGED_ATTACK_COLUMNS[2].label = mod:localize('stat_shots')
+    RANGED_ATTACK_COLUMNS[3].label = mod:localize('stat_fire_rate')
+    RANGED_ATTACK_COLUMNS[4].label = mod:localize('stat_damage')
+    RANGED_ATTACK_COLUMNS[5].label = mod:localize('stat_range')
+    RANGED_ATTACK_COLUMNS[6].label = mod:localize('stat_spread')
+    return _melee_rows(breed, actions), _ranged_rows(breed, actions)
+end
+
+EnemyStatsData.melee_attack_columns = function()
+    return MELEE_ATTACK_COLUMNS
+end
+EnemyStatsData.ranged_attack_columns = function()
+    return RANGED_ATTACK_COLUMNS
 end
 
 function EnemyStatsData.breed_info(breed_name)

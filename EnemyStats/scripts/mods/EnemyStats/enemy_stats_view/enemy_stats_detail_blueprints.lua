@@ -2,8 +2,11 @@ local mod = get_mod('EnemyStats')
 
 local Shared = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/shared/shared_detail_blueprints')
 
+local INDENT_PX = 18
 local STAT_ROW_HEIGHT = 21
-
+local COLOR_STRIPE = Color.terminal_grid_background(60, true)
+local STAT_LABEL_FONT_SIZE = 16
+local STAT_VALUE_FONT_SIZE = 16
 -- Humanoid body diagram: rect passes laid out as a silhouette, each part colored
 -- by its zone armor type. Shown beside the hit-zone table for humanoid breeds.
 local BODY_W = 180
@@ -84,48 +87,68 @@ local function make_blueprints(width)
 
     blueprints.stat = {
         size = { width, STAT_ROW_HEIGHT },
-        pass_template = {
-            {
-                pass_type = 'text',
-                style_id = 'label',
-                value_id = 'label',
-                value = '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 16,
-                    text_vertical_alignment = 'center',
-                    text_horizontal_alignment = 'left',
-                    text_color = Shared.colors.label,
-                    offset = { 0, 0, 2 },
-                    size = { width * 0.55, STAT_ROW_HEIGHT },
-                    text_overflow_mode = 'truncate',
+        pass_template_function = function(_, config)
+            local label_style = {
+                font_type = 'proxima_nova_bold',
+                font_size = STAT_LABEL_FONT_SIZE,
+                text_vertical_alignment = 'center',
+                text_horizontal_alignment = 'left',
+                text_color = Shared.colors.label,
+                offset = { 0, 0, 2 },
+                size = { width * 0.55, STAT_ROW_HEIGHT },
+                text_overflow_mode = 'truncate',
+            }
+            local value_style = {
+                font_type = 'proxima_nova_bold',
+                font_size = STAT_VALUE_FONT_SIZE,
+                text_vertical_alignment = 'center',
+                text_horizontal_alignment = 'left',
+                text_color = Shared.colors.value,
+                offset = { width * 0.55, 0, 2 },
+                size = { width * 0.45, STAT_ROW_HEIGHT },
+                text_overflow_mode = 'truncate',
+            }
+            return {
+                {
+                    pass_type = 'rect',
+                    style_id = 'stripe',
+                    style = {
+                        color = COLOR_STRIPE,
+                        offset = { 0, 0, 0 },
+                    },
+                    visibility_function = function(content)
+                        return content.stripe == true
+                    end,
                 },
-            },
-            {
-                pass_type = 'text',
-                style_id = 'value',
-                value_id = 'value',
-                value = '',
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 16,
-                    text_vertical_alignment = 'center',
-                    text_horizontal_alignment = 'left',
-                    text_color = Shared.colors.value,
-                    offset = { width * 0.55, 0, 2 },
-                    size = { width * 0.45, STAT_ROW_HEIGHT },
-                    text_overflow_mode = 'truncate',
+                {
+                    pass_type = 'text',
+                    style_id = 'label',
+                    value_id = 'label',
+                    value = '',
+                    style = label_style,
                 },
-            },
-        },
+                {
+                    pass_type = 'text',
+                    style_id = 'value',
+                    value_id = 'value',
+                    value = '',
+                    style = value_style,
+                },
+            }
+        end,
         init = function(_, widget, element)
-            widget.content.label = element.label or ''
-            widget.content.value = element.value or ''
+            local content = widget.content
+            content.label = element.label or ''
+            content.value = element.value or ''
+            content.stripe = element.stripe == true
+            local style = widget.style
+            style.label.offset[1] = (element.indent or 0) * INDENT_PX
+            style.value.offset[1] = (element.indent or 0) * INDENT_PX + width * 0.55
             if element.label_color then
-                widget.style.label.text_color = element.label_color
+                style.label.text_color = element.label_color
             end
             if element.value_color then
-                widget.style.value.text_color = element.value_color
+                style.value.text_color = element.value_color
             end
         end,
     }
@@ -133,7 +156,7 @@ local function make_blueprints(width)
     blueprints.table = {
         size_function = function(_, config)
             local rows = config.rows or {}
-            local table_h = Shared.table_height(#rows)
+            local table_h = Shared.table_height(rows)
             if config.diagram then
                 local table_w = (width - BODY_W - BODY_GAP)
                 return { BODY_W + BODY_GAP + table_w, table_h }
@@ -143,7 +166,7 @@ local function make_blueprints(width)
         pass_template_function = function(_, config)
             local rows = config.rows or {}
             local columns = config.columns or {}
-            local table_h = Shared.table_height(#rows)
+            local table_h = Shared.table_height(rows)
             local table_w = config.diagram and (width - BODY_W - BODY_GAP) or width
             local table_origin = config.diagram and (BODY_W + BODY_GAP) or 0
             local table_passes = Shared.make_table_passes(table_w, columns, rows, {

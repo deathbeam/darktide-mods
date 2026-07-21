@@ -29,7 +29,7 @@ local SECTION_LEVELS = {
     { height = 22, font_size = 16, rule = false },
 }
 
-local TABLE_NAME_WIDTH = 150
+local TABLE_NAME_WIDTH = 220
 local TABLE_HEADER_HEIGHT = 26
 local TABLE_ROW_HEIGHT = 22
 
@@ -44,7 +44,23 @@ local function make_table_passes(width, columns, rows, config)
     local column_width = num_columns > 0 and math.floor(cell_area_width / num_columns) or 0
     local header_height = TABLE_HEADER_HEIGHT
     local row_height = TABLE_ROW_HEIGHT
-    local total_height = header_height + num_rows * row_height
+    -- Names longer than the name column wrap; grow that row's height to fit two lines so
+    -- it doesn't overlap the next row. Other rows keep the standard height.
+    local row_heights = {}
+    local total_height = header_height
+    local name_w = TABLE_NAME_WIDTH - 12
+    for i = 1, num_rows do
+        local name = rows[i] and rows[i].name or ''
+        local h = row_height
+        if #name > 0 then
+            -- ~9px per char at font_size 15 bold; two lines when the name exceeds one line.
+            if #name * 9 > name_w then
+                h = row_height * 2
+            end
+        end
+        row_heights[i] = h
+        total_height = total_height + h
+    end
     local passes = {}
 
     passes[#passes + 1] = {
@@ -157,10 +173,12 @@ local function make_table_passes(width, columns, rows, config)
             },
         }
     end
+    local cumulative_y = header_height
     for row_index = 1, num_rows do
         local row = rows[row_index]
         local cells = row.cells or {}
-        local y = header_height + (row_index - 1) * row_height
+        local y = cumulative_y
+        local this_row_h = row_heights[row_index] or row_height
         passes[#passes + 1] = {
             pass_type = 'text',
             style_id = 'name_' .. row_index,
@@ -173,8 +191,8 @@ local function make_table_passes(width, columns, rows, config)
                 text_horizontal_alignment = 'left',
                 text_color = row.name_color or colors.label,
                 offset = { origin_x + 6, y, 5 },
-                size = { TABLE_NAME_WIDTH - 12, row_height },
-                text_overflow_mode = 'truncate',
+                size = { TABLE_NAME_WIDTH - 12, this_row_h },
+                text_overflow_mode = this_row_h > row_height and 'wrap' or 'truncate',
             },
         }
         for col_index = 1, num_columns do
@@ -192,11 +210,13 @@ local function make_table_passes(width, columns, rows, config)
                     text_horizontal_alignment = 'center',
                     text_color = cell.color or colors.value,
                     offset = { origin_x + x, y, 5 },
-                    size = { column_width, row_height },
+                    size = { column_width, this_row_h },
+                    text_vertical_alignment = 'center',
                     text_overflow_mode = 'truncate',
                 },
             }
         end
+        cumulative_y = cumulative_y + this_row_h
     end
     return passes
 end
@@ -351,8 +371,25 @@ local function make_blueprints(width)
     return blueprints
 end
 
-local function table_height(num_rows)
-    return TABLE_HEADER_HEIGHT + num_rows * TABLE_ROW_HEIGHT
+local function table_height(num_rows_or_rows)
+    -- Accept either a row count (uniform height) or the rows table (variable: long
+    -- names wrap and need a double-height row).
+    local rows = type(num_rows_or_rows) == 'table' and num_rows_or_rows or nil
+    local num_rows = rows and #rows or num_rows_or_rows
+    if num_rows == 0 then
+        return TABLE_HEADER_HEIGHT
+    end
+    local name_w = TABLE_NAME_WIDTH - 12
+    local total = TABLE_HEADER_HEIGHT + num_rows * TABLE_ROW_HEIGHT
+    if rows then
+        for i = 1, num_rows do
+            local name = rows[i] and rows[i].name or ''
+            if #name * 9 > name_w then
+                total = total + TABLE_ROW_HEIGHT
+            end
+        end
+    end
+    return total
 end
 
 return {
