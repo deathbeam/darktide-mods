@@ -140,7 +140,6 @@ function build_stats()
 
     local toggles = {
         assume_proc_stacks = mod:get('assume_proc_stacks'),
-        assume_coherency = mod:get('assume_coherency'),
         havoc_rank = mod:get('havoc_rank') or 0,
         coherency_allies = mod:get('coherency_allies') or 3,
     }
@@ -154,7 +153,7 @@ function build_stats()
     vitals.max_toughness = folded_max_toughness or vitals.max_toughness
 
     -- BIO: field type header with the chosen option as subtext, then the description text.
-    local bio = mod:get('show_bio') ~= false and Utils.character_bio(profile) or nil
+    local bio = Utils.character_bio(profile)
     if bio and #bio > 0 then
         _section(records, mod:localize('header_bio'), COLORS.HEADER)
         for i = 1, #bio do
@@ -250,30 +249,21 @@ function build_stats()
     -- TOUGHNESS regen
     if vitals.toughness_template then
         local tough_template = vitals.toughness_template
-        local still_rate, still_coh =
-            Utils.toughness_regen(unit, stat_buffs, tough_template, false, vitals.max_toughness, folded)
-        local moving_rate = Utils.toughness_regen(unit, stat_buffs, tough_template, true, vitals.max_toughness, folded)
+        local regen_rate, coherency_mult =
+            Utils.toughness_regen(unit, stat_buffs, tough_template, vitals.max_toughness, folded)
         local regen_delay = Utils.toughness_regen_delay(unit, stat_buffs, tough_template)
         local bounty =
             Utils.toughness_melee_bounty(unit, stat_buffs, tough_template, vitals.max_toughness, wep_template)
         local bonus_regen, bonus_sources = Utils.toughness_bonus_regen(unit, profile, toggles)
 
         _section(records, mod:localize('header_toughness'), COLORS.DEFENSE)
-        if still_rate then
-            _stat(records, mod:localize('stat_toughness_regen'), string.format('%.1f/s', still_rate), COLORS.DEFENSE)
+        if regen_rate then
+            _stat(records, mod:localize('stat_toughness_regen'), string.format('%.1f/s', regen_rate), COLORS.DEFENSE)
             _sources(records, folded, 'toughness_regen_rate_modifier', 'add')
             _sources(records, folded, 'toughness_regen_rate_multiplier', 'mult')
             _sources(records, folded, 'toughness_regen_percent', 'add')
         end
-        if moving_rate and moving_rate ~= still_rate then
-            _stat(
-                records,
-                mod:localize('stat_toughness_regen_moving'),
-                string.format('%.1f/s', moving_rate),
-                COLORS.DEFENSE
-            )
-        end
-        if still_coh and still_coh ~= 0 then
+        if coherency_mult and coherency_mult ~= 0 then
             _sources(records, folded, 'toughness_coherency_regen_rate_modifier', 'add')
             _sources(records, folded, 'toughness_extra_regen_rate', 'add')
             _sources(records, folded, 'toughness_coherency_regen_rate_multiplier', 'mult')

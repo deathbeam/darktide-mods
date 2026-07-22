@@ -17,10 +17,8 @@ SharedUtils.register_stats_view(
 -- folded stat buffs recompute live. No-op when the view isn't active.
 local REFRESH_SETTINGS = {
     assume_proc_stacks = true,
-    assume_coherency = true,
     coherency_allies = true,
     havoc_rank = true,
-    show_bio = true,
 }
 
 mod.on_setting_changed = function(id)

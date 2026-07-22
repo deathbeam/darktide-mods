@@ -16,8 +16,8 @@ return {
         ['zh-cn'] = '角色属性',
     },
     mod_description = {
-        en = 'Shows derived character stats — health, wounds, toughness, crit, mobility, and damage modifiers — computed from talents, perks, blessings, curios, and assumed-active buffs.',
-        ['zh-cn'] = '显示角色衍生属性 — 生命值、伤口、韧性、暴击、机动性、有效生命值与伤害修正 — 综合天赋、特性、祝福与假设激活的增益计算。',
+        en = 'Shows derived character stats computed from talents, perks, blessings, curios, and active buffs.',
+        ['zh-cn'] = '显示由天赋、特性、祝福、饰品与激活增益计算的衍生属性。',
     },
 
     -- Config
@@ -35,21 +35,13 @@ return {
         en = 'Assume max proc stacks',
         ['zh-cn'] = '假设最大触发层数',
     },
-    assume_coherency = {
-        en = 'Assume coherency active',
-        ['zh-cn'] = '假设共鸣激活',
-    },
-    show_bio = {
-        en = 'Show character background at top',
-        ['zh-cn'] = '顶部显示角色背景',
-    },
     coherency_allies = {
-        en = 'Coherency allies (for toughness regen estimate)',
-        ['zh-cn'] = '共鸣队友数（用于韧性恢复估算）',
+        en = 'Coherency allies',
+        ['zh-cn'] = '共鸣队友数',
     },
     havoc_rank = {
-        en = 'Havoc rank (applies Havoc hidden debuffs)',
-        ['zh-cn'] = '浩劫等级（应用浩劫隐藏减益）',
+        en = 'Havoc rank',
+        ['zh-cn'] = '浩劫等级',
     },
     havoc_source = {
         en = 'Havoc',
@@ -108,8 +100,8 @@ return {
         ['zh-cn'] = '生命',
     },
     header_toughness = {
-        en = 'TOUGHNESS',
-        ['zh-cn'] = '韧性',
+        en = 'RECOVERY',
+        ['zh-cn'] = '恢复',
     },
     header_defense = {
         en = 'DEFENSE',
@@ -141,30 +133,26 @@ return {
         ['zh-cn'] = '职业',
     },
 
-    -- Stat labels: toughness
+    -- Stat labels: recovery
     stat_toughness_regen = {
         en = 'Toughness Regeneration',
         ['zh-cn'] = '韧性恢复',
     },
-    stat_toughness_regen_moving = {
-        en = 'Toughness Regeneration (Moving)',
-        ['zh-cn'] = '韧性恢复（移动）',
-    },
     stat_tough_bonus_regen = {
-        en = 'Toughness Regeneration',
-        ['zh-cn'] = '韧性恢复',
+        en = 'Toughness Replenishment',
+        ['zh-cn'] = '韧性补充',
     },
     stat_tough_regen_delay = {
-        en = 'Toughness Regen Delay',
-        ['zh-cn'] = '韧性恢复延迟',
+        en = 'Toughness Regeneration Speed',
+        ['zh-cn'] = '韧性恢复速度',
     },
     stat_tough_bounty = {
-        en = 'Toughness on Melee Kill',
-        ['zh-cn'] = '近战击杀恢复韧性',
+        en = 'Toughness Replenishment on Melee Kill',
+        ['zh-cn'] = '近战击杀补充韧性',
     },
     coherency_source = {
-        en = 'Coherency',
-        ['zh-cn'] = '共鸣',
+        en = 'Coherency Toughness Regeneration',
+        ['zh-cn'] = '共鸣韧性恢复',
     },
 
     -- Stat labels: defense

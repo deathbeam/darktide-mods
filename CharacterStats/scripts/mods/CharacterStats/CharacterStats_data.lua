@@ -7,11 +7,6 @@ return {
     options = {
         widgets = {
             {
-                setting_id = 'show_bio',
-                type = 'checkbox',
-                default_value = true,
-            },
-            {
                 setting_id = 'add_to_esc_menu',
                 type = 'checkbox',
                 default_value = true,
@@ -26,11 +21,6 @@ return {
             },
             {
                 setting_id = 'assume_proc_stacks',
-                type = 'checkbox',
-                default_value = true,
-            },
-            {
-                setting_id = 'assume_coherency',
                 type = 'checkbox',
                 default_value = true,
             },

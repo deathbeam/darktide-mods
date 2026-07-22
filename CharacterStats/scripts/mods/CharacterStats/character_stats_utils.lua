@@ -173,9 +173,6 @@ function M.compute_max_vitals(folded, archetype, toughness_template, stamina_tem
     return max_health, max_toughness, max_stamina
 end
 
--- Loaded entirely from game data: havoc_modifier_config[rank] gives the active modifiers +
--- their tier, havoc_settings maps each to an add_player_buff, BuffTemplates has the values.
-
 local _havoc
 local function _havoc_tables()
     if _havoc ~= nil then
@@ -206,10 +203,12 @@ function M.havoc_debuffs(rank)
     if not entry then
         return {}
     end
+    -- Definitions live in modifier_templates; havoc_settings.modifiers is just a name array.
+    local templates = data.settings.modifier_templates
     local out = {}
     for name, tier in pairs(entry) do
         if _HAVOC_PLAYER_FACING[name] then
-            local mod_def = data.settings.modifiers and data.settings.modifiers[name]
+            local mod_def = templates and templates[name]
             local buff_name = mod_def and mod_def[tier] and mod_def[tier].add_player_buff
             if buff_name and BuffTemplates[buff_name] then
                 out[#out + 1] = buff_name
@@ -338,7 +337,7 @@ end
 --   regen_rate = base × weapon_mod × rate_modifier × coherency_modifier + percent_regen
 -- The coherency modifier is folded in (it multiplies the rate, not a separate stat), so the
 -- single returned value matches what the HUD shows in coherency range.
-function M.toughness_regen(unit, live_stat_buffs, tough_template, standing_still, max_toughness, folded)
+function M.toughness_regen(unit, live_stat_buffs, tough_template, max_toughness, folded)
     local s = live_stat_buffs
     if not s or not tough_template then
         return nil, nil
@@ -346,9 +345,9 @@ function M.toughness_regen(unit, live_stat_buffs, tough_template, standing_still
     local fv = folded and folded.values
     local wep_tough = _ext(unit, 'weapon_system') and _ext(unit, 'weapon_system'):toughness_template()
     local regen = tough_template.regeneration_speed
-    local base_rate = standing_still and (regen and regen.moving or 0) or (regen and regen.still or 0)
+    local base_rate = regen and (regen.still or regen.moving or 0)
     local wep_mod_t = wep_tough and wep_tough.regeneration_speed_modifier
-    local wep_mod = wep_mod_t and (standing_still and wep_mod_t.moving or wep_mod_t.still) or 1
+    local wep_mod = wep_mod_t and (wep_mod_t.still or wep_mod_t.moving or 1)
 
     local rate_modifier = (fv and fv.toughness_regen_rate_modifier or s.toughness_regen_rate_modifier or 1)
         * (fv and fv.toughness_regen_rate_multiplier or s.toughness_regen_rate_multiplier or 1)
@@ -712,8 +711,8 @@ function M.folded_stat_buffs(live_stat_buffs, unit, profile, player, toggles)
         end
     end
 
-    if toggles.assume_coherency then
-        local ally_count = toggles.coherency_allies or 3
+    local ally_count = toggles.coherency_allies or 0
+    if ally_count > 0 then
         local names = { 'coherency_toughness_regen' }
         for i = 1, #coherency_templates do
             names[#names + 1] = coherency_templates[i]

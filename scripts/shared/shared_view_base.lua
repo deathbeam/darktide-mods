@@ -11,8 +11,7 @@ local function make_view(mod, config)
     local definitions_path = config.definitions_path
     local list_blueprints_path = config.list_blueprints_path
     local single_detail = config.single_detail
-    -- When single_detail is set, the view skips the left list + search and shows only the
-    -- detail panel (used by CharacterStats, whose "list" was a single no-op row).
+    -- When set, skip the left list + search and show only the detail panel.
 
     local ViewElementInputLegend =
         mod:original_require('scripts/ui/view_elements/view_element_input_legend/view_element_input_legend')
