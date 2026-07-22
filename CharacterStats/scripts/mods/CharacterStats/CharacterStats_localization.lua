@@ -2,7 +2,7 @@ return {
     global_loc = {
         loc_character_stats_menu_button = {
             en = 'Character Stats',
-            ['zh-cn'] = '角色属性',
+            ['zh-cn'] = '玩家数据统计',
         },
         loc_character_stats_copy = {
             en = 'Copy to Clipboard',
@@ -54,7 +54,7 @@ return {
     },
     coherency_allies = {
         en = 'Coherency allies',
-        ['zh-cn'] = '共鸣队友数',
+        ['zh-cn'] = '连携队友数',
     },
     havoc_rank = {
         en = 'Havoc rank',
@@ -130,77 +130,77 @@ return {
     },
     stat_toughness_regen_percent = {
         en = 'Toughness Regeneration',
-        ['zh-cn'] = '韧性恢复',
+        ['zh-cn'] = '百分比韧性恢复',
     },
     stat_tough_bonus_regen = {
         en = 'Toughness Replenishment',
-        ['zh-cn'] = '韧性补充',
+        ['zh-cn'] = '天赋韧性补充',
     },
     stat_tough_regen_delay = {
         en = 'Toughness Regeneration Speed',
-        ['zh-cn'] = '韧性恢复速度',
+        ['zh-cn'] = '韧性恢复延迟',
     },
     stat_tough_bounty = {
         en = 'Toughness Replenishment on Melee Kill',
-        ['zh-cn'] = '近战击杀补充韧性',
+        ['zh-cn'] = '近战击杀韧性补充',
     },
     coherency_source = {
         en = 'Coherency Toughness Regeneration',
-        ['zh-cn'] = '共鸣韧性恢复',
+        ['zh-cn'] = '连携韧性恢复',
     },
 
     -- Stat labels: defense
     stat_damage_reduction = {
         en = 'Damage Reduction',
-        ['zh-cn'] = '伤害减免',
+        ['zh-cn'] = '伤害抗性',
     },
     stat_reduction_melee = {
         en = 'Melee Reduction',
-        ['zh-cn'] = '近战减免',
+        ['zh-cn'] = '近战伤害抗性',
     },
     stat_reduction_ranged = {
         en = 'Ranged Reduction',
-        ['zh-cn'] = '远程减免',
+        ['zh-cn'] = '远程伤害抗性',
     },
     stat_tough_reduction_melee = {
         en = 'Toughness Reduction (Melee)',
-        ['zh-cn'] = '近战韧性减免',
+        ['zh-cn'] = '近战韧性伤害抗性',
     },
     stat_tough_reduction_ranged = {
         en = 'Toughness Reduction (Ranged)',
-        ['zh-cn'] = '远程韧性减免',
+        ['zh-cn'] = '远程韧性伤害抗性',
     },
     stat_taken_from_explosions = {
         en = 'Reduction vs Explosions',
-        ['zh-cn'] = '爆炸伤害减免',
+        ['zh-cn'] = '爆炸伤害抗性',
     },
     stat_taken_from_prop_explosions = {
         en = 'Reduction vs Prop Explosions',
-        ['zh-cn'] = '物块爆炸减免',
+        ['zh-cn'] = '环境伤害伤害抗性（比如油桶）',
     },
     stat_taken_from_toxin = {
         en = 'Reduction vs Toxin',
-        ['zh-cn'] = '毒素减免',
+        ['zh-cn'] = '毒素伤害抗性',
     },
     stat_taken_from_burning = {
         en = 'Reduction vs Burning',
-        ['zh-cn'] = '燃烧减免',
+        ['zh-cn'] = '燃烧伤害抗性',
     },
     stat_taken_from_bleeding = {
         en = 'Reduction vs Bleeding',
-        ['zh-cn'] = '流血减免',
+        ['zh-cn'] = '流血伤害抗性',
     },
     stat_taken_from_electrocution = {
         en = 'Reduction vs Electrocution',
-        ['zh-cn'] = '触电减免',
+        ['zh-cn'] = '触电伤害抗性',
     },
     stat_taken_from_kinetic = {
         en = 'Reduction vs Kinetic',
-        ['zh-cn'] = '动能减免',
+        ['zh-cn'] = '物理伤害抗性',
     },
     stat_taken_from_toxic_gas = {
         en = 'Reduction vs Toxic Gas',
-        ['zh-cn'] = '毒气减免',
+        ['zh-cn'] = '毒气伤害抗性',
     },
     stat_taken_from_corruption = {
         en = 'Damage Resistance (Corruption)',
@@ -208,27 +208,27 @@ return {
     },
     stat_taken_from_grimoire = {
         en = 'Damage Resistance (Grimoires)',
-        ['zh-cn'] = '典籍伤害抗性',
+        ['zh-cn'] = '魔法书伤害抗性',
     },
     stat_taken_from_bombers = {
         en = 'Damage Resistance (Bombers)',
-        ['zh-cn'] = '轰炸者伤害抗性',
+        ['zh-cn'] = '血痂、渣滓轰炸者伤害抗性',
     },
     stat_taken_from_flamers = {
         en = 'Damage Resistance (Tox Flamers)',
-        ['zh-cn'] = '喷火兵伤害抗性',
+        ['zh-cn'] = '血痂、渣滓火焰兵伤害抗性',
     },
     stat_taken_from_gunners = {
         en = 'Damage Resistance (Gunners)',
-        ['zh-cn'] = '枪手伤害抗性',
+        ['zh-cn'] = '血痂渣滓炮手、收割者伤害抗性',
     },
     stat_taken_from_mutants = {
         en = 'Damage Resistance (Mutants)',
-        ['zh-cn'] = '变异者伤害抗性',
+        ['zh-cn'] = '变种人伤害抗性',
     },
     stat_taken_from_pox_hounds = {
         en = 'Damage Resistance (Pox Hounds)',
-        ['zh-cn'] = '疫犬伤害抗性',
+        ['zh-cn'] = '瘟疫猎犬伤害抗性',
     },
     stat_taken_from_snipers = {
         en = 'Damage Resistance (Snipers)',
@@ -254,7 +254,7 @@ return {
     },
     stat_rending = {
         en = 'Rending Bonus',
-        ['zh-cn'] = '破甲加成',
+        ['zh-cn'] = '撕裂加成',
     },
 
     -- Offense breakdown terms
@@ -268,7 +268,7 @@ return {
     },
     stat_power_level = {
         en = 'Power Level',
-        ['zh-cn'] = '威力等级',
+        ['zh-cn'] = '能量等级',
     },
     stat_reload_speed = {
         en = 'Reload Speed',
@@ -346,35 +346,35 @@ return {
     -- Rending breakdown terms
     stat_backstab_rending = {
         en = 'Backstab Rending',
-        ['zh-cn'] = '背刺破甲',
+        ['zh-cn'] = '背刺撕裂',
     },
     stat_flanking_rending = {
         en = 'Flanking Rending',
-        ['zh-cn'] = '侧袭破甲',
+        ['zh-cn'] = '侧袭撕裂',
     },
     stat_crit_rending = {
         en = 'Crit Rending',
-        ['zh-cn'] = '暴击破甲',
+        ['zh-cn'] = '暴击撕裂',
     },
     stat_rending_vs_staggered = {
         en = 'Rending vs Staggered',
-        ['zh-cn'] = '对踉跄破甲',
+        ['zh-cn'] = '对踉跄撕裂',
     },
     stat_rending_vs_electrocuted = {
         en = 'Rending vs Electrocuted',
-        ['zh-cn'] = '对触电破甲',
+        ['zh-cn'] = '对触电撕裂',
     },
     stat_close_range_rending = {
         en = 'Close Range Rending',
-        ['zh-cn'] = '近距离破甲',
+        ['zh-cn'] = '近距离撕裂',
     },
     stat_warp_rending = {
         en = 'Warp Rending',
-        ['zh-cn'] = '灵能破甲',
+        ['zh-cn'] = '灵能撕裂',
     },
     stat_melee_rending = {
         en = 'Melee Rending',
-        ['zh-cn'] = '近战破甲',
+        ['zh-cn'] = '近战撕裂',
     },
     stat_melee_heavy_rending = {
         en = 'Melee Heavy Rending',
@@ -382,11 +382,11 @@ return {
     },
     stat_ranged_rending = {
         en = 'Ranged Rending',
-        ['zh-cn'] = '远程破甲',
+        ['zh-cn'] = '远程撕裂',
     },
     stat_ranged_crit_rending = {
         en = 'Ranged Crit Rending',
-        ['zh-cn'] = '远程暴击破甲',
+        ['zh-cn'] = '远程暴击撕裂',
     },
 
     -- Damage taken breakdown terms

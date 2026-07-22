@@ -307,7 +307,8 @@ local function _weapon_buffs(player)
                         out[#out + 1] = {
                             template_name = buff_template_name,
                             override_data = override,
-                            display_name = _display_for_buff(buff_template_name),
+                            display_name = SharedUtils.safe_localize(trait_item and trait_item.display_name)
+                                or _display_for_buff(buff_template_name),
                         }
                     end
                 end
@@ -338,8 +339,6 @@ local function _gadget_buffs(player)
                     out[#out + 1] = {
                         template_name = trait_name,
                         lerp_value = data.value,
-                        -- Prefer the trait item's own name (e.g. "Ferrocrete Hide"), then the
-                        -- stat label, then the prettified template id.
                         display_name = SharedUtils.safe_localize(trait_item and trait_item.display_name)
                             or GADGET_STAT_LABEL[trait_name]
                             or SharedUtils.prettify(trait_name),
