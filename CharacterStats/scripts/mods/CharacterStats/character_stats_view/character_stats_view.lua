@@ -25,6 +25,13 @@ function CharacterStatsView:_on_init(settings, context)
     self._detail_built = false
 end
 
+-- Refresh the detail panel on enter
+local _base_on_enter = CharacterStatsView.on_enter
+function CharacterStatsView:on_enter(...)
+    self._detail_built = false
+    _base_on_enter(self, ...)
+end
+
 -- Detail panel: render the builder's record list through the shared stat/section/spacer
 -- blueprints. No left list in single_detail mode, so on_enter kicks off the build directly.
 function CharacterStatsView:_present_detail()
@@ -92,11 +99,6 @@ function CharacterStatsView:_present_detail()
     self._detail_grid:present_grid_layout(layout, blueprints, left_click_callback)
 end
 
--- Build the detail panel once it's safe to do so. The local player unit and its buff
--- extension aren't available the instant the view opens (the buff snapshot only populates
--- after a fixed_update cycle), so we retry each frame until build_stats returns real data,
--- then stop. No periodic refresh: we only rebuild on open, on setting change, or on weapon
--- swap (which the user does by closing/reopening the view).
 function CharacterStatsView:_on_update(dt, t, input_service)
     if self._detail_built then
         return
@@ -104,8 +106,6 @@ function CharacterStatsView:_on_update(dt, t, input_service)
     if not self._detail_entry or not self._detail_grid then
         return
     end
-    -- pcall: game state can transition under us (e.g. leaving a mission) and briefly make
-    -- the player unit/extensions unavailable; never let a build error tear down the view.
     pcall(function()
         self:_present_detail()
     end)
