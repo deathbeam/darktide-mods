@@ -12,6 +12,7 @@ on:
           - ''
           - SimpleAbilities
           - SimpleMovement
+          - CharacterStats
           - CombatStats
           - EnemyStats
           - WeaponStats

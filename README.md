@@ -10,6 +10,10 @@ Automatically uses blitzes and stimms when equipped. Combination of various mods
 
 Auto run, CTRL to walk, hold to dodge etc
 
+## [CharacterStats](mods/CharacterStats)
+
+Show derived character stats
+
 ## [CombatStats](mods/CombatStats)
 
 Track detailed combat statistics including damage, kills, buff uptime, and more

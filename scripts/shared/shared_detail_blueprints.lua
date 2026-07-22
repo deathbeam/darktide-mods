@@ -28,6 +28,7 @@ local SECTION_LEVELS = {
     { height = 28, font_size = 19, rule = false },
     { height = 22, font_size = 16, rule = false },
 }
+local SUBTEXT_LINE_HEIGHT = 18
 
 local TABLE_NAME_WIDTH = 220
 local TABLE_HEADER_HEIGHT = 26
@@ -324,7 +325,11 @@ local function make_blueprints(width)
 
     blueprints.section = {
         size_function = function(_, config)
-            return { width, SECTION_LEVELS[config.level or 1].height }
+            local h = SECTION_LEVELS[config.level or 1].height
+            if config.subtext and config.subtext ~= '' then
+                h = h + SUBTEXT_LINE_HEIGHT
+            end
+            return { width, h }
         end,
         pass_template_function = function(_, config)
             local level = SECTION_LEVELS[config.level or 1]
@@ -344,6 +349,25 @@ local function make_blueprints(width)
                         size = { width, level.height - (level.rule and 6 or 0) },
                     },
                 },
+                {
+                    pass_type = 'text',
+                    style_id = 'subtext',
+                    value_id = 'subtext',
+                    value = '',
+                    style = {
+                        font_type = 'proxima_nova_bold',
+                        font_size = level.font_size - 3,
+                        text_vertical_alignment = 'top',
+                        text_horizontal_alignment = 'left',
+                        text_color = colors.subtext,
+                        offset = { 0, level.font_size + 2, 2 },
+                        size = { width, SUBTEXT_LINE_HEIGHT },
+                        word_wrap = true,
+                    },
+                    visibility_function = function(content)
+                        return content.subtext ~= nil and content.subtext ~= ''
+                    end,
+                },
             }
             if level.rule then
                 passes[#passes + 1] = {
@@ -359,12 +383,18 @@ local function make_blueprints(width)
             return passes
         end,
         init = function(_, widget, element)
-            widget.content.text = element.text or ''
-            local style = widget.style.text
+            local content = widget.content
+            content.text = element.text or ''
+            content.subtext = element.subtext or ''
+            local style = widget.style
             if element.color then
-                style.text_color = element.color
+                style.text.text_color = element.color
             end
-            style.offset[1] = (element.indent or 0) * INDENT_PX
+            if element.subtext_color then
+                style.subtext.text_color = element.subtext_color
+            end
+            style.text.offset[1] = (element.indent or 0) * INDENT_PX
+            style.subtext.offset[1] = (element.indent or 0) * INDENT_PX
         end,
     }
 

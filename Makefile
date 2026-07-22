@@ -1,6 +1,6 @@
 .PHONY: sync-shared format check publish clean
 
-MODS := WeaponStats EnemyStats CombatStats
+MODS := CharacterStats WeaponStats EnemyStats CombatStats
 SHARED_DIR := scripts/shared
 
 # Copy scripts/shared/*.lua into each mod's scripts/mods/<mod>/shared/ folder.
