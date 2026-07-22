@@ -78,6 +78,16 @@ local function _is_ranged(t)
     return t ~= nil and WeaponTemplate.is_ranged(t)
 end
 
+local function _weapon_toughness_template(unit)
+    local weapon_ext = _ext(unit, 'weapon_system')
+    return weapon_ext and weapon_ext:toughness_template() or nil
+end
+
+local function _weapon_handling(unit)
+    local weapon_ext = _ext(unit, 'weapon_system')
+    return weapon_ext and weapon_ext:weapon_handling_template() or nil
+end
+
 local function _resolve_crime(key)
     return Crimes[CrimesCompabilityMap[key] or key]
 end
@@ -702,12 +712,12 @@ function M.crit_chance(player, unit, wep_template, folded)
     elseif _is_ranged(wep_template) then
         add = add + (s.ranged_critical_strike_chance or 0)
     end
-    local weapon_ext = _ext(unit, 'weapon_system')
-    if weapon_ext then
-        local crit = (weapon_ext:weapon_handling_template() or EMPTY).critical_strike
-        add = add + (crit and crit.chance_modifier or 0)
+    local handling = _weapon_handling(unit)
+    if handling and handling.critical_strike then
+        add = add + (handling.critical_strike.chance_modifier or 0)
     end
-    local archetype = M.profile(player) and M.profile(player).archetype
+    local profile = M.profile(player)
+    local archetype = profile and profile.archetype
     local base = (archetype and archetype.base_critical_strike_chance) or 0
     local chance = math.clamp(base + add, 0, 1)
     return chance * (1 - (s.critical_strike_chance_to_damage_convert or 0))
@@ -736,9 +746,9 @@ function M.attack_speed(unit, folded, wep_template)
     local factor = _is_melee(wep_template) and (s.melee_attack_speed or 1)
         or _is_ranged(wep_template) and (base + (s.ranged_attack_speed or 1) - 1)
         or base
-    local weapon_ext = _ext(unit, 'weapon_system')
-    if weapon_ext then
-        factor = factor * ((weapon_ext:weapon_handling_template() or EMPTY).time_scale or 1)
+    local handling = _weapon_handling(unit)
+    if handling then
+        factor = factor * (handling.time_scale or 1)
     end
     return factor
 end
@@ -815,7 +825,7 @@ function M.toughness_regen(unit, live_stat_buffs, tough_template, max_toughness,
         return nil, nil
     end
     local fv = folded and folded.values
-    local wep_tough = _ext(unit, 'weapon_system') and _ext(unit, 'weapon_system'):toughness_template()
+    local wep_tough = _weapon_toughness_template(unit)
     local regen = tough_template.regeneration_speed
     local base_rate = regen and (regen.still or regen.moving or 0)
     local wep_mod_t = wep_tough and wep_tough.regeneration_speed_modifier
@@ -840,7 +850,7 @@ function M.toughness_regen_delay(unit, live_stat_buffs, tough_template)
     if not s or not tough_template then
         return nil
     end
-    local wep_tough = _ext(unit, 'weapon_system') and _ext(unit, 'weapon_system'):toughness_template()
+    local wep_tough = _weapon_toughness_template(unit)
     local wep_mod = wep_tough and wep_tough.regeneration_delay_modifier or 1
     local buff_mod = (s.toughness_regen_delay_modifier or 1) * (s.toughness_regen_delay_multiplier or 1)
     return tough_template.regeneration_delay * wep_mod * buff_mod
@@ -851,7 +861,7 @@ function M.toughness_melee_bounty(unit, live_stat_buffs, tough_template, max_tou
     if not s or not tough_template or not max_toughness or not _is_melee(wep_template) then
         return nil
     end
-    local wep_tough = _ext(unit, 'weapon_system') and _ext(unit, 'weapon_system'):toughness_template()
+    local wep_tough = _weapon_toughness_template(unit)
     local recovery = tough_template.recovery_percentages or EMPTY
     local wep_mod = wep_tough
             and wep_tough.recovery_percentage_modifiers
@@ -1015,15 +1025,18 @@ function M.toughness_bonus_regen(unit, profile, toggles)
         if not template then
             return
         end
-        local per_s = template.toughness_regen_per_second or template.toughness_regen_per_second_per_stack
+        -- Only _per_stack rates scale with stacks; a flat toughness_regen_per_second is
+        -- applied once per buff instance regardless of stack count (matches the engine).
+        local per_stack = template.toughness_regen_per_second_per_stack
+        local per_s = template.toughness_regen_per_second
         if not per_s then
             local total_amount = template.toughness_restored_on_proc or template.toughness_regen_on_proc
             local dur = template.active_duration or template.duration
             per_s = (total_amount and dur and dur > 0) and (total_amount / dur) or nil
         end
-        if per_s then
+        if per_s or per_stack then
             local stacks = (toggles and toggles.assume_proc_stacks) and (template.max_stacks or 1) or 1
-            local contributed = per_s * stacks
+            local contributed = (per_s or 0) + (per_stack or 0) * stacks
             if template.increased_toughness_regen_per_charge then
                 contributed = contributed + template.increased_toughness_regen_per_charge * charges
             end
@@ -1034,23 +1047,17 @@ function M.toughness_bonus_regen(unit, profile, toggles)
         end
     end
 
-    local related = _related_by_talent()
     for i = 1, #entries do
         local entry = entries[i]
         local display = entry.display_name or entry.talent_name
-        local passive = {}
         for j = 1, #entry.buff_template_names do
             local bname = entry.buff_template_names[j]
-            passive[bname] = true
-            fold(BuffTemplates[bname], display)
-        end
-        local rel = related[entry.talent_name]
-        if rel then
-            for j = 1, #rel do
-                local bname = rel[j]
-                if not passive[bname] then
-                    fold(BuffTemplates[bname], display)
-                end
+            local template = BuffTemplates[bname]
+            fold(template, display)
+            -- A server_only_proc_buff parent delegates its effect to a <name>_stack child that
+            -- carries the toughness_regen fields; fold that child too.
+            if template and template.class_name == 'server_only_proc_buff' then
+                fold(BuffTemplates[bname .. '_stack'], display)
             end
         end
     end

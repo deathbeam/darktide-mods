@@ -234,6 +234,106 @@ function build_stats()
         _spacer(records)
     end
 
+    -- OFFENSE
+    _section(records, mod:localize('header_offense'), COLORS.OFFENSE)
+
+    local dmg_mult = Utils.damage_multiplier(folded)
+    if dmg_mult then
+        if dmg_mult.generic ~= 1 then
+            _stat(records, mod:localize('stat_total_damage'), _fmt_pct(dmg_mult.generic - 1), COLORS.OFFENSE)
+            _sources(records, folded, 'damage', 'add')
+            _sources(records, folded, 'power_level_modifier', 'add')
+        end
+        if dmg_mult.melee ~= dmg_mult.generic then
+            _stat(records, mod:localize('stat_melee_damage'), _fmt_pct(dmg_mult.melee - 1), COLORS.OFFENSE)
+            _sources(records, folded, 'melee_damage', 'add')
+            _sources(records, folded, 'melee_power_level_modifier', 'add')
+        end
+        if dmg_mult.ranged ~= dmg_mult.generic then
+            _stat(records, mod:localize('stat_ranged_damage'), _fmt_pct(dmg_mult.ranged - 1), COLORS.OFFENSE)
+            _sources(records, folded, 'ranged_damage', 'add')
+            _sources(records, folded, 'ranged_power_level_modifier', 'add')
+        end
+    end
+
+    local vs_terms = Utils.damage_vs_terms(folded)
+    if vs_terms then
+        for i = 1, #vs_terms do
+            local t = vs_terms[i]
+            _stat(records, mod:localize(t.label), _fmt_pct(t.delta), COLORS.OFFENSE)
+            _sources(records, folded, t.key, 'add')
+        end
+    end
+
+    local atk_speed = Utils.attack_speed(unit, folded, wep_template)
+    if atk_speed and atk_speed ~= 1 then
+        _stat(records, mod:localize('stat_attack_speed'), _fmt_pct(atk_speed - 1), COLORS.OFFENSE)
+        _sources(records, folded, 'attack_speed', 'add')
+        _sources(records, folded, 'melee_attack_speed', 'add')
+        _sources(records, folded, 'ranged_attack_speed', 'add')
+    end
+
+    local crit = Utils.crit_chance(player, unit, wep_template, folded)
+    if crit then
+        _stat(records, mod:localize('stat_crit_chance'), _fmt_pct(crit), COLORS.OFFENSE)
+        _sources(records, folded, 'critical_strike_chance', 'add')
+        _sources(records, folded, 'melee_critical_strike_chance', 'add')
+        _sources(records, folded, 'ranged_critical_strike_chance', 'add')
+    end
+
+    local crit_dmg = Utils.crit_damage_mult(folded, wep_template)
+    if crit_dmg and crit_dmg ~= 1 then
+        _stat(records, mod:localize('stat_crit_damage'), _fmt_pct(crit_dmg - 1), COLORS.OFFENSE)
+        _sources(records, folded, 'critical_strike_damage', 'add')
+        _sources(records, folded, 'melee_critical_strike_damage', 'add')
+        _sources(records, folded, 'ranged_critical_strike_damage', 'add')
+    end
+
+    local rending_terms = Utils.rending_terms(folded, wep_template)
+    if rending_terms and #rending_terms > 0 then
+        local rending_sum = 0
+        for i = 1, #rending_terms do
+            rending_sum = rending_sum + rending_terms[i].delta
+        end
+        _stat(records, mod:localize('stat_rending'), _fmt_pct(rending_sum), COLORS.OFFENSE)
+        for i = 1, #rending_terms do
+            _sources(records, folded, rending_terms[i].key, 'add')
+        end
+    end
+
+    _stat_with_sources(records, folded, 'stat_power_level', 'power_level_modifier', COLORS.OFFENSE)
+    _sources(records, folded, 'melee_power_level_modifier', 'add')
+    _sources(records, folded, 'ranged_power_level_modifier', 'add')
+
+    if Utils.is_ranged(wep_template) then
+        _stat_with_sources(records, folded, 'stat_reload_speed', 'reload_speed', COLORS.OFFENSE)
+        _stat_with_sources(records, folded, 'stat_spread', 'spread_modifier', COLORS.OFFENSE)
+    end
+
+    if Utils.has_stat(folded, 'impact_modifier') then
+        _stat(
+            records,
+            mod:localize('stat_impact'),
+            _fmt_pct(Utils.stat_delta(folded, 'impact_modifier')),
+            COLORS.OFFENSE
+        )
+        _sources(records, folded, 'impact_modifier', 'add')
+        _sources(records, folded, 'melee_impact_modifier', 'add')
+        _sources(records, folded, 'ranged_impact_modifier', 'add')
+    end
+
+    if Utils.has_stat(folded, 'movement_speed') then
+        _stat(
+            records,
+            mod:localize('stat_movement_speed'),
+            _fmt_pct(Utils.stat_delta(folded, 'movement_speed')),
+            COLORS.MOBILITY
+        )
+        _sources(records, folded, 'movement_speed', 'add')
+        _sources(records, folded, 'sprint_movement_speed', 'add')
+    end
+    _spacer(records)
+
     -- DEFENSE
     local dmg_taken = Utils.damage_taken(folded)
     local has_health = max_health and max_health > 0
@@ -352,106 +452,6 @@ function build_stats()
         end
         _spacer(records)
     end
-
-    -- OFFENSE
-    _section(records, mod:localize('header_offense'), COLORS.OFFENSE)
-
-    local dmg_mult = Utils.damage_multiplier(folded)
-    if dmg_mult then
-        if dmg_mult.generic ~= 1 then
-            _stat(records, mod:localize('stat_total_damage'), _fmt_pct(dmg_mult.generic - 1), COLORS.OFFENSE)
-            _sources(records, folded, 'damage', 'add')
-            _sources(records, folded, 'power_level_modifier', 'add')
-        end
-        if dmg_mult.melee ~= dmg_mult.generic then
-            _stat(records, mod:localize('stat_melee_damage'), _fmt_pct(dmg_mult.melee - 1), COLORS.OFFENSE)
-            _sources(records, folded, 'melee_damage', 'add')
-            _sources(records, folded, 'melee_power_level_modifier', 'add')
-        end
-        if dmg_mult.ranged ~= dmg_mult.generic then
-            _stat(records, mod:localize('stat_ranged_damage'), _fmt_pct(dmg_mult.ranged - 1), COLORS.OFFENSE)
-            _sources(records, folded, 'ranged_damage', 'add')
-            _sources(records, folded, 'ranged_power_level_modifier', 'add')
-        end
-    end
-
-    local vs_terms = Utils.damage_vs_terms(folded)
-    if vs_terms then
-        for i = 1, #vs_terms do
-            local t = vs_terms[i]
-            _stat(records, mod:localize(t.label), _fmt_pct(t.delta), COLORS.OFFENSE)
-            _sources(records, folded, t.key, 'add')
-        end
-    end
-
-    local atk_speed = Utils.attack_speed(unit, folded, wep_template)
-    if atk_speed and atk_speed ~= 1 then
-        _stat(records, mod:localize('stat_attack_speed'), _fmt_pct(atk_speed - 1), COLORS.OFFENSE)
-        _sources(records, folded, 'attack_speed', 'add')
-        _sources(records, folded, 'melee_attack_speed', 'add')
-        _sources(records, folded, 'ranged_attack_speed', 'add')
-    end
-
-    local crit = Utils.crit_chance(player, unit, wep_template, folded)
-    if crit then
-        _stat(records, mod:localize('stat_crit_chance'), _fmt_pct(crit), COLORS.OFFENSE)
-        _sources(records, folded, 'critical_strike_chance', 'add')
-        _sources(records, folded, 'melee_critical_strike_chance', 'add')
-        _sources(records, folded, 'ranged_critical_strike_chance', 'add')
-    end
-
-    local crit_dmg = Utils.crit_damage_mult(folded, wep_template)
-    if crit_dmg and crit_dmg ~= 1 then
-        _stat(records, mod:localize('stat_crit_damage'), _fmt_pct(crit_dmg - 1), COLORS.OFFENSE)
-        _sources(records, folded, 'critical_strike_damage', 'add')
-        _sources(records, folded, 'melee_critical_strike_damage', 'add')
-        _sources(records, folded, 'ranged_critical_strike_damage', 'add')
-    end
-
-    local rending_terms = Utils.rending_terms(folded, wep_template)
-    if rending_terms and #rending_terms > 0 then
-        local rending_sum = 0
-        for i = 1, #rending_terms do
-            rending_sum = rending_sum + rending_terms[i].delta
-        end
-        _stat(records, mod:localize('stat_rending'), _fmt_pct(rending_sum), COLORS.OFFENSE)
-        for i = 1, #rending_terms do
-            _sources(records, folded, rending_terms[i].key, 'add')
-        end
-    end
-
-    _stat_with_sources(records, folded, 'stat_power_level', 'power_level_modifier', COLORS.OFFENSE)
-    _sources(records, folded, 'melee_power_level_modifier', 'add')
-    _sources(records, folded, 'ranged_power_level_modifier', 'add')
-
-    if Utils.is_ranged(wep_template) then
-        _stat_with_sources(records, folded, 'stat_reload_speed', 'reload_speed', COLORS.OFFENSE)
-        _stat_with_sources(records, folded, 'stat_spread', 'spread_modifier', COLORS.OFFENSE)
-    end
-
-    if Utils.has_stat(folded, 'impact_modifier') then
-        _stat(
-            records,
-            mod:localize('stat_impact'),
-            _fmt_pct(Utils.stat_delta(folded, 'impact_modifier')),
-            COLORS.OFFENSE
-        )
-        _sources(records, folded, 'impact_modifier', 'add')
-        _sources(records, folded, 'melee_impact_modifier', 'add')
-        _sources(records, folded, 'ranged_impact_modifier', 'add')
-    end
-
-    if Utils.has_stat(folded, 'movement_speed') then
-        _stat(
-            records,
-            mod:localize('stat_movement_speed'),
-            _fmt_pct(Utils.stat_delta(folded, 'movement_speed')),
-            COLORS.MOBILITY
-        )
-        _sources(records, folded, 'movement_speed', 'add')
-        _sources(records, folded, 'sprint_movement_speed', 'add')
-    end
-    _spacer(records)
 
     return records, header_text, subtext
 end
