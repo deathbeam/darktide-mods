@@ -53,6 +53,12 @@ local function _fmt_pct(n)
     return string.format('%.0f%%', n * 100)
 end
 
+-- "<base> (<suffix>)" — e.g. "Toughness Damage Reduction (Melee)". The suffix words come
+-- from the game's own loc keys (proxied via game_loc), so variants stay consistent with it.
+local function _variant(base_key, suffix_key)
+    return mod:localize(base_key) .. ' (' .. mod:localize(suffix_key) .. ')'
+end
+
 -- Render the contributing sources for a stat as indented sub-rows, merged by display name so
 -- duplicate curios / multi-template talents collapse to one row with summed deltas.
 local function _sources(records, folded, stat_key, stat_type)
@@ -172,7 +178,6 @@ function build_stats()
 
     -- VITALS
     _section(records, mod:localize('header_vitals'), COLORS.VITAL)
-    _stat(records, mod:localize('stat_archetype'), archetype_label, COLORS.META)
     if max_health then
         _stat(records, mod:localize('stat_health'), _fmt_num(max_health), COLORS.VITAL)
         _sources(records, folded, 'max_health_modifier', 'add')
@@ -297,6 +302,20 @@ function build_stats()
         _sources(records, folded, 'ranged_critical_strike_damage', 'add')
     end
 
+    local weakspot = Utils.weakspot_damage(folded, wep_template)
+    if weakspot and weakspot.generic ~= 1 then
+        _stat(records, mod:localize('stat_weakspot'), _fmt_pct(weakspot.generic - 1), COLORS.OFFENSE)
+        _sources(records, folded, 'weakspot_damage', 'add')
+        if weakspot.melee ~= weakspot.generic then
+            _stat(records, _variant('stat_weakspot', 'melee'), _fmt_pct(weakspot.melee - 1), COLORS.OFFENSE)
+            _sources(records, folded, 'melee_weakspot_damage', 'add')
+        end
+        if weakspot.ranged ~= weakspot.generic then
+            _stat(records, _variant('stat_weakspot', 'ranged'), _fmt_pct(weakspot.ranged - 1), COLORS.OFFENSE)
+            _sources(records, folded, 'ranged_weakspot_damage', 'add')
+        end
+    end
+
     local rending_terms = Utils.rending_terms(folded, wep_template)
     if rending_terms and #rending_terms > 0 then
         local rending_sum = 0
@@ -345,41 +364,43 @@ function build_stats()
     -- DEFENSE
     local dmg_taken = Utils.damage_taken(folded)
     local has_health = max_health and max_health > 0
-    local has_defense = dmg_taken and dmg_taken.generic ~= 1
+    local has_defense = dmg_taken and (dmg_taken.generic ~= 1 or dmg_taken.melee ~= 1 or dmg_taken.ranged ~= 1)
 
     _section(records, mod:localize('header_defense'), COLORS.DEFENSE)
     if has_defense and has_health then
-        _stat(records, mod:localize('stat_damage_reduction'), _fmt_pct(1 - dmg_taken.generic), COLORS.DEFENSE)
-        _sources(records, folded, 'damage_taken_multiplier', 'mult')
-        _sources(records, folded, 'damage_taken_modifier', 'add')
+        if dmg_taken.generic ~= 1 then
+            _stat(records, mod:localize('stat_damage_reduction'), _fmt_pct(1 - dmg_taken.generic), COLORS.DEFENSE)
+            _sources(records, folded, 'damage_taken_multiplier', 'mult')
+            _sources(records, folded, 'damage_taken_modifier', 'add')
+        end
         if dmg_taken.melee ~= dmg_taken.generic then
-            _stat(records, mod:localize('stat_reduction_melee'), _fmt_pct(1 - dmg_taken.melee), COLORS.DEFENSE)
+            _stat(records, _variant('stat_damage_reduction', 'melee'), _fmt_pct(1 - dmg_taken.melee), COLORS.DEFENSE)
             _sources(records, folded, 'melee_damage_taken_multiplier', 'mult')
             _sources(records, folded, 'melee_damage_taken_modifier', 'add')
         end
         if dmg_taken.ranged ~= dmg_taken.generic then
-            _stat(records, mod:localize('stat_reduction_ranged'), _fmt_pct(1 - dmg_taken.ranged), COLORS.DEFENSE)
+            _stat(records, _variant('stat_damage_reduction', 'ranged'), _fmt_pct(1 - dmg_taken.ranged), COLORS.DEFENSE)
             _sources(records, folded, 'ranged_damage_taken_multiplier', 'mult')
             _sources(records, folded, 'ranged_damage_taken_modifier', 'add')
         end
     end
 
     local tough_taken = Utils.toughness_damage_taken(folded)
-    if tough_taken then
-        if tough_taken.melee ~= 1 then
-            _stat(records, mod:localize('stat_tough_reduction_melee'), _fmt_pct(1 - tough_taken.melee), COLORS.DEFENSE)
+    local has_tough_defense = tough_taken
+        and (tough_taken.generic ~= 1 or tough_taken.melee ~= 1 or tough_taken.ranged ~= 1)
+    if has_tough_defense then
+        if tough_taken.generic ~= 1 then
+            _stat(records, mod:localize('stat_tough_reduction'), _fmt_pct(1 - tough_taken.generic), COLORS.DEFENSE)
             _sources(records, folded, 'toughness_damage_taken_multiplier', 'mult')
+            _sources(records, folded, 'toughness_damage_taken_modifier', 'add')
+        end
+        if tough_taken.melee ~= tough_taken.generic then
+            _stat(records, _variant('stat_tough_reduction', 'melee'), _fmt_pct(1 - tough_taken.melee), COLORS.DEFENSE)
             _sources(records, folded, 'melee_toughness_damage_taken_multiplier', 'mult')
             _sources(records, folded, 'melee_toughness_damage_taken_modifier', 'add')
         end
-        if tough_taken.ranged ~= 1 then
-            _stat(
-                records,
-                mod:localize('stat_tough_reduction_ranged'),
-                _fmt_pct(1 - tough_taken.ranged),
-                COLORS.DEFENSE
-            )
-            _sources(records, folded, 'toughness_damage_taken_multiplier', 'mult')
+        if tough_taken.ranged ~= tough_taken.generic then
+            _stat(records, _variant('stat_tough_reduction', 'ranged'), _fmt_pct(1 - tough_taken.ranged), COLORS.DEFENSE)
             _sources(records, folded, 'ranged_toughness_damage_taken_multiplier', 'mult')
             _sources(records, folded, 'ranged_toughness_damage_taken_modifier', 'add')
         end

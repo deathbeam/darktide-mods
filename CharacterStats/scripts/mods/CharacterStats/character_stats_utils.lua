@@ -892,6 +892,32 @@ function M.damage_multiplier(folded)
     return { generic = compose(false, false), melee = compose(true, false), ranged = compose(false, true) }
 end
 
+-- Mirrors the weakspot/finesse damage fold in damage_calculation.lua:_finesse_boost_damage:
+-- the per-hit multiplier is 1 + sum(weakspot_damage-1) with melee/ranged variants layered on.
+function M.weakspot_damage(folded, wep_template)
+    local v = _folded_values(folded)
+    if not v then
+        return nil
+    end
+    local function compose(is_melee, is_ranged)
+        local add = 0
+        local function term(key)
+            local val = v[key]
+            if type(val) == 'number' and val ~= 1 then
+                add = add + val - 1
+            end
+        end
+        term('weakspot_damage')
+        if is_melee then
+            term('melee_weakspot_damage')
+        elseif is_ranged then
+            term('ranged_weakspot_damage')
+        end
+        return 1 + add
+    end
+    return { generic = compose(false, false), melee = compose(true, false), ranged = compose(false, true) }
+end
+
 function M.damage_vs_terms(folded)
     local v = _folded_values(folded)
     if not v then
@@ -942,23 +968,7 @@ end
 
 function M.damage_taken(folded)
     local v = _folded_values(folded)
-    if not v then
-        return nil, nil
-    end
-    local terms = {}
-    local function term(label, key, kind)
-        local val = v[key]
-        if type(val) == 'number' and val ~= 1 then
-            terms[#terms + 1] = { label = label, key = key, value = val, kind = kind }
-        end
-    end
-    term('stat_damage_taken_mult', 'damage_taken_multiplier', 'mult')
-    term('stat_damage_taken_mod', 'damage_taken_modifier', 'add')
-    term('stat_melee_damage_taken_mult', 'melee_damage_taken_multiplier', 'mult')
-    term('stat_melee_damage_taken_mod', 'melee_damage_taken_modifier', 'add')
-    term('stat_ranged_damage_taken_mult', 'ranged_damage_taken_multiplier', 'mult')
-    term('stat_ranged_damage_taken_mod', 'ranged_damage_taken_modifier', 'add')
-    return _compose_taken(v, 'damage_taken'), terms
+    return v and _compose_taken(v, 'damage_taken') or nil
 end
 
 function M.toughness_damage_taken(folded)

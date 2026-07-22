@@ -19,6 +19,10 @@ return {
         stat_attack_speed = 'loc_weapon_stats_display_attack_speed',
         stat_reload_speed = 'loc_stats_display_reload_speed_stat',
         stat_spread = 'loc_weapon_stats_display_spread',
+        stat_power_level = 'loc_weapon_stats_display_power',
+        stat_weakspot = 'loc_weapon_details_weakspot',
+        melee = 'loc_setting_melee',
+        ranged = 'loc_setting_ranged',
         bio_origin = 'loc_character_create_title_bio_origin',
         bio_home_planet = 'loc_character_create_title_home_planet',
         bio_early_life = 'loc_character_create_title_early_life',
@@ -118,10 +122,6 @@ return {
         en = 'Max Toughness',
         ['zh-cn'] = '最大韧性',
     },
-    stat_archetype = {
-        en = 'Archetype',
-        ['zh-cn'] = '职业',
-    },
 
     -- Stat labels: recovery
     stat_toughness_regen = {
@@ -154,29 +154,17 @@ return {
         en = 'Damage Reduction',
         ['zh-cn'] = '伤害抗性',
     },
-    stat_reduction_melee = {
-        en = 'Melee Reduction',
-        ['zh-cn'] = '近战伤害抗性',
-    },
-    stat_reduction_ranged = {
-        en = 'Ranged Reduction',
-        ['zh-cn'] = '远程伤害抗性',
-    },
-    stat_tough_reduction_melee = {
-        en = 'Toughness Reduction (Melee)',
-        ['zh-cn'] = '近战韧性伤害抗性',
-    },
-    stat_tough_reduction_ranged = {
-        en = 'Toughness Reduction (Ranged)',
-        ['zh-cn'] = '远程韧性伤害抗性',
+    stat_tough_reduction = {
+        en = 'Toughness Damage Reduction',
+        ['zh-cn'] = '韧性伤害减免',
     },
     stat_taken_from_explosions = {
         en = 'Reduction vs Explosions',
         ['zh-cn'] = '爆炸伤害抗性',
     },
     stat_taken_from_prop_explosions = {
-        en = 'Reduction vs Prop Explosions',
-        ['zh-cn'] = '环境伤害伤害抗性（比如油桶）',
+        en = 'Reduction vs Prop Explosions (Barrels, etc.)',
+        ['zh-cn'] = '环境爆炸伤害抗性（油桶等）',
     },
     stat_taken_from_toxin = {
         en = 'Reduction vs Toxin',
@@ -265,10 +253,6 @@ return {
     stat_ranged_damage = {
         en = 'Ranged Damage Bonus',
         ['zh-cn'] = '远程伤害加成',
-    },
-    stat_power_level = {
-        en = 'Power Level',
-        ['zh-cn'] = '能量等级',
     },
     stat_reload_speed = {
         en = 'Reload Speed',
@@ -387,32 +371,6 @@ return {
     stat_ranged_crit_rending = {
         en = 'Ranged Crit Rending',
         ['zh-cn'] = '远程暴击撕裂',
-    },
-
-    -- Damage taken breakdown terms
-    stat_damage_taken_mult = {
-        en = 'Damage Taken (Mult)',
-        ['zh-cn'] = '受到伤害（乘算）',
-    },
-    stat_damage_taken_mod = {
-        en = 'Damage Taken (Add)',
-        ['zh-cn'] = '受到伤害（加算）',
-    },
-    stat_melee_damage_taken_mult = {
-        en = 'Melee Taken (Mult)',
-        ['zh-cn'] = '近战承受（乘算）',
-    },
-    stat_melee_damage_taken_mod = {
-        en = 'Melee Taken (Add)',
-        ['zh-cn'] = '近战承受（加算）',
-    },
-    stat_ranged_damage_taken_mult = {
-        en = 'Ranged Taken (Mult)',
-        ['zh-cn'] = '远程承受（乘算）',
-    },
-    stat_ranged_damage_taken_mod = {
-        en = 'Ranged Taken (Add)',
-        ['zh-cn'] = '远程承受（加算）',
     },
 
     -- Stat labels: mobility
