@@ -459,33 +459,26 @@ function M.character_bio(profile)
     if not backstory then
         return nil
     end
-    local function entry(title_loc, data, override_text)
+    local function entry(title_key, data, override_text)
         local text = override_text or (data and SharedUtils.safe_localize(data.description)) or nil
         if not text or text == '' then
             return nil
         end
         return {
-            title = SharedUtils.safe_localize(title_loc) or SharedUtils.prettify(title_loc),
+            title = mod:localize(title_key),
             option = data and SharedUtils.safe_localize(data.display_name) or nil,
             text = text,
         }
     end
     local archetype = profile.archetype
     local out = {}
-    out[#out + 1] = entry(
-        'loc_character_create_title_bio_origin',
-        nil,
-        archetype and SharedUtils.safe_localize(archetype.archetype_description)
-    )
-    out[#out + 1] = entry('loc_character_create_title_home_planet', HomePlanets[backstory.planet])
-    out[#out + 1] = entry('loc_character_create_title_early_life', Childhood[backstory.childhood])
-    out[#out + 1] = entry('loc_character_create_title_first_conflict', GrowingUp[backstory.growing_up])
-    out[#out + 1] = entry('loc_character_create_title_key_event', FormativeEvent[backstory.formative_event])
-    out[#out + 1] = entry('loc_character_create_title_crime', _resolve_crime(backstory.crime))
-    out[#out + 1] = entry(
-        'loc_character_create_title_personality',
-        _resolve_personality(backstory.personality, profile.selected_voice)
-    )
+    out[#out + 1] = entry('bio_origin', nil, archetype and SharedUtils.safe_localize(archetype.archetype_description))
+    out[#out + 1] = entry('bio_home_planet', HomePlanets[backstory.planet])
+    out[#out + 1] = entry('bio_early_life', Childhood[backstory.childhood])
+    out[#out + 1] = entry('bio_first_conflict', GrowingUp[backstory.growing_up])
+    out[#out + 1] = entry('bio_key_event', FormativeEvent[backstory.formative_event])
+    out[#out + 1] = entry('bio_crime', _resolve_crime(backstory.crime))
+    out[#out + 1] = entry('bio_personality', _resolve_personality(backstory.personality, profile.selected_voice))
     local filtered = {}
     for i = 1, #out do
         if out[i] then

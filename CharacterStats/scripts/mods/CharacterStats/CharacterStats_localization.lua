@@ -13,6 +13,19 @@ return {
         stat_toughness_regen = 'loc_player_buff_coherency_toughness_regen',
         coherency_source = 'loc_player_buff_coherency_toughness_regen',
         stat_toughness_regen_percent = 'loc_toughness_tutorial',
+        stat_dodge_dist = 'loc_weapon_stats_display_dodge_distance',
+        stat_dodge_speed = 'loc_weapon_stats_display_dodge_speed',
+        stat_sprint_speed = 'loc_weapon_stats_display_sprint_speed',
+        stat_attack_speed = 'loc_weapon_stats_display_attack_speed',
+        stat_reload_speed = 'loc_stats_display_reload_speed_stat',
+        stat_spread = 'loc_weapon_stats_display_spread',
+        bio_origin = 'loc_character_create_title_bio_origin',
+        bio_home_planet = 'loc_character_create_title_home_planet',
+        bio_early_life = 'loc_character_create_title_early_life',
+        bio_first_conflict = 'loc_character_create_title_first_conflict',
+        bio_key_event = 'loc_character_create_title_key_event',
+        bio_crime = 'loc_character_create_title_crime',
+        bio_personality = 'loc_character_create_title_personality',
     },
 
     mod_name = {
@@ -58,36 +71,8 @@ return {
         ['zh-cn'] = '当前角色',
     },
     header_bio = {
-        en = 'Character Background',
+        en = 'CHARACTER BACKGROUND',
         ['zh-cn'] = '角色背景',
-    },
-    bio_archetype = {
-        en = 'Archetype',
-        ['zh-cn'] = '职业',
-    },
-    bio_home_planet = {
-        en = 'Home World',
-        ['zh-cn'] = '母星',
-    },
-    bio_childhood = {
-        en = 'Childhood',
-        ['zh-cn'] = '童年',
-    },
-    bio_growing_up = {
-        en = 'Growing Up',
-        ['zh-cn'] = '成长',
-    },
-    bio_formative_event = {
-        en = 'Formative Event',
-        ['zh-cn'] = '成形事件',
-    },
-    bio_crime = {
-        en = 'Crime',
-        ['zh-cn'] = '罪行',
-    },
-    bio_personality = {
-        en = 'Personality',
-        ['zh-cn'] = '性格',
     },
     no_character = {
         en = 'No active character (enter a mission or the hub)',
@@ -119,6 +104,7 @@ return {
         en = 'MOBILITY',
         ['zh-cn'] = '机动性',
     },
+
     -- Stat labels: vitals
     stat_health = {
         en = 'Max Health',
@@ -462,6 +448,4 @@ return {
         en = 'Dodge Speed',
         ['zh-cn'] = '闪避速度',
     },
-
-    -- Gear breakdown role labels
 }
