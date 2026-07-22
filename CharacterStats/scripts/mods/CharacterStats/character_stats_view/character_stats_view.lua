@@ -10,51 +10,31 @@ local CharacterStatsView = make_view(mod, {
     class_name = 'CharacterStatsView',
     prefix = 'character_stats',
     shared_utils = SharedUtils,
+    single_detail = true,
     definitions_path = 'CharacterStats/scripts/mods/CharacterStats/character_stats_view/character_stats_view_definitions',
     list_blueprints_path = 'CharacterStats/scripts/mods/CharacterStats/character_stats_view/character_stats_view_blueprints',
 })
 
 function CharacterStatsView:_on_init(settings, context)
-    self._entry = {
-        widget_type = 'character_entry',
-        name = mod:localize('current_character'),
-        subtext = '',
-    }
-    -- Set when the detail panel has been successfully built with real character data.
-    -- Cleared on open and on setting change so a fresh build is triggered.
+    self._detail_entry = true
     self._detail_built = false
-end
-
--- The list is a single fixed row; search has no effect but the shared base still drives
--- _setup_entries from the search widget, so keep it a no-op passthrough.
-function CharacterStatsView:_setup_entries()
-    self._detail_built = false
-    self:_present_list({ self._entry })
-end
-
-function CharacterStatsView:_cb_on_list_presented()
-    local entries = self._filtered_list
-    if entries and #entries > 0 then
-        self._list_grid:select_grid_index(1)
-        self:_select_entry(entries[1])
-    end
 end
 
 -- Detail panel: render the builder's record list through the shared stat/section/spacer
--- blueprints, reusing the same record shape WeaponStats emits.
-function CharacterStatsView:_present_detail(entry)
+-- blueprints. No left list in single_detail mode, so on_enter kicks off the build directly.
+function CharacterStatsView:_present_detail()
     if not self._detail_grid then
         return
     end
 
-    self._detail_entry = entry
+    self._detail_entry = true
     local width = self:_detail_width()
     local blueprints = make_detail_blueprints(width)
 
     local layout = {}
     local records, header_text, subtext = Builder.build_stats()
 
-    if entry and header_text then
+    if header_text then
         layout[#layout + 1] = {
             widget_type = 'header_icon',
             text = header_text,
@@ -119,7 +99,7 @@ function CharacterStatsView:_on_update(dt, t, input_service)
     -- pcall: game state can transition under us (e.g. leaving a mission) and briefly make
     -- the player unit/extensions unavailable; never let a build error tear down the view.
     pcall(function()
-        self:_present_detail(self._detail_entry)
+        self:_present_detail()
     end)
 end
 

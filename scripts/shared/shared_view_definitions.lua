@@ -7,7 +7,7 @@ local TextInputPassTemplates = require('scripts/ui/pass_templates/text_input_pas
 -- prefix: the scenegraph/widget name prefix (e.g. "weapon_stats", "enemy_stats", "combat_stats")
 -- mod:    the mod instance, used for mod:localize('mod_name') on the title
 -- extra_legend_inputs: optional list of legend input entries appended after the close button
-local function make_definitions(prefix, mod, extra_legend_inputs)
+local function make_definitions(prefix, mod, extra_legend_inputs, single_detail)
     local screen_width = UIWorkspaceSettings.screen.size[1]
     local screen_height = UIWorkspaceSettings.screen.size[2]
 
@@ -20,55 +20,61 @@ local function make_definitions(prefix, mod, extra_legend_inputs)
     local search_height = 50
     local search_gap = 10
 
-    local grid_width = 500
-    local grid_height = screen_height - top_padding - bottom_padding - search_height - search_gap
-    local detail_height = grid_height + search_height + search_gap
-    local detail_width = screen_width - grid_width - left_padding - right_padding - gap
+    local list_width = 500
+    local list_height = screen_height - top_padding - bottom_padding - search_height - search_gap
+    local detail_height = list_height + search_height + search_gap
+    local detail_width = screen_width - list_width - left_padding - right_padding - gap
+    if single_detail then
+        detail_width = screen_width - left_padding - right_padding
+        detail_height = screen_height - top_padding - bottom_padding
+    end
 
     local scenegraph_definition = {
         screen = UIWorkspaceSettings.screen,
-        [prefix .. '_search'] = {
+    }
+    if not single_detail then
+        scenegraph_definition[prefix .. '_search'] = {
             vertical_alignment = 'top',
             parent = 'screen',
             horizontal_alignment = 'left',
-            size = { grid_width, search_height },
+            size = { list_width, search_height },
             position = { left_padding, top_padding, 1 },
-        },
-        [prefix .. '_list_background'] = {
+        }
+        scenegraph_definition[prefix .. '_list_background'] = {
             vertical_alignment = 'top',
             parent = 'screen',
             horizontal_alignment = 'left',
-            size = { grid_width, grid_height },
+            size = { list_width, list_height },
             position = { left_padding, top_padding + search_height + search_gap, 1 },
-        },
-        [prefix .. '_list_content'] = {
+        }
+        scenegraph_definition[prefix .. '_list_content'] = {
             vertical_alignment = 'top',
             parent = prefix .. '_list_background',
             horizontal_alignment = 'left',
-            size = { grid_width, grid_height },
+            size = { list_width, list_height },
             position = { 0, 0, 1 },
-        },
-        [prefix .. '_detail_background'] = {
-            vertical_alignment = 'top',
-            parent = 'screen',
-            horizontal_alignment = 'left',
-            size = { detail_width, detail_height },
-            position = { left_padding + grid_width + gap, top_padding, 1 },
-        },
-        [prefix .. '_detail_content'] = {
-            vertical_alignment = 'top',
-            parent = prefix .. '_detail_background',
-            horizontal_alignment = 'left',
-            size = { detail_width, detail_height },
-            position = { 0, 0, 1 },
-        },
-        [prefix .. '_title_text'] = {
-            vertical_alignment = 'top',
-            parent = 'screen',
-            horizontal_alignment = 'left',
-            size = { 1200, 50 },
-            position = { 100, 80, 1 },
-        },
+        }
+    end
+    scenegraph_definition[prefix .. '_detail_background'] = {
+        vertical_alignment = 'top',
+        parent = 'screen',
+        horizontal_alignment = 'left',
+        size = { detail_width, detail_height },
+        position = { single_detail and left_padding or (left_padding + list_width + gap), top_padding, 1 },
+    }
+    scenegraph_definition[prefix .. '_detail_content'] = {
+        vertical_alignment = 'top',
+        parent = prefix .. '_detail_background',
+        horizontal_alignment = 'left',
+        size = { detail_width, detail_height },
+        position = { 0, 0, 1 },
+    }
+    scenegraph_definition[prefix .. '_title_text'] = {
+        vertical_alignment = 'top',
+        parent = 'screen',
+        horizontal_alignment = 'left',
+        size = { 1200, 50 },
+        position = { 100, 80, 1 },
     }
 
     local widget_definitions = {
@@ -81,52 +87,57 @@ local function make_definitions(prefix, mod, extra_legend_inputs)
                 style = table.clone(UIFontSettings.header_1),
             },
         }, prefix .. '_title_text'),
-        [prefix .. '_search'] = UIWidget.create_definition(
+    }
+    if not single_detail then
+        widget_definitions[prefix .. '_search'] = UIWidget.create_definition(
             TextInputPassTemplates.terminal_input_field,
             prefix .. '_search',
-            { grid_width, search_height }
-        ),
-        [prefix .. '_list_background'] = UIWidget.create_definition({
+            { list_width, search_height }
+        )
+        widget_definitions[prefix .. '_list_background'] = UIWidget.create_definition({
             {
                 pass_type = 'rect',
                 style = {
                     color = { 200, 0, 0, 0 },
                 },
             },
-        }, prefix .. '_list_background'),
-        [prefix .. '_detail_background'] = UIWidget.create_definition({
-            {
-                pass_type = 'rect',
-                style = {
-                    color = { 200, 0, 0, 0 },
-                },
+        }, prefix .. '_list_background')
+    end
+    widget_definitions[prefix .. '_detail_background'] = UIWidget.create_definition({
+        {
+            pass_type = 'rect',
+            style = {
+                color = { 200, 0, 0, 0 },
             },
-        }, prefix .. '_detail_background'),
-    }
+        },
+    }, prefix .. '_detail_background')
 
     local fade_margin = 16
 
-    local list_grid_width = grid_width
-    local list_grid_height = grid_height - 13
-    local list_grid_settings = {
-        grid_id = 'list_grid',
-        scrollbar_width = scrollbar_width,
-        scrollbar_horizontal_offset = -scrollbar_width,
-        use_is_focused_for_navigation = false,
-        use_select_on_focused = false,
-        use_terminal_background = false,
-        hide_dividers = true,
-        hide_background = true,
-        using_custom_gamepad_navigation = false,
-        enable_gamepad_scrolling = true,
-        widget_icon_load_margin = 0,
-        top_padding = 0,
-        edge_padding = fade_margin,
-        grid_spacing = { 0, 2 },
-        grid_size = { list_grid_width - fade_margin, list_grid_height },
-        mask_size = { list_grid_width, list_grid_height },
-        title_height = 0,
-    }
+    local list_grid_width = list_width
+    local list_grid_height = list_height - 13
+    local list_grid_settings = nil
+    if not single_detail then
+        list_grid_settings = {
+            grid_id = 'list_grid',
+            scrollbar_width = scrollbar_width,
+            scrollbar_horizontal_offset = -scrollbar_width,
+            use_is_focused_for_navigation = false,
+            use_select_on_focused = false,
+            use_terminal_background = false,
+            hide_dividers = true,
+            hide_background = true,
+            using_custom_gamepad_navigation = false,
+            enable_gamepad_scrolling = true,
+            widget_icon_load_margin = 0,
+            top_padding = 0,
+            edge_padding = fade_margin,
+            grid_spacing = { 0, 2 },
+            grid_size = { list_grid_width - fade_margin, list_grid_height },
+            mask_size = { list_grid_width, list_grid_height },
+            title_height = 0,
+        }
+    end
 
     local detail_grid_width = detail_width
     local detail_grid_height = detail_height - 13

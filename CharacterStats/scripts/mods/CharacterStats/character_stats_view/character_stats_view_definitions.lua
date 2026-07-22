@@ -12,4 +12,5 @@ local extra_legend_inputs = {
     },
 }
 
-return make_shared_definitions('character_stats', mod, extra_legend_inputs)
+-- single_detail: drop the left list/search and span the detail panel full-width.
+return make_shared_definitions('character_stats', mod, extra_legend_inputs, true)

@@ -10,6 +10,9 @@ local function make_view(mod, config)
     local icon_packages = config.icon_packages
     local definitions_path = config.definitions_path
     local list_blueprints_path = config.list_blueprints_path
+    local single_detail = config.single_detail
+    -- When single_detail is set, the view skips the left list + search and shows only the
+    -- detail panel (used by CharacterStats, whose "list" was a single no-op row).
 
     local ViewElementInputLegend =
         mod:original_require('scripts/ui/view_elements/view_element_input_legend/view_element_input_legend')
@@ -55,10 +58,14 @@ local function make_view(mod, config)
         end
 
         self:_setup_input_legend()
-        self:_setup_search()
-        self:_setup_list_grid()
+        if not single_detail then
+            self:_setup_search()
+            self:_setup_list_grid()
+        end
         self:_setup_detail_grid()
-        self:_setup_entries()
+        if not single_detail then
+            self:_setup_entries()
+        end
     end
 
     function View:_present_list(entries)
@@ -115,7 +122,7 @@ local function make_view(mod, config)
     -- Grid elements ----------------------------------------------------------
 
     function View:_setup_list_grid()
-        if self._list_grid then
+        if not single_detail and self._list_grid then
             self._list_grid = nil
             self:_remove_element('list_grid')
         end
@@ -226,12 +233,14 @@ local function make_view(mod, config)
     function View:update(dt, t, input_service)
         self:_on_update(dt, t, input_service)
 
-        local search_widget = self._widgets_by_name[prefix .. '_search']
-        if search_widget then
-            local current_search = search_widget.content.input_text or ''
-            if current_search ~= self._last_search_text then
-                self._last_search_text = current_search
-                self:_setup_entries()
+        if not single_detail then
+            local search_widget = self._widgets_by_name[prefix .. '_search']
+            if search_widget then
+                local current_search = search_widget.content.input_text or ''
+                if current_search ~= self._last_search_text then
+                    self._last_search_text = current_search
+                    self:_setup_entries()
+                end
             end
         end
 
