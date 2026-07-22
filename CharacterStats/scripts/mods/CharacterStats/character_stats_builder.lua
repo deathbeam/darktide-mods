@@ -2,6 +2,7 @@ local mod = get_mod('CharacterStats')
 
 local Utils = mod:io_dofile('CharacterStats/scripts/mods/CharacterStats/character_stats_utils')
 local SharedUtils = mod:io_dofile('CharacterStats/scripts/mods/CharacterStats/shared/shared_utils')
+local ProfileUtils = mod:original_require('scripts/utilities/profile_utils')
 
 local COLORS = {
     HEADER = Color.terminal_text_header(255, true),
@@ -106,19 +107,26 @@ function build_stats()
     local profile = Utils.profile(player)
     local archetype = profile and profile.archetype
     local archetype_name = archetype and archetype.name
-    local archetype_loc_key = archetype and archetype.archetype_name
-    local archetype_label = (archetype_loc_key and SharedUtils.safe_localize(archetype_loc_key))
-        or archetype_name
-        or '-'
 
-    local header_text = mod:localize('current_character')
-    local subtext = archetype_label
+    local char_name = ''
+    local ok_name, n = pcall(player.name, player)
+    if ok_name and n and n ~= '' then
+        char_name = n
+    end
+    local archetype_title = ''
+    if profile and archetype then
+        local ok_t, t = pcall(ProfileUtils.character_archetype_title, profile, true)
+        archetype_title = (ok_t and t) or SharedUtils.safe_localize(archetype.archetype_name) or archetype_name or ''
+    end
+    local header_icon = archetype and archetype.archetype_badge or nil
+
+    local header_text = char_name ~= '' and char_name or mod:localize('current_character')
+    local subtext = archetype_title
 
     if not unit then
         local records = {}
-        _section(records, mod:localize('header_vitals'))
-        _stat(records, '', mod:localize('no_character'), COLORS.META)
-        return records, header_text, subtext
+        _add(records, { type = 'text', text = mod:localize('no_character') })
+        return records, header_text, subtext, header_icon
     end
 
     local records = {}
@@ -453,7 +461,7 @@ function build_stats()
         _spacer(records)
     end
 
-    return records, header_text, subtext
+    return records, header_text, subtext, header_icon
 end
 
 return {

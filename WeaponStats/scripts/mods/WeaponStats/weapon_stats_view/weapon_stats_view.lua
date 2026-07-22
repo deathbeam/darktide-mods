@@ -167,6 +167,7 @@ function WeaponStatsView:_present_detail(entry)
             text = entry.name,
             color = Color.terminal_text_header(255, true),
             icon = entry.icon,
+            icon_size = { 192, 96 },
             subtext = entry.subtext,
             subtext_color = entry.subtext_color,
         }

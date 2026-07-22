@@ -6,11 +6,16 @@ local make_view = mod:io_dofile('CharacterStats/scripts/mods/CharacterStats/shar
 local make_detail_blueprints =
     mod:io_dofile('CharacterStats/scripts/mods/CharacterStats/character_stats_view/character_stats_detail_blueprints')
 
+local ICON_PACKAGES = {
+    'packages/ui/views/main_menu_view/main_menu_view',
+}
+
 local CharacterStatsView = make_view(mod, {
     class_name = 'CharacterStatsView',
     prefix = 'character_stats',
     shared_utils = SharedUtils,
     single_detail = true,
+    icon_packages = ICON_PACKAGES,
     definitions_path = 'CharacterStats/scripts/mods/CharacterStats/character_stats_view/character_stats_view_definitions',
     list_blueprints_path = 'CharacterStats/scripts/mods/CharacterStats/character_stats_view/character_stats_view_blueprints',
 })
@@ -31,7 +36,7 @@ function CharacterStatsView:_present_detail()
     local blueprints = make_detail_blueprints(width)
 
     local layout = {}
-    local records, header_text, subtext = Builder.build_stats()
+    local records, header_text, subtext, header_icon = Builder.build_stats()
 
     self._detail_entry = { name = header_text or mod:localize('mod_name') }
 
@@ -40,6 +45,8 @@ function CharacterStatsView:_present_detail()
             widget_type = 'header_icon',
             text = header_text,
             subtext = subtext or '',
+            icon = header_icon,
+            icon_size = { 160, 96 },
             subtext_color = Color.terminal_text_body_sub_header(255, true),
             color = Color.terminal_text_header(255, true),
         }

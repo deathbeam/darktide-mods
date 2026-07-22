@@ -76,7 +76,7 @@ function EnemyStatsView:_present_detail(entry)
             widget_type = 'header_icon',
             text = entry.name,
             icon = category_icon,
-            icon_size = { 80, 80 },
+            icon_size = { 96, 96 },
             subtext = entry.subtext,
             subtext_color = entry.subtext_color,
             color = Color.terminal_text_header(255, true),

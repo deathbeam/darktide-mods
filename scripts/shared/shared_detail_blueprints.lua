@@ -296,7 +296,7 @@ local function make_blueprints(width)
             widget.content.icon = element.icon
             widget.content.subtext = element.subtext or ''
 
-            local icon_size = element.icon_size or { 192, 96 }
+            local icon_size = element.icon_size
             local icon_margin = 10
 
             widget.style.icon.size = icon_size
