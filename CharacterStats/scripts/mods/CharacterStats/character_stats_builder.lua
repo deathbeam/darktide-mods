@@ -62,18 +62,7 @@ local function _sources(records, folded, stat_key, stat_type)
     if not list or #list == 0 then
         return
     end
-    local merged, by_name = {}, {}
-    for i = 1, #list do
-        local src = list[i]
-        local existing = by_name[src.name]
-        if existing then
-            existing.delta = existing.delta + src.delta
-        else
-            local copy = { name = src.name, delta = src.delta }
-            by_name[src.name] = copy
-            merged[#merged + 1] = copy
-        end
-    end
+    local merged = Utils._merge_sources_by_name(list, 'delta', stat_type)
     for i = 1, #merged do
         local src = merged[i]
         local value_str
@@ -192,112 +181,6 @@ function build_stats()
     end
     _spacer(records)
 
-    -- DEFENSE
-    local dmg_taken = Utils.damage_taken(folded)
-    local has_health = max_health and max_health > 0
-    local has_defense = dmg_taken and dmg_taken.generic ~= 1
-
-    _section(records, mod:localize('header_defense'), COLORS.DEFENSE)
-    if has_defense and has_health then
-        _stat(records, mod:localize('stat_damage_reduction'), _fmt_pct(1 - dmg_taken.generic), COLORS.DEFENSE)
-        _sources(records, folded, 'damage_taken_multiplier', 'mult')
-        _sources(records, folded, 'damage_taken_modifier', 'add')
-        if dmg_taken.melee ~= dmg_taken.generic then
-            _stat(records, mod:localize('stat_reduction_melee'), _fmt_pct(1 - dmg_taken.melee), COLORS.DEFENSE)
-            _sources(records, folded, 'melee_damage_taken_multiplier', 'mult')
-            _sources(records, folded, 'melee_damage_taken_modifier', 'add')
-        end
-        if dmg_taken.ranged ~= dmg_taken.generic then
-            _stat(records, mod:localize('stat_reduction_ranged'), _fmt_pct(1 - dmg_taken.ranged), COLORS.DEFENSE)
-            _sources(records, folded, 'ranged_damage_taken_multiplier', 'mult')
-            _sources(records, folded, 'ranged_damage_taken_modifier', 'add')
-        end
-    end
-
-    local tough_taken = Utils.toughness_damage_taken(folded)
-    if tough_taken then
-        if tough_taken.melee ~= 1 then
-            _stat(records, mod:localize('stat_tough_reduction_melee'), _fmt_pct(1 - tough_taken.melee), COLORS.DEFENSE)
-            _sources(records, folded, 'toughness_damage_taken_multiplier', 'mult')
-            _sources(records, folded, 'melee_toughness_damage_taken_multiplier', 'mult')
-            _sources(records, folded, 'melee_toughness_damage_taken_modifier', 'add')
-        end
-        if tough_taken.ranged ~= 1 then
-            _stat(
-                records,
-                mod:localize('stat_tough_reduction_ranged'),
-                _fmt_pct(1 - tough_taken.ranged),
-                COLORS.DEFENSE
-            )
-            _sources(records, folded, 'toughness_damage_taken_multiplier', 'mult')
-            _sources(records, folded, 'ranged_toughness_damage_taken_multiplier', 'mult')
-            _sources(records, folded, 'ranged_toughness_damage_taken_modifier', 'add')
-        end
-    end
-
-    local source_terms = Utils.damage_taken_from_sources(folded)
-    if source_terms then
-        for i = 1, #source_terms do
-            local t = source_terms[i]
-            local reduction = t.kind == 'mult' and (1 - t.value) or -t.delta
-            _stat(records, mod:localize(t.label), _fmt_pct(reduction), COLORS.DEFENSE)
-            _sources(records, folded, t.key, t.kind == 'mult' and 'mult' or 'add')
-        end
-    end
-    _spacer(records)
-
-    -- TOUGHNESS regen
-    if vitals.toughness_template then
-        local tough_template = vitals.toughness_template
-        local regen_rate, coherency_mult =
-            Utils.toughness_regen(unit, stat_buffs, tough_template, vitals.max_toughness, folded)
-        local regen_delay = Utils.toughness_regen_delay(unit, stat_buffs, tough_template)
-        local bounty =
-            Utils.toughness_melee_bounty(unit, stat_buffs, tough_template, vitals.max_toughness, wep_template)
-        local bonus_regen, bonus_sources = Utils.toughness_bonus_regen(unit, profile, toggles)
-
-        _section(records, mod:localize('header_toughness'), COLORS.DEFENSE)
-        if regen_rate then
-            _stat(records, mod:localize('stat_toughness_regen'), string.format('%.1f/s', regen_rate), COLORS.DEFENSE)
-            _sources(records, folded, 'toughness_regen_rate_modifier', 'add')
-            _sources(records, folded, 'toughness_regen_rate_multiplier', 'mult')
-            _sources(records, folded, 'toughness_regen_percent', 'add')
-        end
-        if coherency_mult and coherency_mult ~= 0 then
-            _sources(records, folded, 'toughness_coherency_regen_rate_modifier', 'add')
-            _sources(records, folded, 'toughness_extra_regen_rate', 'add')
-            _sources(records, folded, 'toughness_coherency_regen_rate_multiplier', 'mult')
-        end
-        -- Bonus regen from proc/over-time talents: these call Toughness.replenish_percentage
-        -- directly (not stat buffs), so they are computed separately and shown per-source.
-        if bonus_regen and vitals.max_toughness then
-            local bonus_per_s = bonus_regen * vitals.max_toughness
-            _stat(records, mod:localize('stat_tough_bonus_regen'), string.format('%.1f/s', bonus_per_s), COLORS.DEFENSE)
-            if bonus_sources then
-                for i = 1, #bonus_sources do
-                    local src = bonus_sources[i]
-                    local src_per_s = src.per_second * vitals.max_toughness
-                    _add(records, {
-                        type = 'stat',
-                        label = src.name,
-                        value = string.format('%.1f/s (%.1f%%/s)', src_per_s, src.per_second * 100),
-                        label_color = COLORS.META,
-                        value_color = COLORS.META,
-                        indent = 1,
-                        stripe = true,
-                    })
-                end
-            end
-        end
-        if regen_delay then
-            _stat(records, mod:localize('stat_tough_regen_delay'), string.format('%.1fs', regen_delay), COLORS.DEFENSE)
-        end
-        if bounty and bounty > 0 then
-            _stat(records, mod:localize('stat_tough_bounty'), _fmt_num(bounty), COLORS.DEFENSE)
-        end
-        _spacer(records)
-    end
-
     -- MOBILITY
     local mobility = Utils.mobility(unit, stat_buffs, folded)
     if mobility then
@@ -347,6 +230,125 @@ function build_stats()
         end
         if mobility.dodge_speed and mobility.dodge_speed ~= 1 then
             _stat(records, mod:localize('stat_dodge_speed'), _fmt_pct(mobility.dodge_speed), COLORS.MOBILITY)
+        end
+        _spacer(records)
+    end
+
+    -- DEFENSE
+    local dmg_taken = Utils.damage_taken(folded)
+    local has_health = max_health and max_health > 0
+    local has_defense = dmg_taken and dmg_taken.generic ~= 1
+
+    _section(records, mod:localize('header_defense'), COLORS.DEFENSE)
+    if has_defense and has_health then
+        _stat(records, mod:localize('stat_damage_reduction'), _fmt_pct(1 - dmg_taken.generic), COLORS.DEFENSE)
+        _sources(records, folded, 'damage_taken_multiplier', 'mult')
+        _sources(records, folded, 'damage_taken_modifier', 'add')
+        if dmg_taken.melee ~= dmg_taken.generic then
+            _stat(records, mod:localize('stat_reduction_melee'), _fmt_pct(1 - dmg_taken.melee), COLORS.DEFENSE)
+            _sources(records, folded, 'melee_damage_taken_multiplier', 'mult')
+            _sources(records, folded, 'melee_damage_taken_modifier', 'add')
+        end
+        if dmg_taken.ranged ~= dmg_taken.generic then
+            _stat(records, mod:localize('stat_reduction_ranged'), _fmt_pct(1 - dmg_taken.ranged), COLORS.DEFENSE)
+            _sources(records, folded, 'ranged_damage_taken_multiplier', 'mult')
+            _sources(records, folded, 'ranged_damage_taken_modifier', 'add')
+        end
+    end
+
+    local tough_taken = Utils.toughness_damage_taken(folded)
+    if tough_taken then
+        if tough_taken.melee ~= 1 then
+            _stat(records, mod:localize('stat_tough_reduction_melee'), _fmt_pct(1 - tough_taken.melee), COLORS.DEFENSE)
+            _sources(records, folded, 'toughness_damage_taken_multiplier', 'mult')
+            _sources(records, folded, 'melee_toughness_damage_taken_multiplier', 'mult')
+            _sources(records, folded, 'melee_toughness_damage_taken_modifier', 'add')
+        end
+        if tough_taken.ranged ~= 1 then
+            _stat(
+                records,
+                mod:localize('stat_tough_reduction_ranged'),
+                _fmt_pct(1 - tough_taken.ranged),
+                COLORS.DEFENSE
+            )
+            _sources(records, folded, 'toughness_damage_taken_multiplier', 'mult')
+            _sources(records, folded, 'ranged_toughness_damage_taken_multiplier', 'mult')
+            _sources(records, folded, 'ranged_toughness_damage_taken_modifier', 'add')
+        end
+    end
+
+    local source_terms = Utils.damage_taken_from_sources(folded)
+    if source_terms then
+        for i = 1, #source_terms do
+            local t = source_terms[i]
+            local reduction = t.kind == 'mult' and (1 - t.value) or -t.delta
+            _stat(records, mod:localize(t.label), _fmt_pct(reduction), COLORS.DEFENSE)
+            -- A grouped term's keys share identical sources (one perk buffs every breed
+            -- in the group to the same value), so render sources from the first key only.
+            _sources(records, folded, t.keys[1], t.kind == 'mult' and 'mult' or 'add')
+        end
+    end
+    _spacer(records)
+
+    -- TOUGHNESS regen
+    if vitals.toughness_template then
+        local tough_template = vitals.toughness_template
+        local coherency_regen, percent_regen, coherency_mult =
+            Utils.toughness_regen(unit, stat_buffs, tough_template, vitals.max_toughness, folded)
+        local regen_delay = Utils.toughness_regen_delay(unit, stat_buffs, tough_template)
+        local bounty =
+            Utils.toughness_melee_bounty(unit, stat_buffs, tough_template, vitals.max_toughness, wep_template)
+        local bonus_regen, bonus_sources = Utils.toughness_bonus_regen(unit, profile, toggles)
+
+        _section(records, mod:localize('header_toughness'), COLORS.DEFENSE)
+        if coherency_regen then
+            _stat(
+                records,
+                mod:localize('stat_toughness_regen'),
+                string.format('%.1f/s', coherency_regen),
+                COLORS.DEFENSE
+            )
+            _sources(records, folded, 'toughness_regen_rate_modifier', 'add')
+            _sources(records, folded, 'toughness_regen_rate_multiplier', 'mult')
+            _sources(records, folded, 'toughness_coherency_regen_rate_modifier', 'add')
+            _sources(records, folded, 'toughness_extra_regen_rate', 'add')
+            _sources(records, folded, 'toughness_coherency_regen_rate_multiplier', 'mult')
+        end
+        if percent_regen and percent_regen ~= 0 then
+            _stat(
+                records,
+                mod:localize('stat_toughness_regen_percent'),
+                string.format('%.1f/s', percent_regen),
+                COLORS.DEFENSE
+            )
+            _sources(records, folded, 'toughness_regen_percent', 'add')
+        end
+        -- Bonus regen from proc/over-time talents: these call Toughness.replenish_percentage
+        -- directly (not stat buffs), so they are computed separately and shown per-source.
+        if bonus_regen and vitals.max_toughness then
+            local bonus_per_s = bonus_regen * vitals.max_toughness
+            _stat(records, mod:localize('stat_tough_bonus_regen'), string.format('%.1f/s', bonus_per_s), COLORS.DEFENSE)
+            if bonus_sources then
+                for i = 1, #bonus_sources do
+                    local src = bonus_sources[i]
+                    local src_per_s = src.per_second * vitals.max_toughness
+                    _add(records, {
+                        type = 'stat',
+                        label = src.name,
+                        value = string.format('%.1f/s (%.1f%%/s)', src_per_s, src.per_second * 100),
+                        label_color = COLORS.META,
+                        value_color = COLORS.META,
+                        indent = 1,
+                        stripe = true,
+                    })
+                end
+            end
+        end
+        if regen_delay then
+            _stat(records, mod:localize('stat_tough_regen_delay'), string.format('%.1fs', regen_delay), COLORS.DEFENSE)
+        end
+        if bounty and bounty > 0 then
+            _stat(records, mod:localize('stat_tough_bounty'), _fmt_num(bounty), COLORS.DEFENSE)
         end
         _spacer(records)
     end

@@ -242,7 +242,9 @@ function SharedUtils.layout_to_markdown(title, layout)
         elseif wt == 'stat' or wt == 'substat' then
             local label = e.label or ''
             local value = e.value or ''
-            lines[#lines + 1] = string.format('- **%s**: %s', _strip_rich_text(label), _strip_rich_text(value))
+            local indent = string.rep('  ', e.indent or 0)
+            lines[#lines + 1] =
+                string.format('%s- **%s**: %s', indent, _strip_rich_text(label), _strip_rich_text(value))
         elseif wt == 'text' then
             lines[#lines + 1] = (e.text or '')
         elseif wt == 'table' then

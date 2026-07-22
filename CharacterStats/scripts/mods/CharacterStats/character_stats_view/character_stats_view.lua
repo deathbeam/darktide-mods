@@ -16,7 +16,7 @@ local CharacterStatsView = make_view(mod, {
 })
 
 function CharacterStatsView:_on_init(settings, context)
-    self._detail_entry = true
+    self._detail_entry = { name = mod:localize('mod_name') }
     self._detail_built = false
 end
 
@@ -27,12 +27,13 @@ function CharacterStatsView:_present_detail()
         return
     end
 
-    self._detail_entry = true
     local width = self:_detail_width()
     local blueprints = make_detail_blueprints(width)
 
     local layout = {}
     local records, header_text, subtext = Builder.build_stats()
+
+    self._detail_entry = { name = header_text or mod:localize('mod_name') }
 
     if header_text then
         layout[#layout + 1] = {

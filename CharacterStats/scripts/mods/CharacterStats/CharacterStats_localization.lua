@@ -9,7 +9,11 @@ return {
             ['zh-cn'] = '复制到剪贴板',
         },
     },
-    game_loc = {},
+    game_loc = {
+        stat_toughness_regen = 'loc_player_buff_coherency_toughness_regen',
+        coherency_source = 'loc_player_buff_coherency_toughness_regen',
+        stat_toughness_regen_percent = 'loc_toughness_tutorial',
+    },
 
     mod_name = {
         en = 'Character Stats',
@@ -135,6 +139,10 @@ return {
 
     -- Stat labels: recovery
     stat_toughness_regen = {
+        en = 'Coherency Toughness Regeneration',
+        ['zh-cn'] = '共鸣韧性恢复',
+    },
+    stat_toughness_regen_percent = {
         en = 'Toughness Regeneration',
         ['zh-cn'] = '韧性恢复',
     },
@@ -207,6 +215,38 @@ return {
     stat_taken_from_toxic_gas = {
         en = 'Reduction vs Toxic Gas',
         ['zh-cn'] = '毒气减免',
+    },
+    stat_taken_from_corruption = {
+        en = 'Damage Resistance (Corruption)',
+        ['zh-cn'] = '腐化伤害抗性',
+    },
+    stat_taken_from_grimoire = {
+        en = 'Damage Resistance (Grimoires)',
+        ['zh-cn'] = '典籍伤害抗性',
+    },
+    stat_taken_from_bombers = {
+        en = 'Damage Resistance (Bombers)',
+        ['zh-cn'] = '轰炸者伤害抗性',
+    },
+    stat_taken_from_flamers = {
+        en = 'Damage Resistance (Tox Flamers)',
+        ['zh-cn'] = '喷火兵伤害抗性',
+    },
+    stat_taken_from_gunners = {
+        en = 'Damage Resistance (Gunners)',
+        ['zh-cn'] = '枪手伤害抗性',
+    },
+    stat_taken_from_mutants = {
+        en = 'Damage Resistance (Mutants)',
+        ['zh-cn'] = '变异者伤害抗性',
+    },
+    stat_taken_from_pox_hounds = {
+        en = 'Damage Resistance (Pox Hounds)',
+        ['zh-cn'] = '疫犬伤害抗性',
+    },
+    stat_taken_from_snipers = {
+        en = 'Damage Resistance (Snipers)',
+        ['zh-cn'] = '狙击手伤害抗性',
     },
 
     -- Stat labels: offense
