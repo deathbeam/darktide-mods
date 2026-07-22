@@ -233,7 +233,6 @@ function SharedUtils.layout_to_markdown(title, layout)
                 lines[#lines + 1] = '*' .. _strip_rich_text(e.subtext) .. '*'
             end
         elseif wt == 'section' then
-        elseif wt == 'section' then
             local depth = e.level == 2 and 4 or (e.level == 3 and 5 or 3)
             lines[#lines + 1] = ''
             lines[#lines + 1] = string.rep('#', depth) .. ' ' .. (e.text or '')
