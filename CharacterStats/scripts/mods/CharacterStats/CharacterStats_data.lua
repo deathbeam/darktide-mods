@@ -20,6 +20,15 @@ return {
                 view_name = 'character_stats_view',
             },
             {
+                setting_id = 'weapon_slot',
+                type = 'dropdown',
+                default_value = 'slot_primary',
+                options = {
+                    { value = 'slot_primary', text = 'weapon_slot_primary' },
+                    { value = 'slot_secondary', text = 'weapon_slot_secondary' },
+                },
+            },
+            {
                 setting_id = 'assume_proc_stacks',
                 type = 'checkbox',
                 default_value = true,

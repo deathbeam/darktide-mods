@@ -16,6 +16,7 @@ SharedUtils.register_stats_view(
 -- Refresh the open view's detail panel when an assume/breakdown toggle flips so the
 -- folded stat buffs recompute live. No-op when the view isn't active.
 local REFRESH_SETTINGS = {
+    weapon_slot = true,
     assume_proc_stacks = true,
     coherency_allies = true,
     havoc_rank = true,

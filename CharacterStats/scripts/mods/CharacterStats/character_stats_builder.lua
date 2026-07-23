@@ -55,7 +55,7 @@ local function _fmt_pct(n)
     return string.format(fmt, pct)
 end
 
--- "<base> (<suffix>)" — e.g. "Toughness Damage Reduction (Melee)". The suffix words come
+-- "<base> (<suffix>)", e.g. "Toughness Damage Reduction (Melee)". The suffix words come
 -- from the game's own loc keys (proxied via game_loc), so variants stay consistent with it.
 local function _variant(base_key, suffix_key)
     return mod:localize(base_key) .. ' (' .. mod:localize(suffix_key) .. ')'
@@ -80,7 +80,7 @@ local function _sources(records, folded, stat_key, stat_type)
         elseif stat_type == 'flat' then
             value_str = string.format('%s%.0f', src.delta >= 0 and '+' or '', src.delta)
         else
-            value_str = string.format('%s%.0f%%', src.delta >= 0 and '+' or '', src.delta * 100)
+            value_str = (src.delta >= 0 and '+' or '') .. _fmt_pct(src.delta)
         end
         _add(records, {
             type = 'stat',
@@ -92,6 +92,29 @@ local function _sources(records, folded, stat_key, stat_type)
             stripe = true,
         })
     end
+end
+
+-- A source row for a base (non-buff) value: the archetype/weapon contribution that
+-- isn't in the folded buff sources. Shown first so the breakdown reads base + buffs = total.
+local function _base_source(records, label, delta, stat_type)
+    if not delta or delta == 0 then
+        return
+    end
+    local value_str
+    if stat_type == 'flat' then
+        value_str = string.format('%s%.0f', delta >= 0 and '+' or '', delta)
+    else
+        value_str = (delta >= 0 and '+' or '') .. _fmt_pct(delta)
+    end
+    _add(records, {
+        type = 'stat',
+        label = label,
+        value = value_str,
+        label_color = COLORS.META,
+        value_color = COLORS.META,
+        indent = 1,
+        stripe = true,
+    })
 end
 
 -- Render a stat line (delta as %) plus its contributing sources, only when the stat has at
@@ -141,9 +164,11 @@ function build_stats()
 
     local vitals = Utils.vitals(unit)
     local stat_buffs = vitals.stat_buffs
-    local wep_template = Utils.wielded_weapon_template(unit)
+    local weapon_slot = mod:get('weapon_slot') or 'slot_primary'
+    local wep_template = Utils.wielded_weapon_template(unit, weapon_slot)
 
     local toggles = {
+        weapon_slot = weapon_slot,
         assume_proc_stacks = mod:get('assume_proc_stacks'),
         havoc_rank = mod:get('havoc_rank') or 0,
         coherency_allies = mod:get('coherency_allies') or 3,
@@ -182,6 +207,7 @@ function build_stats()
     _section(records, mod:localize('header_vitals'), COLORS.VITAL)
     if max_health then
         _stat(records, mod:localize('stat_health'), _fmt_num(max_health), COLORS.VITAL)
+        _base_source(records, mod:localize('source_base'), vitals.archetype and vitals.archetype.health, 'flat')
         _sources(records, folded, 'max_health_modifier', 'add')
         _sources(records, folded, 'max_health_multiplier', 'add')
     end
@@ -190,6 +216,12 @@ function build_stats()
     end
     if vitals.max_toughness then
         _stat(records, mod:localize('stat_toughness'), _fmt_num(vitals.max_toughness), COLORS.VITAL)
+        _base_source(
+            records,
+            mod:localize('source_base'),
+            vitals.toughness_template and vitals.toughness_template.max,
+            'flat'
+        )
         _sources(records, folded, 'toughness_bonus', 'add')
         _sources(records, folded, 'toughness', 'flat')
         _sources(records, folded, 'toughness_bonus_flat', 'flat')
@@ -288,7 +320,7 @@ function build_stats()
         _sources(records, folded, 'ranged_attack_speed', 'add')
     end
 
-    local crit = Utils.crit_chance(player, unit, wep_template, folded)
+    local crit = Utils.crit_chance(folded, wep_template)
     if crit then
         _stat(records, mod:localize('stat_crit_chance'), _fmt_pct(crit), COLORS.OFFENSE)
         _sources(records, folded, 'critical_strike_chance', 'add')

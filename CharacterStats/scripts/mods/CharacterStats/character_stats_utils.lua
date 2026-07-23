@@ -5,6 +5,9 @@ local WeaponTemplate = mod:original_require('scripts/utilities/weapon/weapon_tem
 local BuffSettings = mod:original_require('scripts/settings/buff/buff_settings')
 local BuffTemplates = mod:original_require('scripts/settings/buff/buff_templates')
 local WeaponTraitTemplates = mod:original_require('scripts/settings/equipment/weapon_traits/weapon_trait_templates')
+local WeaponHandlingTemplates =
+    mod:original_require('scripts/settings/equipment/weapon_handling_templates/weapon_handling_templates')
+local WeaponTweakTemplates = mod:original_require('scripts/extension_systems/weapon/utilities/weapon_tweak_templates')
 local MasterItems = mod:original_require('scripts/backend/master_items')
 local HomePlanets = mod:original_require('scripts/settings/character/home_planets')
 local Childhood = mod:original_require('scripts/settings/character/childhood')
@@ -83,6 +86,29 @@ local function _weapon_toughness_template(unit)
     return weapon_ext and weapon_ext:toughness_template() or nil
 end
 
+-- Max crit chance_modifier across the weapon template's actions. Ninja weapons (combat knife,
+-- hatchets, saws, shivs) carry a crit bump on their handling template. The template is
+-- preparsed at load, which mutates each action's weapon_handling_template into a lookup key,
+-- so the original name is recovered via get_template_identifiers().base_identifier.
+local function _weapon_crit_modifier(wep_template)
+    if not wep_template or not wep_template.__base_template_lookup then
+        return nil
+    end
+    local best = nil
+    for action_name in pairs(wep_template.actions or EMPTY) do
+        local base_id = WeaponTweakTemplates.get_template_identifiers(wep_template, 'weapon_handling', action_name)
+        local cs = base_id and WeaponHandlingTemplates[base_id] and WeaponHandlingTemplates[base_id].critical_strike
+        local mod = cs and cs.chance_modifier
+        if type(mod) == 'table' then
+            mod = mod.lerp_perfect or mod.lerp_basic
+        end
+        if type(mod) == 'number' and (best == nil or mod > best) then
+            best = mod
+        end
+    end
+    return best
+end
+
 local function _weapon_handling(unit)
     local weapon_ext = _ext(unit, 'weapon_system')
     return weapon_ext and weapon_ext:weapon_handling_template() or nil
@@ -126,6 +152,22 @@ end
 local function _stat_base(name)
     local b = stat_buff_type_base[name]
     return b ~= nil and b or 1
+end
+
+-- Inject a single additive stat contribution (value + named source) into the folded result,
+-- bypassing the buff template path. Used for non-buff base values like the weapon crit bump.
+local function _inject_source(result, stat_name, value, source)
+    if not value or value == 0 or not source then
+        return
+    end
+    local cur = result.values[stat_name]
+    result.values[stat_name] = (cur or _stat_base(stat_name)) + value
+    local list = result.sources[stat_name]
+    if not list then
+        list = {}
+        result.sources[stat_name] = list
+    end
+    list[#list + 1] = { name = source, delta = value, stacks = 1 }
 end
 
 local function _merge(result, stat_buffs, stack_count, source, lerp_t)
@@ -279,38 +321,39 @@ local function _display_for_buff(template_name)
     return (template and SharedUtils.safe_localize(template.display_name)) or SharedUtils.prettify(template_name)
 end
 
-local function _weapon_buffs(player)
+local function _weapon_buffs(player, slot_name)
     local vl = _equip_loadout(player)
-    local cached = vl and MasterItems.get_cached()
+    if not vl or not slot_name then
+        return {}
+    end
+    local cached = MasterItems.get_cached()
     if not cached then
         return {}
     end
     local out = {}
-    for _, slot in ipairs({ 'slot_primary', 'slot_secondary' }) do
-        local item = vl:item_from_slot(slot)
-        if item and item.traits then
-            for i = 1, #item.traits do
-                local trait = item.traits[i]
-                local trait_item = trait.id and cached[trait.id]
-                local trait_name = trait_item and trait_item.trait
-                local def = trait_name and WeaponTraitTemplates[trait_name]
-                if def and def.buffs then
-                    local rarity = trait.rarity or 1
-                    for buff_template_name, levels in pairs(def.buffs) do
-                        local override
-                        for r = rarity, 1, -1 do
-                            override = levels[r]
-                            if override then
-                                break
-                            end
+    local item = vl:item_from_slot(slot_name)
+    if item and item.traits then
+        for i = 1, #item.traits do
+            local trait = item.traits[i]
+            local trait_item = trait.id and cached[trait.id]
+            local trait_name = trait_item and trait_item.trait
+            local def = trait_name and WeaponTraitTemplates[trait_name]
+            if def and def.buffs then
+                local rarity = trait.rarity or 1
+                for buff_template_name, levels in pairs(def.buffs) do
+                    local override
+                    for r = rarity, 1, -1 do
+                        override = levels[r]
+                        if override then
+                            break
                         end
-                        out[#out + 1] = {
-                            template_name = buff_template_name,
-                            override_data = override,
-                            display_name = SharedUtils.safe_localize(trait_item and trait_item.display_name)
-                                or _display_for_buff(buff_template_name),
-                        }
                     end
+                    out[#out + 1] = {
+                        template_name = buff_template_name,
+                        override_data = override,
+                        display_name = SharedUtils.safe_localize(trait_item and trait_item.display_name)
+                            or _display_for_buff(buff_template_name),
+                    }
                 end
             end
         end
@@ -548,15 +591,13 @@ function M.character_bio(profile)
     return filtered
 end
 
-function M.wielded_weapon_template(unit)
-    local weapon_ext = _ext(unit, 'weapon_system')
-    if not weapon_ext then
-        return nil, nil
+function M.wielded_weapon_template(unit, slot_name)
+    local vl = unit and ScriptUnit.has_extension(unit, 'visual_loadout_system')
+    if not vl or not slot_name then
+        return nil
     end
-    local ok, template = pcall(function()
-        return weapon_ext.weapon_template and weapon_ext:weapon_template()
-    end)
-    return (ok and template) or nil, weapon_ext
+    local item = vl:item_from_slot(slot_name)
+    return item and WeaponTemplate.weapon_template_from_item(item) or nil
 end
 
 function M.vitals(unit)
@@ -650,7 +691,8 @@ function M.folded_stat_buffs(unit, profile, player, toggles)
         end
     end
 
-    for _, entry in ipairs(_weapon_buffs(player)) do
+    local weapon_slot = toggles.weapon_slot
+    for _, entry in ipairs(_weapon_buffs(player, weapon_slot)) do
         local template = BuffTemplates[entry.template_name]
         if template then
             local stacks = _stacks_for(template, toggles)
@@ -665,6 +707,22 @@ function M.folded_stat_buffs(unit, profile, player, toggles)
             )
             _merge(result, (override and override.proc_stat_buffs) or template.proc_stat_buffs, stacks, source)
         end
+    end
+
+    local archetype = profile and profile.archetype
+    local base_crit = (archetype and archetype.base_critical_strike_chance) or 0
+    if base_crit ~= 0 then
+        _inject_source(result, 'critical_strike_chance', base_crit, mod:localize('source_base'))
+    end
+    local wep_template = M.wielded_weapon_template(unit, weapon_slot)
+    local crit_mod = _weapon_crit_modifier(wep_template)
+    if crit_mod and crit_mod ~= 0 then
+        local vl = unit and ScriptUnit.has_extension(unit, 'visual_loadout_system')
+        local item = vl and weapon_slot and vl:item_from_slot(weapon_slot)
+        local weapon_name = (item and SharedUtils.safe_localize(item.display_name))
+            or (wep_template and wep_template.name)
+            or mod:localize('mod_name')
+        _inject_source(result, 'critical_strike_chance', crit_mod, weapon_name)
     end
 
     for _, entry in ipairs(_gadget_buffs(player)) do
@@ -686,7 +744,7 @@ function M.sources_for_stat(folded, stat_key)
     return folded and folded.sources and folded.sources[stat_key] or nil
 end
 
-function M.crit_chance(player, unit, wep_template, folded)
+function M.crit_chance(folded, wep_template)
     local s = folded and folded.values
     if not s then
         return nil
@@ -697,14 +755,7 @@ function M.crit_chance(player, unit, wep_template, folded)
     elseif _is_ranged(wep_template) then
         add = add + (s.ranged_critical_strike_chance or 0)
     end
-    local handling = _weapon_handling(unit)
-    if handling and handling.critical_strike then
-        add = add + (handling.critical_strike.chance_modifier or 0)
-    end
-    local profile = M.profile(player)
-    local archetype = profile and profile.archetype
-    local base = (archetype and archetype.base_critical_strike_chance) or 0
-    local chance = math.clamp(base + add, 0, 1)
+    local chance = math.clamp(add, 0, 1)
     return chance * (1 - (s.critical_strike_chance_to_damage_convert or 0))
 end
 

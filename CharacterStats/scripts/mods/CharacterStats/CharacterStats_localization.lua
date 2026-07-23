@@ -115,6 +115,22 @@ return {
         en = 'Coherency',
         ['zh-cn'] = '连携',
     },
+    source_base = {
+        en = 'Base',
+        ['zh-cn'] = '基础',
+    },
+    weapon_slot = {
+        en = 'Weapon Slot',
+        ['zh-cn'] = '武器槽位',
+    },
+    weapon_slot_primary = {
+        en = 'Primary Weapon',
+        ['zh-cn'] = '主武器',
+    },
+    weapon_slot_secondary = {
+        en = 'Secondary Weapon',
+        ['zh-cn'] = '副武器',
+    },
 
     -- Stat labels: vitals
     stat_health = {
