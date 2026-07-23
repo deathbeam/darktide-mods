@@ -92,11 +92,6 @@ local function _weapon_crit_modifier(wep_template)
     return best
 end
 
-local function _weapon_handling(unit)
-    local weapon_ext = _ext(unit, 'weapon_system')
-    return weapon_ext and weapon_ext:weapon_handling_template() or nil
-end
-
 local function _resolve_crime(key)
     return Crimes[CrimesCompabilityMap[key] or key]
 end
@@ -722,36 +717,6 @@ function M.crit_chance(folded, wep_template)
     return chance * (1 - (s.critical_strike_chance_to_damage_convert or 0))
 end
 
-function M.crit_damage_mult(folded, wep_template)
-    local s = folded and folded.values
-    if not s then
-        return nil
-    end
-    local crit = s.critical_strike_damage or 1
-    if _is_melee(wep_template) then
-        crit = crit + (s.melee_critical_strike_damage or 1) - 1
-    elseif _is_ranged(wep_template) then
-        crit = crit + (s.ranged_critical_strike_damage or 1) - 1
-    end
-    return crit
-end
-
-function M.attack_speed(unit, folded, wep_template)
-    local s = folded and folded.values
-    if not s or not wep_template then
-        return nil
-    end
-    local base = s.attack_speed or 1
-    local factor = _is_melee(wep_template) and (s.melee_attack_speed or 1)
-        or _is_ranged(wep_template) and (base + (s.ranged_attack_speed or 1) - 1)
-        or base
-    local handling = _weapon_handling(unit)
-    if handling then
-        factor = factor * (handling.time_scale or 1)
-    end
-    return factor
-end
-
 function M.mobility(unit, live_stat_buffs, folded)
     local s = live_stat_buffs
     if not unit or not s then
@@ -841,7 +806,7 @@ function M.toughness_regen(unit, live_stat_buffs, tough_template, max_toughness,
         * (fv and fv.toughness_coherency_regen_rate_multiplier or s.toughness_coherency_regen_rate_multiplier or 1)
     local coherency_regen = base_rate * wep_mod * rate_modifier * coherency_modifier
     local percent_regen = (fv and fv.toughness_regen_percent or s.toughness_regen_percent or 0) * (max_toughness or 0)
-    return coherency_regen, percent_regen, coherency_modifier
+    return coherency_regen, percent_regen
 end
 
 function M.toughness_regen_delay(unit, live_stat_buffs, tough_template)
@@ -853,76 +818,6 @@ function M.toughness_regen_delay(unit, live_stat_buffs, tough_template)
     local wep_mod = wep_tough and wep_tough.regeneration_delay_modifier or 1
     local buff_mod = (s.toughness_regen_delay_modifier or 1) * (s.toughness_regen_delay_multiplier or 1)
     return tough_template.regeneration_delay * wep_mod * buff_mod
-end
-
-function M.toughness_melee_bounty(unit, live_stat_buffs, tough_template, max_toughness, wep_template)
-    local s = live_stat_buffs
-    if not s or not tough_template or not max_toughness or not _is_melee(wep_template) then
-        return nil
-    end
-    local wep_tough = _weapon_toughness_template(unit)
-    local recovery = tough_template.recovery_percentages or EMPTY
-    local wep_mod = wep_tough
-            and wep_tough.recovery_percentage_modifiers
-            and wep_tough.recovery_percentage_modifiers.melee_kill
-        or 1
-    local replenish = (s.toughness_melee_replenish or 1) + (s.toughness_replenish_multiplier or 1) - 1
-    return max_toughness * (recovery.melee_kill or 0) * replenish * wep_mod
-end
-
--- Mirrors damage_calculation.lua:_calculate_damage_buff: sums (value-1) across additive attacker
--- buffs with melee/ranged layered on the generic base.
-function M.damage_multiplier(folded)
-    local v = _folded_values(folded)
-    if not v then
-        return nil
-    end
-    local function compose(is_melee, is_ranged)
-        local add = 0
-        local function term(key)
-            local val = v[key]
-            if type(val) == 'number' and val ~= 1 then
-                add = add + val - 1
-            end
-        end
-        term('damage')
-        term('power_level_modifier')
-        if is_melee then
-            term('melee_damage')
-            term('melee_power_level_modifier')
-        elseif is_ranged then
-            term('ranged_damage')
-            term('ranged_power_level_modifier')
-        end
-        return 1 + add
-    end
-    return { generic = compose(false, false), melee = compose(true, false), ranged = compose(false, true) }
-end
-
--- Mirrors the weakspot/finesse damage fold in damage_calculation.lua:_finesse_boost_damage:
--- the per-hit multiplier is 1 + sum(weakspot_damage-1) with melee/ranged variants layered on.
-function M.weakspot_damage(folded, wep_template)
-    local v = _folded_values(folded)
-    if not v then
-        return nil
-    end
-    local function compose(is_melee, is_ranged)
-        local add = 0
-        local function term(key)
-            local val = v[key]
-            if type(val) == 'number' and val ~= 1 then
-                add = add + val - 1
-            end
-        end
-        term('weakspot_damage')
-        if is_melee then
-            term('melee_weakspot_damage')
-        elseif is_ranged then
-            term('ranged_weakspot_damage')
-        end
-        return 1 + add
-    end
-    return { generic = compose(false, false), melee = compose(true, false), ranged = compose(false, true) }
 end
 
 function M.compose_taken(folded, prefix)

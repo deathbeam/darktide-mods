@@ -595,11 +595,9 @@ function build_stats()
     -- TOUGHNESS regen
     if vitals.toughness_template then
         local tough_template = vitals.toughness_template
-        local coherency_regen, percent_regen, coherency_mult =
+        local coherency_regen, percent_regen =
             Utils.toughness_regen(unit, stat_buffs, tough_template, vitals.max_toughness, folded)
         local regen_delay = Utils.toughness_regen_delay(unit, stat_buffs, tough_template)
-        local bounty =
-            Utils.toughness_melee_bounty(unit, stat_buffs, tough_template, vitals.max_toughness, wep_template)
         local bonus_regen, bonus_sources = Utils.toughness_bonus_regen(unit, profile, toggles)
 
         _section(records, mod:localize('header_toughness'), COLORS.DEFENSE)
@@ -648,9 +646,6 @@ function build_stats()
         end
         if regen_delay then
             _stat(records, mod:localize('stat_tough_regen_delay'), string.format('%.1fs', regen_delay), COLORS.DEFENSE)
-        end
-        if bounty and bounty > 0 then
-            _stat(records, mod:localize('stat_tough_bounty'), _fmt_num(bounty), COLORS.DEFENSE)
         end
         _spacer(records)
     end

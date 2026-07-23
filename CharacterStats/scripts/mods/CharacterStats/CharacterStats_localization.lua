@@ -249,10 +249,6 @@ return {
         en = 'Toughness Regeneration Speed',
         ['zh-cn'] = '韧性恢复延迟',
     },
-    stat_tough_bounty = {
-        en = 'Toughness Replenishment on Melee Kill',
-        ['zh-cn'] = '近战击杀韧性补充',
-    },
 
     -- Stat labels: defense
     stat_damage_reduction = {
