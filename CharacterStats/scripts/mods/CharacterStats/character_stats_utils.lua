@@ -321,6 +321,8 @@ local function _display_for_buff(template_name)
     return (template and SharedUtils.safe_localize(template.display_name)) or SharedUtils.prettify(template_name)
 end
 
+-- Both blessings (item.traits) and perks (item.perks) carry on-equip stat buffs in the same
+-- shape (WeaponTraitTemplates[name].buffs -> rarity-indexed overrides), so fold them together.
 local function _weapon_buffs(player, slot_name)
     local vl = _equip_loadout(player)
     if not vl or not slot_name then
@@ -332,28 +334,33 @@ local function _weapon_buffs(player, slot_name)
     end
     local out = {}
     local item = vl:item_from_slot(slot_name)
-    if item and item.traits then
-        for i = 1, #item.traits do
-            local trait = item.traits[i]
-            local trait_item = trait.id and cached[trait.id]
-            local trait_name = trait_item and trait_item.trait
-            local def = trait_name and WeaponTraitTemplates[trait_name]
-            if def and def.buffs then
-                local rarity = trait.rarity or 1
-                for buff_template_name, levels in pairs(def.buffs) do
-                    local override
-                    for r = rarity, 1, -1 do
-                        override = levels[r]
-                        if override then
-                            break
+    if item then
+        for _, list_key in ipairs({ 'traits', 'perks' }) do
+            local list = item[list_key]
+            if list then
+                for i = 1, #list do
+                    local trait = list[i]
+                    local trait_item = trait.id and cached[trait.id]
+                    local trait_name = trait_item and trait_item.trait
+                    local def = trait_name and WeaponTraitTemplates[trait_name]
+                    if def and def.buffs then
+                        local rarity = trait.rarity or 1
+                        for buff_template_name, levels in pairs(def.buffs) do
+                            local override
+                            for r = rarity, 1, -1 do
+                                override = levels[r]
+                                if override then
+                                    break
+                                end
+                            end
+                            out[#out + 1] = {
+                                template_name = buff_template_name,
+                                override_data = override,
+                                display_name = SharedUtils.safe_localize(trait_item and trait_item.display_name)
+                                    or _display_for_buff(buff_template_name),
+                            }
                         end
                     end
-                    out[#out + 1] = {
-                        template_name = buff_template_name,
-                        override_data = override,
-                        display_name = SharedUtils.safe_localize(trait_item and trait_item.display_name)
-                            or _display_for_buff(buff_template_name),
-                    }
                 end
             end
         end
