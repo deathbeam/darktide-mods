@@ -11,10 +11,11 @@ return {
     },
     game_loc = {
         stat_toughness_regen = 'loc_player_buff_coherency_toughness_regen',
-        coherency_source = 'loc_player_buff_coherency_toughness_regen',
         stat_toughness_regen_percent = 'loc_toughness_tutorial',
         stat_dodge_dist = 'loc_weapon_stats_display_dodge_distance',
         stat_dodge_speed = 'loc_weapon_stats_display_dodge_speed',
+        stat_dodge_count = 'loc_weapon_stats_display_effective_dodges',
+        stat_stamina = 'loc_stats_display_stamina_title',
         stat_sprint_speed = 'loc_weapon_stats_display_sprint_speed',
         stat_attack_speed = 'loc_weapon_stats_display_attack_speed',
         stat_reload_speed = 'loc_stats_display_reload_speed_stat',
@@ -64,19 +65,11 @@ return {
         en = 'Havoc rank',
         ['zh-cn'] = '浩劫等级',
     },
-    havoc_source = {
-        en = 'Havoc',
-        ['zh-cn'] = '浩劫',
-    },
 
     -- List
     current_character = {
         en = 'Current Character',
         ['zh-cn'] = '当前角色',
-    },
-    header_bio = {
-        en = 'CHARACTER BACKGROUND',
-        ['zh-cn'] = '角色背景',
     },
     no_character = {
         en = 'No active character (enter a mission or the hub)',
@@ -88,6 +81,10 @@ return {
     },
 
     -- Section headers
+    header_bio = {
+        en = 'CHARACTER BACKGROUND',
+        ['zh-cn'] = '角色背景',
+    },
     header_vitals = {
         en = 'VITALS',
         ['zh-cn'] = '生命',
@@ -109,6 +106,16 @@ return {
         ['zh-cn'] = '机动性',
     },
 
+    -- Sources
+    havoc_source = {
+        en = 'Havoc',
+        ['zh-cn'] = '浩劫',
+    },
+    coherency_source = {
+        en = 'Coherency',
+        ['zh-cn'] = '连携',
+    },
+
     -- Stat labels: vitals
     stat_health = {
         en = 'Max Health',
@@ -124,14 +131,6 @@ return {
     },
 
     -- Stat labels: recovery
-    stat_toughness_regen = {
-        en = 'Coherency Toughness Regeneration',
-        ['zh-cn'] = '共鸣韧性恢复',
-    },
-    stat_toughness_regen_percent = {
-        en = 'Toughness Regeneration',
-        ['zh-cn'] = '百分比韧性恢复',
-    },
     stat_tough_bonus_regen = {
         en = 'Toughness Replenishment',
         ['zh-cn'] = '天赋韧性补充',
@@ -143,10 +142,6 @@ return {
     stat_tough_bounty = {
         en = 'Toughness Replenishment on Melee Kill',
         ['zh-cn'] = '近战击杀韧性补充',
-    },
-    coherency_source = {
-        en = 'Coherency Toughness Regeneration',
-        ['zh-cn'] = '连携韧性恢复',
     },
 
     -- Stat labels: defense
@@ -253,14 +248,6 @@ return {
     stat_ranged_damage = {
         en = 'Ranged Damage Bonus',
         ['zh-cn'] = '远程伤害加成',
-    },
-    stat_reload_speed = {
-        en = 'Reload Speed',
-        ['zh-cn'] = '换弹速度',
-    },
-    stat_spread = {
-        en = 'Spread',
-        ['zh-cn'] = '散射',
     },
     stat_impact = {
         en = 'Impact',
@@ -374,10 +361,6 @@ return {
     },
 
     -- Stat labels: mobility
-    stat_stamina = {
-        en = 'Max Stamina',
-        ['zh-cn'] = '最大体力',
-    },
     stat_stamina_regen = {
         en = 'Stamina Regen',
         ['zh-cn'] = '体力恢复',
@@ -386,24 +369,8 @@ return {
         en = 'Stamina Regen Delay',
         ['zh-cn'] = '体力恢复延迟',
     },
-    stat_sprint_speed = {
-        en = 'Sprint Speed (m/s)',
-        ['zh-cn'] = '冲刺速度（米/秒）',
-    },
     stat_sprint_time = {
-        en = 'Sprint Duration (sec)',
+        en = 'Sprint Duration',
         ['zh-cn'] = '冲刺持续时间（秒）',
-    },
-    stat_dodge_count = {
-        en = 'Dodge Count',
-        ['zh-cn'] = '闪避次数',
-    },
-    stat_dodge_dist = {
-        en = 'Dodge Distance',
-        ['zh-cn'] = '闪避距离',
-    },
-    stat_dodge_speed = {
-        en = 'Dodge Speed',
-        ['zh-cn'] = '闪避速度',
     },
 }

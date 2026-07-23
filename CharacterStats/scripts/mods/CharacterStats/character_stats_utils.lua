@@ -623,14 +623,9 @@ function M.folded_stat_buffs(unit, profile, player, toggles)
             if rel then
                 for j = 1, #rel do
                     local bname = rel[j]
-                    if not passive[bname] then
-                        _fold(
-                            result,
-                            BuffTemplates[bname],
-                            entry.tier,
-                            _stacks_for(BuffTemplates[bname], toggles),
-                            source
-                        )
+                    local tmpl = BuffTemplates[bname]
+                    if not passive[bname] and tmpl and tmpl.buff_category ~= 'aura' then
+                        _fold(result, tmpl, entry.tier, _stacks_for(tmpl, toggles), source)
                     end
                 end
             end

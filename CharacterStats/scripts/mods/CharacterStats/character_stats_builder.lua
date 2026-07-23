@@ -50,7 +50,9 @@ local function _fmt_pct(n)
     if n == nil then
         return '-'
     end
-    return string.format('%.0f%%', n * 100)
+    local pct = n * 100
+    local fmt = math.abs(pct - math.floor(pct)) < 0.05 and '%.0f%%' or '%.1f%%'
+    return string.format(fmt, pct)
 end
 
 -- "<base> (<suffix>)" — e.g. "Toughness Damage Reduction (Melee)". The suffix words come
