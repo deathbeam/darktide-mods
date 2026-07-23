@@ -35,23 +35,6 @@ local _HAVOC_PLAYER_FACING = {
 }
 
 -- Enemy-type damage resistance curio perks: damage_taken_by_<breed>_multiplier (multiplicative).
-local _ENEMY_RESISTANCE_TERMS = {
-    { key = 'damage_taken_by_cultist_grenadier_multiplier', label = 'stat_taken_from_bombers' },
-    { key = 'damage_taken_by_renegade_grenadier_multiplier', label = 'stat_taken_from_bombers' },
-    { key = 'damage_taken_by_cultist_flamer_multiplier', label = 'stat_taken_from_flamers' },
-    { key = 'damage_taken_by_renegade_flamer_multiplier', label = 'stat_taken_from_flamers' },
-    { key = 'damage_taken_by_renegade_flamer_mutator_multiplier', label = 'stat_taken_from_flamers' },
-    { key = 'damage_taken_by_cultist_gunner_multiplier', label = 'stat_taken_from_gunners' },
-    { key = 'damage_taken_by_renegade_gunner_multiplier', label = 'stat_taken_from_gunners' },
-    { key = 'damage_taken_by_chaos_ogryn_gunner_multiplier', label = 'stat_taken_from_gunners' },
-    { key = 'damage_taken_by_cultist_mutant_multiplier', label = 'stat_taken_from_mutants' },
-    { key = 'damage_taken_by_cultist_mutant_mutator_multiplier', label = 'stat_taken_from_mutants' },
-    { key = 'damage_taken_by_chaos_hound_multiplier', label = 'stat_taken_from_pox_hounds' },
-    { key = 'damage_taken_by_chaos_hound_mutator_multiplier', label = 'stat_taken_from_pox_hounds' },
-    { key = 'damage_taken_by_chaos_armored_hound_multiplier', label = 'stat_taken_from_pox_hounds' },
-    { key = 'damage_taken_by_renegade_sniper_multiplier', label = 'stat_taken_from_snipers' },
-}
-
 local GADGET_STAT_LABEL = {
     gadget_health_increase = 'Max Health',
     gadget_innate_health_increase = 'Max Health',
@@ -469,34 +452,7 @@ end
 
 -- Group damage-taken terms that share a label (e.g. a Gunners perk buffs 3 breeds to the
 -- same value): collapses them into one term carrying all keys, value taken from the first.
-local function _group_terms_by_label(terms)
-    local grouped, by_label = {}, {}
-    for i = 1, #terms do
-        local t = terms[i]
-        local existing = by_label[t.label]
-        if existing then
-            existing.keys[#existing.keys + 1] = t.key
-        else
-            local copy = { label = t.label, value = t.value, delta = t.delta, kind = t.kind, keys = { t.key } }
-            by_label[t.label] = copy
-            grouped[#grouped + 1] = copy
-        end
-    end
-    return grouped
-end
-
 -- {label, key, delta} terms for the given stat keys, skipping defaults (multiplier base 1).
-local function _terms(values, keys)
-    local out = {}
-    for _, k in ipairs(keys) do
-        local v = values[k.key]
-        if type(v) == 'number' and v ~= 1 then
-            out[#out + 1] = { label = k.label, key = k.key, delta = v - 1, kind = k.kind }
-        end
-    end
-    return out
-end
-
 -- damage_taken / toughness_damage_taken share the same compose: mult = <prefix>_multiplier,
 -- mod = <prefix>_modifier (+ melee/ranged variants), final = mult * mod.
 local function _compose_taken(values, prefix)
@@ -686,7 +642,7 @@ function M.folded_stat_buffs(unit, profile, player, toggles)
         for i = 1, #coherency_templates do
             names[#names + 1] = coherency_templates[i]
         end
-        local coh_source = mod:localize('coherency_source')
+        local coh_source = mod:localize('source_coherency')
         for i = 1, #names do
             local template = BuffTemplates[names[i]]
             local stepped = template and template.stepped_stat_buffs
@@ -738,7 +694,7 @@ function M.folded_stat_buffs(unit, profile, player, toggles)
 
     local havoc_rank = toggles.havoc_rank or 0
     if havoc_rank > 0 then
-        local havoc_source = mod:localize('havoc_source')
+        local havoc_source = mod:localize('source_havoc')
         for _, name in ipairs(_havoc_debuffs(havoc_rank)) do
             _fold(result, BuffTemplates[name], nil, 1, havoc_source)
         end
@@ -969,91 +925,9 @@ function M.weakspot_damage(folded, wep_template)
     return { generic = compose(false, false), melee = compose(true, false), ranged = compose(false, true) }
 end
 
-function M.damage_vs_terms(folded)
+function M.compose_taken(folded, prefix)
     local v = _folded_values(folded)
-    if not v then
-        return nil
-    end
-    return _terms(v, {
-        { key = 'damage_vs_elites', label = 'stat_damage_vs_elites' },
-        { key = 'melee_heavy_damage_vs_elites', label = 'stat_melee_heavy_vs_elites' },
-        { key = 'damage_vs_specials', label = 'stat_damage_vs_specials' },
-        { key = 'damage_vs_monsters', label = 'stat_damage_vs_monsters' },
-        { key = 'ranged_damage_vs_monsters', label = 'stat_ranged_vs_monsters' },
-        { key = 'damage_vs_ogryn', label = 'stat_damage_vs_ogryn' },
-        { key = 'damage_vs_ogryn_and_monsters', label = 'stat_damage_vs_ogryn_monsters' },
-        { key = 'damage_vs_horde', label = 'stat_damage_vs_horde' },
-        { key = 'damage_vs_bleeding', label = 'stat_damage_vs_bleeding' },
-        { key = 'damage_vs_burning', label = 'stat_damage_vs_burning' },
-        { key = 'damage_vs_electrocuted', label = 'stat_damage_vs_electrocuted' },
-        { key = 'damage_vs_staggered', label = 'stat_damage_vs_staggered' },
-        { key = 'damage_vs_suppressed', label = 'stat_damage_vs_suppressed' },
-        { key = 'damage_vs_healthy', label = 'stat_damage_vs_healthy' },
-    })
-end
-
-function M.rending_terms(folded, wep_template)
-    local v = _folded_values(folded)
-    if not v then
-        return nil
-    end
-    local keys = {
-        { key = 'rending_multiplier', label = 'stat_rending' },
-        { key = 'backstab_rending_multiplier', label = 'stat_backstab_rending' },
-        { key = 'flanking_rending_multiplier', label = 'stat_flanking_rending' },
-        { key = 'critical_strike_rending_multiplier', label = 'stat_crit_rending' },
-        { key = 'rending_vs_staggered_multiplier', label = 'stat_rending_vs_staggered' },
-        { key = 'rending_vs_electrocuted_multiplier', label = 'stat_rending_vs_electrocuted' },
-        { key = 'close_range_rending_multiplier', label = 'stat_close_range_rending' },
-        { key = 'warp_attacks_rending_multiplier', label = 'stat_warp_rending' },
-    }
-    if _is_melee(wep_template) then
-        keys[#keys + 1] = { key = 'melee_rending_multiplier', label = 'stat_melee_rending' }
-        keys[#keys + 1] = { key = 'melee_heavy_rending_multiplier', label = 'stat_melee_heavy_rending' }
-    elseif _is_ranged(wep_template) then
-        keys[#keys + 1] = { key = 'ranged_rending_multiplier', label = 'stat_ranged_rending' }
-        keys[#keys + 1] = { key = 'ranged_critical_strike_rending_multiplier', label = 'stat_ranged_crit_rending' }
-    end
-    return _terms(v, keys)
-end
-
-function M.damage_taken(folded)
-    local v = _folded_values(folded)
-    return v and _compose_taken(v, 'damage_taken') or nil
-end
-
-function M.toughness_damage_taken(folded)
-    local v = _folded_values(folded)
-    return v and _compose_taken(v, 'toughness_damage_taken') or nil
-end
-
-function M.damage_taken_from_sources(folded)
-    local v = _folded_values(folded)
-    if not v then
-        return nil
-    end
-    local terms = _terms(v, {
-        { key = 'damage_taken_from_explosions', label = 'stat_taken_from_explosions' },
-        { key = 'damage_taken_from_prop_explosions', label = 'stat_taken_from_prop_explosions' },
-        { key = 'damage_taken_from_toxin', label = 'stat_taken_from_toxin' },
-        { key = 'damage_taken_from_burning', label = 'stat_taken_from_burning' },
-        { key = 'damage_taken_from_bleeding', label = 'stat_taken_from_bleeding' },
-        { key = 'damage_taken_from_electrocution', label = 'stat_taken_from_electrocution' },
-        { key = 'damage_taken_from_kinetic', label = 'stat_taken_from_kinetic' },
-    })
-    local function mult_term(label, key)
-        local val = v[key]
-        if type(val) == 'number' and val ~= 1 then
-            terms[#terms + 1] = { label = label, key = key, value = val, kind = 'mult' }
-        end
-    end
-    mult_term('stat_taken_from_toxic_gas', 'damage_taken_from_toxic_gas_multiplier')
-    mult_term('stat_taken_from_corruption', 'corruption_taken_multiplier')
-    mult_term('stat_taken_from_grimoire', 'corruption_taken_grimoire_multiplier')
-    for _, t in ipairs(_ENEMY_RESISTANCE_TERMS) do
-        mult_term(t.label, t.key)
-    end
-    return _group_terms_by_label(terms)
+    return v and _compose_taken(v, prefix) or nil
 end
 
 -- Sum the bonus toughness regen granted by allocated talents' proc/over-time buffs that call

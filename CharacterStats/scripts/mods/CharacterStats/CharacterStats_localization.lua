@@ -22,8 +22,18 @@ return {
         stat_spread = 'loc_weapon_stats_display_spread',
         stat_power_level = 'loc_weapon_stats_display_power',
         stat_weakspot = 'loc_weapon_details_weakspot',
-        melee = 'loc_setting_melee',
-        ranged = 'loc_setting_ranged',
+        variant_melee = 'loc_setting_melee',
+        variant_ranged = 'loc_setting_ranged',
+        variant_ogryn = 'loc_character_class_ogryn',
+        variant_staggered = 'loc_stagger',
+        variant_burning = 'loc_stats_display_burn_stat',
+        variant_crit = 'loc_weapon_details_crit',
+        variant_suppressed = 'loc_weapon_stats_display_suppression',
+        variant_corruption = 'loc_corruption_tutorial',
+        variant_grimoire = 'loc_contract_task_pickup_type_grimoire',
+        variant_flamers = 'loc_breed_flamer_generic_name',
+        variant_gunners = 'loc_breed_gunner_generic_name',
+        variant_pox_hounds = 'loc_breed_display_name_chaos_hound',
         bio_origin = 'loc_character_create_title_bio_origin',
         bio_home_planet = 'loc_character_create_title_home_planet',
         bio_early_life = 'loc_character_create_title_early_life',
@@ -75,10 +85,6 @@ return {
         en = 'No active character (enter a mission or the hub)',
         ['zh-cn'] = '无活动角色（进入任务或大厅）',
     },
-    search_placeholder = {
-        en = 'Search...',
-        ['zh-cn'] = '搜索...',
-    },
 
     -- Section headers
     header_bio = {
@@ -107,11 +113,11 @@ return {
     },
 
     -- Sources
-    havoc_source = {
+    source_havoc = {
         en = 'Havoc',
         ['zh-cn'] = '浩劫',
     },
-    coherency_source = {
+    source_coherency = {
         en = 'Coherency',
         ['zh-cn'] = '连携',
     },
@@ -119,6 +125,94 @@ return {
         en = 'Base',
         ['zh-cn'] = '基础',
     },
+
+    -- Variants
+    variant_elites = {
+        en = 'Elites',
+        ['zh-cn'] = '精英',
+    },
+    variant_specials = {
+        en = 'Specialists',
+        ['zh-cn'] = '专家',
+    },
+    variant_monsters = {
+        en = 'Monsters',
+        ['zh-cn'] = '怪物',
+    },
+    variant_horde = {
+        en = 'Horde',
+        ['zh-cn'] = '群怪',
+    },
+    variant_bleeding = {
+        en = 'Bleeding',
+        ['zh-cn'] = '流血',
+    },
+    variant_electrocuted = {
+        en = 'Electrocuted',
+        ['zh-cn'] = '触电',
+    },
+    variant_healthy = {
+        en = 'Healthy',
+        ['zh-cn'] = '健康',
+    },
+    variant_backstab = {
+        en = 'Backstab',
+        ['zh-cn'] = '背刺',
+    },
+    variant_flanking = {
+        en = 'Flanking',
+        ['zh-cn'] = '侧袭',
+    },
+    variant_close_range = {
+        en = 'Close Range',
+        ['zh-cn'] = '近距',
+    },
+    variant_warp = {
+        en = 'Warp',
+        ['zh-cn'] = '亚空间',
+    },
+    variant_heavy = {
+        en = 'Heavy',
+        ['zh-cn'] = '重击',
+    },
+    variant_bombers = {
+        en = 'Bombers',
+        ['zh-cn'] = '炸弹人',
+    },
+    variant_electrocution = {
+        en = 'Electrocution',
+        ['zh-cn'] = '触电',
+    },
+    variant_explosions = {
+        en = 'Explosions',
+        ['zh-cn'] = '爆炸',
+    },
+    variant_kinetic = {
+        en = 'Kinetic',
+        ['zh-cn'] = '动能',
+    },
+    variant_mutants = {
+        en = 'Mutants',
+        ['zh-cn'] = '变异者',
+    },
+    variant_prop_explosions = {
+        en = 'Prop Explosions',
+        ['zh-cn'] = '环境爆炸',
+    },
+    variant_snipers = {
+        en = 'Snipers',
+        ['zh-cn'] = '狙击手',
+    },
+    variant_toxic_gas = {
+        en = 'Toxic Gas',
+        ['zh-cn'] = '毒气',
+    },
+    variant_toxin = {
+        en = 'Toxin',
+        ['zh-cn'] = '毒素',
+    },
+
+    -- Slots
     weapon_slot = {
         en = 'Weapon Slot',
         ['zh-cn'] = '武器槽位',
@@ -169,75 +263,11 @@ return {
         en = 'Toughness Damage Reduction',
         ['zh-cn'] = '韧性伤害减免',
     },
-    stat_taken_from_explosions = {
-        en = 'Reduction vs Explosions',
-        ['zh-cn'] = '爆炸伤害抗性',
-    },
-    stat_taken_from_prop_explosions = {
-        en = 'Reduction vs Prop Explosions (Barrels, etc.)',
-        ['zh-cn'] = '环境爆炸伤害抗性（油桶等）',
-    },
-    stat_taken_from_toxin = {
-        en = 'Reduction vs Toxin',
-        ['zh-cn'] = '毒素伤害抗性',
-    },
-    stat_taken_from_burning = {
-        en = 'Reduction vs Burning',
-        ['zh-cn'] = '燃烧伤害抗性',
-    },
-    stat_taken_from_bleeding = {
-        en = 'Reduction vs Bleeding',
-        ['zh-cn'] = '流血伤害抗性',
-    },
-    stat_taken_from_electrocution = {
-        en = 'Reduction vs Electrocution',
-        ['zh-cn'] = '触电伤害抗性',
-    },
-    stat_taken_from_kinetic = {
-        en = 'Reduction vs Kinetic',
-        ['zh-cn'] = '物理伤害抗性',
-    },
-    stat_taken_from_toxic_gas = {
-        en = 'Reduction vs Toxic Gas',
-        ['zh-cn'] = '毒气伤害抗性',
-    },
-    stat_taken_from_corruption = {
-        en = 'Damage Resistance (Corruption)',
-        ['zh-cn'] = '腐化伤害抗性',
-    },
-    stat_taken_from_grimoire = {
-        en = 'Damage Resistance (Grimoires)',
-        ['zh-cn'] = '魔法书伤害抗性',
-    },
-    stat_taken_from_bombers = {
-        en = 'Damage Resistance (Bombers)',
-        ['zh-cn'] = '血痂、渣滓轰炸者伤害抗性',
-    },
-    stat_taken_from_flamers = {
-        en = 'Damage Resistance (Tox Flamers)',
-        ['zh-cn'] = '血痂、渣滓火焰兵伤害抗性',
-    },
-    stat_taken_from_gunners = {
-        en = 'Damage Resistance (Gunners)',
-        ['zh-cn'] = '血痂渣滓炮手、收割者伤害抗性',
-    },
-    stat_taken_from_mutants = {
-        en = 'Damage Resistance (Mutants)',
-        ['zh-cn'] = '变种人伤害抗性',
-    },
-    stat_taken_from_pox_hounds = {
-        en = 'Damage Resistance (Pox Hounds)',
-        ['zh-cn'] = '瘟疫猎犬伤害抗性',
-    },
-    stat_taken_from_snipers = {
-        en = 'Damage Resistance (Snipers)',
-        ['zh-cn'] = '狙击手伤害抗性',
-    },
 
     -- Stat labels: offense
-    stat_attack_speed = {
-        en = 'Attack Speed Bonus',
-        ['zh-cn'] = '攻击速度加成',
+    stat_damage = {
+        en = 'Damage Bonus',
+        ['zh-cn'] = '伤害加成',
     },
     stat_crit_chance = {
         en = 'Crit Chance',
@@ -247,133 +277,13 @@ return {
         en = 'Crit Damage Bonus',
         ['zh-cn'] = '暴击伤害加成',
     },
-    stat_total_damage = {
-        en = 'Total Damage Bonus',
-        ['zh-cn'] = '总伤害加成',
-    },
     stat_rending = {
         en = 'Rending Bonus',
         ['zh-cn'] = '撕裂加成',
     },
-
-    -- Offense breakdown terms
-    stat_melee_damage = {
-        en = 'Melee Damage Bonus',
-        ['zh-cn'] = '近战伤害加成',
-    },
-    stat_ranged_damage = {
-        en = 'Ranged Damage Bonus',
-        ['zh-cn'] = '远程伤害加成',
-    },
     stat_impact = {
         en = 'Impact',
         ['zh-cn'] = '冲击',
-    },
-    stat_movement_speed = {
-        en = 'Movement Speed',
-        ['zh-cn'] = '移动速度',
-    },
-    stat_damage_vs_elites = {
-        en = 'Damage vs Elites',
-        ['zh-cn'] = '对精英伤害',
-    },
-    stat_damage_vs_specials = {
-        en = 'Damage vs Specialists',
-        ['zh-cn'] = '对专家伤害',
-    },
-    stat_damage_vs_monsters = {
-        en = 'Damage vs Monsters',
-        ['zh-cn'] = '对怪物伤害',
-    },
-    stat_ranged_vs_monsters = {
-        en = 'Ranged vs Monsters',
-        ['zh-cn'] = '远程对怪物',
-    },
-    stat_damage_vs_ogryn = {
-        en = 'Damage vs Ogryn',
-        ['zh-cn'] = '对欧格林',
-    },
-    stat_damage_vs_ogryn_monsters = {
-        en = 'Damage vs Ogryn/Monsters',
-        ['zh-cn'] = '对欧格林/怪物',
-    },
-    stat_damage_vs_horde = {
-        en = 'Damage vs Horde',
-        ['zh-cn'] = '对群怪',
-    },
-    stat_damage_vs_bleeding = {
-        en = 'Damage vs Bleeding',
-        ['zh-cn'] = '对流血',
-    },
-    stat_damage_vs_burning = {
-        en = 'Damage vs Burning',
-        ['zh-cn'] = '对燃烧',
-    },
-    stat_damage_vs_electrocuted = {
-        en = 'Damage vs Electrocuted',
-        ['zh-cn'] = '对触电',
-    },
-    stat_damage_vs_staggered = {
-        en = 'Damage vs Staggered',
-        ['zh-cn'] = '对踉跄',
-    },
-    stat_damage_vs_suppressed = {
-        en = 'Damage vs Suppressed',
-        ['zh-cn'] = '对压制',
-    },
-    stat_damage_vs_healthy = {
-        en = 'Damage vs Healthy',
-        ['zh-cn'] = '对健康',
-    },
-    stat_melee_heavy_vs_elites = {
-        en = 'Melee Heavy vs Elites',
-        ['zh-cn'] = '近战重击对精英',
-    },
-
-    -- Rending breakdown terms
-    stat_backstab_rending = {
-        en = 'Backstab Rending',
-        ['zh-cn'] = '背刺撕裂',
-    },
-    stat_flanking_rending = {
-        en = 'Flanking Rending',
-        ['zh-cn'] = '侧袭撕裂',
-    },
-    stat_crit_rending = {
-        en = 'Crit Rending',
-        ['zh-cn'] = '暴击撕裂',
-    },
-    stat_rending_vs_staggered = {
-        en = 'Rending vs Staggered',
-        ['zh-cn'] = '对踉跄撕裂',
-    },
-    stat_rending_vs_electrocuted = {
-        en = 'Rending vs Electrocuted',
-        ['zh-cn'] = '对触电撕裂',
-    },
-    stat_close_range_rending = {
-        en = 'Close Range Rending',
-        ['zh-cn'] = '近距离撕裂',
-    },
-    stat_warp_rending = {
-        en = 'Warp Rending',
-        ['zh-cn'] = '灵能撕裂',
-    },
-    stat_melee_rending = {
-        en = 'Melee Rending',
-        ['zh-cn'] = '近战撕裂',
-    },
-    stat_melee_heavy_rending = {
-        en = 'Melee Heavy Rending',
-        ['zh-cn'] = '近战重击破甲',
-    },
-    stat_ranged_rending = {
-        en = 'Ranged Rending',
-        ['zh-cn'] = '远程撕裂',
-    },
-    stat_ranged_crit_rending = {
-        en = 'Ranged Crit Rending',
-        ['zh-cn'] = '远程暴击撕裂',
     },
 
     -- Stat labels: mobility
@@ -388,5 +298,9 @@ return {
     stat_sprint_time = {
         en = 'Sprint Duration',
         ['zh-cn'] = '冲刺持续时间（秒）',
+    },
+    stat_movement_speed = {
+        en = 'Movement Speed',
+        ['zh-cn'] = '移动速度',
     },
 }

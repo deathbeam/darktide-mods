@@ -55,15 +55,24 @@ local function _fmt_pct(n)
     return string.format(fmt, pct)
 end
 
--- "<base> (<suffix>)", e.g. "Toughness Damage Reduction (Melee)". The suffix words come
--- from the game's own loc keys (proxied via game_loc), so variants stay consistent with it.
-local function _variant(base_key, suffix_key)
-    return mod:localize(base_key) .. ' (' .. mod:localize(suffix_key) .. ')'
+-- " (Melee, Monsters)" suffix for source rows / variant totals. The tag words come from
+-- the game's own loc keys (melee/ranged) or our variant_* keys, so variants stay consistent.
+local function _variant_tag(tags)
+    if not tags or #tags == 0 then
+        return ''
+    end
+    local parts = {}
+    for i = 1, #tags do
+        parts[i] = mod:localize(tags[i])
+    end
+    return ' (' .. table.concat(parts, ', ') .. ')'
 end
 
 -- Render the contributing sources for a stat as indented sub-rows, merged by display name so
 -- duplicate curios / multi-template talents collapse to one row with summed deltas.
-local function _sources(records, folded, stat_key, stat_type)
+-- Like _sources but appends `tag` (e.g. " (Melee)") to each source's label, so a merged
+-- variant group shows which variant each source contributes to.
+local function _sources_tagged(records, folded, stat_key, stat_type, tag)
     if not folded then
         return
     end
@@ -84,7 +93,7 @@ local function _sources(records, folded, stat_key, stat_type)
         end
         _add(records, {
             type = 'stat',
-            label = src.name,
+            label = src.name .. tag,
             value = value_str,
             label_color = COLORS.META,
             value_color = COLORS.META,
@@ -92,6 +101,10 @@ local function _sources(records, folded, stat_key, stat_type)
             stripe = true,
         })
     end
+end
+
+local function _sources(records, folded, stat_key, stat_type)
+    _sources_tagged(records, folded, stat_key, stat_type, '')
 end
 
 -- A source row for a base (non-buff) value: the archetype/weapon contribution that
@@ -119,6 +132,116 @@ end
 
 -- Render a stat line (delta as %) plus its contributing sources, only when the stat has at
 -- least one non-default source. Used by the offense/defense additive-bonus blocks.
+-- Render a "base stat + variants" group: one row per variant total (generic first, then each
+-- variant as generic+variant), then ALL sources merged below, each annotated with its variant
+-- tag. `generic_keys` are always-active; `variants` is a list of
+-- { keys={...}, label='stat_xxx', tags={'melee'} } for variant-specific keys.
+local function _stat_group(records, folded, base_label, generic_keys, variants, color)
+    local v = folded and folded.values
+    if not v then
+        return
+    end
+    local function sum_delta(keys)
+        local d = 0
+        for i = 1, #keys do
+            local val = v[keys[i]]
+            if type(val) == 'number' and val ~= 1 then
+                d = d + val - 1
+            end
+        end
+        return d
+    end
+
+    local generic_delta = sum_delta(generic_keys)
+    local has_variant = false
+    for i = 1, #variants do
+        if sum_delta(variants[i].keys) ~= 0 then
+            has_variant = true
+            break
+        end
+    end
+    if generic_delta == 0 and not has_variant then
+        return
+    end
+
+    if generic_delta ~= 0 then
+        _stat(records, mod:localize(base_label), _fmt_pct(generic_delta), color)
+    end
+    for i = 1, #variants do
+        local var_delta = sum_delta(variants[i].keys)
+        if var_delta ~= 0 then
+            local label = mod:localize(base_label) .. _variant_tag(variants[i].tags)
+            _stat(records, label, _fmt_pct(generic_delta + var_delta), color)
+        end
+    end
+
+    for i = 1, #generic_keys do
+        _sources(records, folded, generic_keys[i], 'add')
+    end
+    for i = 1, #variants do
+        local tag = _variant_tag(variants[i].tags)
+        for j = 1, #variants[i].keys do
+            _sources_tagged(records, folded, variants[i].keys[j], 'add', tag)
+        end
+    end
+end
+
+-- Damage/toughness reduction group: the engine composes taken-multiplier as
+-- mult = <prefix>_multiplier (+ melee/ranged) and mod = <prefix>_modifier (+ melee/ranged),
+-- final = mult * mod. Show reduction = 1 - final for generic + each variant that differs,
+-- then all sources (mult and add) annotated with their variant tag.
+local function _taken_group(records, folded, base_label, prefix, color)
+    local taken = Utils.compose_taken(folded, prefix)
+    if not taken then
+        return
+    end
+    local has_any = taken.generic ~= 1 or taken.melee ~= 1 or taken.ranged ~= 1
+    if not has_any then
+        return
+    end
+    if taken.generic ~= 1 then
+        _stat(records, mod:localize(base_label), _fmt_pct(1 - taken.generic), color)
+    end
+    if taken.melee ~= taken.generic then
+        _stat(records, mod:localize(base_label) .. _variant_tag({ 'variant_melee' }), _fmt_pct(1 - taken.melee), color)
+    end
+    if taken.ranged ~= taken.generic then
+        _stat(
+            records,
+            mod:localize(base_label) .. _variant_tag({ 'variant_ranged' }),
+            _fmt_pct(1 - taken.ranged),
+            color
+        )
+    end
+    _sources(records, folded, prefix .. '_multiplier', 'mult')
+    _sources(records, folded, prefix .. '_modifier', 'add')
+    local melee_tag = _variant_tag({ 'variant_melee' })
+    local ranged_tag = _variant_tag({ 'variant_ranged' })
+    _sources_tagged(records, folded, 'melee_' .. prefix .. '_multiplier', 'mult', melee_tag)
+    _sources_tagged(records, folded, 'melee_' .. prefix .. '_modifier', 'add', melee_tag)
+    _sources_tagged(records, folded, 'ranged_' .. prefix .. '_multiplier', 'mult', ranged_tag)
+    _sources_tagged(records, folded, 'ranged_' .. prefix .. '_modifier', 'add', ranged_tag)
+end
+
+-- Independent multiplicative resistances (Corruption, Gunners, etc.): each is a variant of
+-- "Damage Resistance", shown as reduction = 1 - value, with sources from the first key (grouped
+-- breed keys share identical sources). Unlike _stat_group, these don't compose additively.
+local function _resistance_group(records, folded, base_label, variants, color)
+    local v = folded and folded.values
+    if not v then
+        return
+    end
+    for i = 1, #variants do
+        local var = variants[i]
+        local value = v[var.keys[1]]
+        if type(value) == 'number' and value ~= 1 then
+            local label = mod:localize(base_label) .. _variant_tag(var.tags)
+            _stat(records, label, _fmt_pct(1 - value), color)
+            _sources(records, folded, var.keys[1], 'mult')
+        end
+    end
+end
+
 local function _stat_with_sources(records, folded, label, stat_key, color, src_type)
     if not Utils.has_stat(folded, stat_key) then
         return
@@ -278,89 +401,115 @@ function build_stats()
         if mobility.dodge_speed and mobility.dodge_speed ~= 1 then
             _stat(records, mod:localize('stat_dodge_speed'), _fmt_pct(mobility.dodge_speed), COLORS.MOBILITY)
         end
+        if Utils.has_stat(folded, 'movement_speed') then
+            _stat(
+                records,
+                mod:localize('stat_movement_speed'),
+                _fmt_pct(Utils.stat_delta(folded, 'movement_speed')),
+                COLORS.MOBILITY
+            )
+            _sources(records, folded, 'movement_speed', 'add')
+            _sources(records, folded, 'sprint_movement_speed', 'add')
+        end
         _spacer(records)
     end
 
     -- OFFENSE
     _section(records, mod:localize('header_offense'), COLORS.OFFENSE)
 
-    local dmg_mult = Utils.damage_multiplier(folded)
-    if dmg_mult then
-        if dmg_mult.generic ~= 1 then
-            _stat(records, mod:localize('stat_total_damage'), _fmt_pct(dmg_mult.generic - 1), COLORS.OFFENSE)
-            _sources(records, folded, 'damage', 'add')
-            _sources(records, folded, 'power_level_modifier', 'add')
-        end
-        if dmg_mult.melee ~= dmg_mult.generic then
-            _stat(records, mod:localize('stat_melee_damage'), _fmt_pct(dmg_mult.melee - 1), COLORS.OFFENSE)
-            _sources(records, folded, 'melee_damage', 'add')
-            _sources(records, folded, 'melee_power_level_modifier', 'add')
-        end
-        if dmg_mult.ranged ~= dmg_mult.generic then
-            _stat(records, mod:localize('stat_ranged_damage'), _fmt_pct(dmg_mult.ranged - 1), COLORS.OFFENSE)
-            _sources(records, folded, 'ranged_damage', 'add')
-            _sources(records, folded, 'ranged_power_level_modifier', 'add')
-        end
-    end
+    -- Damage: generic + melee/ranged weapon-type variants + damage-vs-X variants, all under
+    -- one group with annotated sources.
+    _stat_group(records, folded, 'stat_damage', { 'damage', 'power_level_modifier' }, {
+        { keys = { 'melee_damage', 'melee_power_level_modifier' }, tags = { 'variant_melee' } },
+        {
+            keys = { 'ranged_damage', 'ranged_power_level_modifier' },
+            tags = { 'variant_ranged' },
+        },
+        { keys = { 'damage_vs_elites' }, tags = { 'variant_elites' } },
+        {
+            keys = { 'melee_heavy_damage_vs_elites' },
+            tags = { 'variant_melee', 'variant_heavy', 'variant_elites' },
+        },
+        { keys = { 'damage_vs_specials' }, tags = { 'variant_specials' } },
+        { keys = { 'damage_vs_monsters' }, tags = { 'variant_monsters' } },
+        {
+            keys = { 'ranged_damage_vs_monsters' },
+            tags = { 'variant_ranged', 'variant_monsters' },
+        },
+        { keys = { 'damage_vs_ogryn' }, tags = { 'variant_ogryn' } },
+        {
+            keys = { 'damage_vs_ogryn_and_monsters' },
+            tags = { 'variant_ogryn', 'variant_monsters' },
+        },
+        { keys = { 'damage_vs_horde' }, tags = { 'variant_horde' } },
+        { keys = { 'damage_vs_bleeding' }, tags = { 'variant_bleeding' } },
+        { keys = { 'damage_vs_burning' }, tags = { 'variant_burning' } },
+        {
+            keys = { 'damage_vs_electrocuted' },
+            tags = { 'variant_electrocuted' },
+        },
+        { keys = { 'damage_vs_staggered' }, tags = { 'variant_staggered' } },
+        { keys = { 'damage_vs_suppressed' }, tags = { 'variant_suppressed' } },
+        { keys = { 'damage_vs_healthy' }, tags = { 'variant_healthy' } },
+    }, COLORS.OFFENSE)
 
-    local vs_terms = Utils.damage_vs_terms(folded)
-    if vs_terms then
-        for i = 1, #vs_terms do
-            local t = vs_terms[i]
-            _stat(records, mod:localize(t.label), _fmt_pct(t.delta), COLORS.OFFENSE)
-            _sources(records, folded, t.key, 'add')
-        end
-    end
+    -- Attack speed: generic + melee/ranged.
+    _stat_group(records, folded, 'stat_attack_speed', { 'attack_speed' }, {
+        { keys = { 'melee_attack_speed' }, tags = { 'variant_melee' } },
+        { keys = { 'ranged_attack_speed' }, tags = { 'variant_ranged' } },
+    }, COLORS.OFFENSE)
 
-    local atk_speed = Utils.attack_speed(unit, folded, wep_template)
-    if atk_speed and atk_speed ~= 1 then
-        _stat(records, mod:localize('stat_attack_speed'), _fmt_pct(atk_speed - 1), COLORS.OFFENSE)
-        _sources(records, folded, 'attack_speed', 'add')
-        _sources(records, folded, 'melee_attack_speed', 'add')
-        _sources(records, folded, 'ranged_attack_speed', 'add')
-    end
-
+    -- Crit chance: a fraction (not a bonus), so render the total directly; melee/ranged variants
+    -- add on top of the generic. The base + weapon crit are injected into critical_strike_chance.
     local crit = Utils.crit_chance(folded, wep_template)
-    if crit then
+    if crit and crit > 0 then
         _stat(records, mod:localize('stat_crit_chance'), _fmt_pct(crit), COLORS.OFFENSE)
         _sources(records, folded, 'critical_strike_chance', 'add')
-        _sources(records, folded, 'melee_critical_strike_chance', 'add')
-        _sources(records, folded, 'ranged_critical_strike_chance', 'add')
+        _sources_tagged(records, folded, 'melee_critical_strike_chance', 'add', _variant_tag({ 'variant_melee' }))
+        _sources_tagged(records, folded, 'ranged_critical_strike_chance', 'add', _variant_tag({ 'variant_ranged' }))
     end
 
-    local crit_dmg = Utils.crit_damage_mult(folded, wep_template)
-    if crit_dmg and crit_dmg ~= 1 then
-        _stat(records, mod:localize('stat_crit_damage'), _fmt_pct(crit_dmg - 1), COLORS.OFFENSE)
-        _sources(records, folded, 'critical_strike_damage', 'add')
-        _sources(records, folded, 'melee_critical_strike_damage', 'add')
-        _sources(records, folded, 'ranged_critical_strike_damage', 'add')
-    end
+    -- Crit damage bonus: generic + melee/ranged.
+    _stat_group(records, folded, 'stat_crit_damage', { 'critical_strike_damage' }, {
+        { keys = { 'melee_critical_strike_damage' }, tags = { 'variant_melee' } },
+        { keys = { 'ranged_critical_strike_damage' }, tags = { 'variant_ranged' } },
+    }, COLORS.OFFENSE)
 
-    local weakspot = Utils.weakspot_damage(folded, wep_template)
-    if weakspot and weakspot.generic ~= 1 then
-        _stat(records, mod:localize('stat_weakspot'), _fmt_pct(weakspot.generic - 1), COLORS.OFFENSE)
-        _sources(records, folded, 'weakspot_damage', 'add')
-        if weakspot.melee ~= weakspot.generic then
-            _stat(records, _variant('stat_weakspot', 'melee'), _fmt_pct(weakspot.melee - 1), COLORS.OFFENSE)
-            _sources(records, folded, 'melee_weakspot_damage', 'add')
-        end
-        if weakspot.ranged ~= weakspot.generic then
-            _stat(records, _variant('stat_weakspot', 'ranged'), _fmt_pct(weakspot.ranged - 1), COLORS.OFFENSE)
-            _sources(records, folded, 'ranged_weakspot_damage', 'add')
-        end
-    end
+    -- Weakspot damage bonus: generic + melee/ranged.
+    _stat_group(records, folded, 'stat_weakspot', { 'weakspot_damage' }, {
+        { keys = { 'melee_weakspot_damage' }, tags = { 'variant_melee' } },
+        { keys = { 'ranged_weakspot_damage' }, tags = { 'variant_ranged' } },
+    }, COLORS.OFFENSE)
 
-    local rending_terms = Utils.rending_terms(folded, wep_template)
-    if rending_terms and #rending_terms > 0 then
-        local rending_sum = 0
-        for i = 1, #rending_terms do
-            rending_sum = rending_sum + rending_terms[i].delta
-        end
-        _stat(records, mod:localize('stat_rending'), _fmt_pct(rending_sum), COLORS.OFFENSE)
-        for i = 1, #rending_terms do
-            _sources(records, folded, rending_terms[i].key, 'add')
-        end
-    end
+    -- Rending: generic + melee/ranged + conditional variants, all under one sum.
+    _stat_group(records, folded, 'stat_rending', { 'rending_multiplier' }, {
+        { keys = { 'melee_rending_multiplier' }, tags = { 'variant_melee' } },
+        {
+            keys = { 'melee_heavy_rending_multiplier' },
+            tags = { 'variant_melee', 'variant_heavy' },
+        },
+        { keys = { 'ranged_rending_multiplier' }, tags = { 'variant_ranged' } },
+        {
+            keys = { 'ranged_critical_strike_rending_multiplier' },
+            tags = { 'variant_ranged', 'variant_crit' },
+        },
+        { keys = { 'backstab_rending_multiplier' }, tags = { 'variant_backstab' } },
+        { keys = { 'flanking_rending_multiplier' }, tags = { 'variant_flanking' } },
+        { keys = { 'critical_strike_rending_multiplier' }, tags = { 'variant_crit' } },
+        {
+            keys = { 'rending_vs_staggered_multiplier' },
+            tags = { 'variant_staggered' },
+        },
+        {
+            keys = { 'rending_vs_electrocuted_multiplier' },
+            tags = { 'variant_electrocuted' },
+        },
+        {
+            keys = { 'close_range_rending_multiplier' },
+            tags = { 'variant_close_range' },
+        },
+        { keys = { 'warp_attacks_rending_multiplier' }, tags = { 'variant_warp' } },
+    }, COLORS.OFFENSE)
 
     _stat_with_sources(records, folded, 'stat_power_level', 'power_level_modifier', COLORS.OFFENSE)
     _sources(records, folded, 'melee_power_level_modifier', 'add')
@@ -371,86 +520,76 @@ function build_stats()
         _stat_with_sources(records, folded, 'stat_spread', 'spread_modifier', COLORS.OFFENSE)
     end
 
-    if Utils.has_stat(folded, 'impact_modifier') then
-        _stat(
-            records,
-            mod:localize('stat_impact'),
-            _fmt_pct(Utils.stat_delta(folded, 'impact_modifier')),
-            COLORS.OFFENSE
-        )
-        _sources(records, folded, 'impact_modifier', 'add')
-        _sources(records, folded, 'melee_impact_modifier', 'add')
-        _sources(records, folded, 'ranged_impact_modifier', 'add')
-    end
+    _stat_group(records, folded, 'stat_impact', { 'impact_modifier' }, {
+        { keys = { 'melee_impact_modifier' }, tags = { 'variant_melee' } },
+        { keys = { 'ranged_impact_modifier' }, tags = { 'variant_ranged' } },
+    }, COLORS.OFFENSE)
 
-    if Utils.has_stat(folded, 'movement_speed') then
-        _stat(
-            records,
-            mod:localize('stat_movement_speed'),
-            _fmt_pct(Utils.stat_delta(folded, 'movement_speed')),
-            COLORS.MOBILITY
-        )
-        _sources(records, folded, 'movement_speed', 'add')
-        _sources(records, folded, 'sprint_movement_speed', 'add')
-    end
     _spacer(records)
 
     -- DEFENSE
-    local dmg_taken = Utils.damage_taken(folded)
     local has_health = max_health and max_health > 0
-    local has_defense = dmg_taken and (dmg_taken.generic ~= 1 or dmg_taken.melee ~= 1 or dmg_taken.ranged ~= 1)
 
     _section(records, mod:localize('header_defense'), COLORS.DEFENSE)
-    if has_defense and has_health then
-        if dmg_taken.generic ~= 1 then
-            _stat(records, mod:localize('stat_damage_reduction'), _fmt_pct(1 - dmg_taken.generic), COLORS.DEFENSE)
-            _sources(records, folded, 'damage_taken_multiplier', 'mult')
-            _sources(records, folded, 'damage_taken_modifier', 'add')
-        end
-        if dmg_taken.melee ~= dmg_taken.generic then
-            _stat(records, _variant('stat_damage_reduction', 'melee'), _fmt_pct(1 - dmg_taken.melee), COLORS.DEFENSE)
-            _sources(records, folded, 'melee_damage_taken_multiplier', 'mult')
-            _sources(records, folded, 'melee_damage_taken_modifier', 'add')
-        end
-        if dmg_taken.ranged ~= dmg_taken.generic then
-            _stat(records, _variant('stat_damage_reduction', 'ranged'), _fmt_pct(1 - dmg_taken.ranged), COLORS.DEFENSE)
-            _sources(records, folded, 'ranged_damage_taken_multiplier', 'mult')
-            _sources(records, folded, 'ranged_damage_taken_modifier', 'add')
-        end
+    if has_health then
+        _taken_group(records, folded, 'stat_damage_reduction', 'damage_taken', COLORS.DEFENSE)
     end
+    _taken_group(records, folded, 'stat_tough_reduction', 'toughness_damage_taken', COLORS.DEFENSE)
 
-    local tough_taken = Utils.toughness_damage_taken(folded)
-    local has_tough_defense = tough_taken
-        and (tough_taken.generic ~= 1 or tough_taken.melee ~= 1 or tough_taken.ranged ~= 1)
-    if has_tough_defense then
-        if tough_taken.generic ~= 1 then
-            _stat(records, mod:localize('stat_tough_reduction'), _fmt_pct(1 - tough_taken.generic), COLORS.DEFENSE)
-            _sources(records, folded, 'toughness_damage_taken_multiplier', 'mult')
-            _sources(records, folded, 'toughness_damage_taken_modifier', 'add')
-        end
-        if tough_taken.melee ~= tough_taken.generic then
-            _stat(records, _variant('stat_tough_reduction', 'melee'), _fmt_pct(1 - tough_taken.melee), COLORS.DEFENSE)
-            _sources(records, folded, 'melee_toughness_damage_taken_multiplier', 'mult')
-            _sources(records, folded, 'melee_toughness_damage_taken_modifier', 'add')
-        end
-        if tough_taken.ranged ~= tough_taken.generic then
-            _stat(records, _variant('stat_tough_reduction', 'ranged'), _fmt_pct(1 - tough_taken.ranged), COLORS.DEFENSE)
-            _sources(records, folded, 'ranged_toughness_damage_taken_multiplier', 'mult')
-            _sources(records, folded, 'ranged_toughness_damage_taken_modifier', 'add')
-        end
-    end
-
-    local source_terms = Utils.damage_taken_from_sources(folded)
-    if source_terms then
-        for i = 1, #source_terms do
-            local t = source_terms[i]
-            local reduction = t.kind == 'mult' and (1 - t.value) or -t.delta
-            _stat(records, mod:localize(t.label), _fmt_pct(reduction), COLORS.DEFENSE)
-            -- A grouped term's keys share identical sources (one perk buffs every breed
-            -- in the group to the same value), so render sources from the first key only.
-            _sources(records, folded, t.keys[1], t.kind == 'mult' and 'mult' or 'add')
-        end
-    end
+    -- Damage Resistance variants: independent multiplicative resistances (corruption, enemy
+    -- types, status effects), each shown as reduction = 1 - value. Grouped breed keys share
+    -- sources, so only the first key's sources render per group.
+    _resistance_group(records, folded, 'stat_damage_reduction', {
+        { keys = { 'corruption_taken_multiplier' }, tags = { 'variant_corruption' } },
+        { keys = { 'corruption_taken_grimoire_multiplier' }, tags = { 'variant_grimoire' } },
+        { keys = { 'damage_taken_from_toxic_gas_multiplier' }, tags = { 'variant_toxic_gas' } },
+        { keys = { 'damage_taken_from_toxin' }, tags = { 'variant_toxin' } },
+        { keys = { 'damage_taken_from_explosions' }, tags = { 'variant_explosions' } },
+        { keys = { 'damage_taken_from_prop_explosions' }, tags = { 'variant_prop_explosions' } },
+        { keys = { 'damage_taken_from_burning' }, tags = { 'variant_burning' } },
+        { keys = { 'damage_taken_from_bleeding' }, tags = { 'variant_bleeding' } },
+        { keys = { 'damage_taken_from_electrocution' }, tags = { 'variant_electrocution' } },
+        { keys = { 'damage_taken_from_kinetic' }, tags = { 'variant_kinetic' } },
+        {
+            keys = {
+                'damage_taken_by_cultist_grenadier_multiplier',
+                'damage_taken_by_renegade_grenadier_multiplier',
+            },
+            tags = { 'variant_bombers' },
+        },
+        {
+            keys = {
+                'damage_taken_by_cultist_flamer_multiplier',
+                'damage_taken_by_renegade_flamer_multiplier',
+                'damage_taken_by_renegade_flamer_mutator_multiplier',
+            },
+            tags = { 'variant_flamers' },
+        },
+        {
+            keys = {
+                'damage_taken_by_cultist_gunner_multiplier',
+                'damage_taken_by_renegade_gunner_multiplier',
+                'damage_taken_by_chaos_ogryn_gunner_multiplier',
+            },
+            tags = { 'variant_gunners' },
+        },
+        {
+            keys = {
+                'damage_taken_by_cultist_mutant_multiplier',
+                'damage_taken_by_cultist_mutant_mutator_multiplier',
+            },
+            tags = { 'variant_mutants' },
+        },
+        {
+            keys = {
+                'damage_taken_by_chaos_hound_multiplier',
+                'damage_taken_by_chaos_hound_mutator_multiplier',
+                'damage_taken_by_chaos_armored_hound_multiplier',
+            },
+            tags = { 'variant_pox_hounds' },
+        },
+        { keys = { 'damage_taken_by_renegade_sniper_multiplier' }, tags = { 'variant_snipers' } },
+    }, COLORS.DEFENSE)
     _spacer(records)
 
     -- TOUGHNESS regen
