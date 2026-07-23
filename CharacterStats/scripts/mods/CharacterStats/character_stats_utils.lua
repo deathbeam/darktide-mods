@@ -352,29 +352,69 @@ local function _gadget_buffs(player)
     return out
 end
 
-local function _folded_values(folded)
-    return folded and folded.values or nil
-end
-
--- Merge source rows by `name`, composing `field` per the stat type: multiplicative
--- stats multiply (matching the engine), additive/flat stats sum. One row per named
--- contributor, so a talent granting several same-named buffs collapses to one line.
-local function _merge_sources_by_name(sources, field, stat_type)
-    local merged, by_name = {}, {}
-    local mult = stat_type == 'mult'
-    for i = 1, #sources do
-        local src = sources[i]
-        local existing = by_name[src.name]
-        if existing then
-            existing[field] = mult and (existing[field] * src[field]) or (existing[field] + src[field])
-        else
-            local copy = { name = src.name }
-            copy[field] = src[field]
-            by_name[src.name] = copy
-            merged[#merged + 1] = copy
+local function _havoc_debuffs(rank)
+    if not rank or rank <= 0 then
+        return {}
+    end
+    local data = _havoc_tables()
+    local entry = data and data.config[rank]
+    if not entry then
+        return {}
+    end
+    -- Definitions live in modifier_templates; havoc_settings.modifiers is just a name array.
+    local templates = data.settings.modifier_templates
+    local out = {}
+    for name, tier in pairs(entry) do
+        if _HAVOC_PLAYER_FACING[name] then
+            local mod_def = templates and templates[name]
+            local buff_name = mod_def and mod_def[tier] and mod_def[tier].add_player_buff
+            if buff_name and BuffTemplates[buff_name] then
+                out[#out + 1] = buff_name
+            end
         end
     end
-    return merged
+    return out
+end
+
+local function _talent_entries(unit, profile)
+    local archetype = profile and profile.archetype
+    if not archetype then
+        return nil, nil
+    end
+    local talent_ext = unit and ScriptUnit.has_extension(unit, 'talent_system')
+    local allocated
+    if talent_ext then
+        local ok, result = pcall(function()
+            return talent_ext.talents and talent_ext:talents()
+        end)
+        allocated = (ok and result) or talent_ext._talents
+    end
+    allocated = allocated or (profile and profile.talents)
+    if not allocated then
+        return nil, nil
+    end
+
+    local entries, coherency_templates, talents = {}, {}, archetype.talents
+    for talent_name, tier in pairs(allocated) do
+        local talent = talents and talents[talent_name]
+        if talent then
+            entries[#entries + 1] = {
+                talent_name = talent_name,
+                tier = tier,
+                buff_template_names = _talent_passive_buffs(talent),
+                display_name = SharedUtils.safe_localize(talent.display_name) or SharedUtils.prettify(talent_name),
+            }
+            local coh = talent.coherency
+            if coh and coh.buff_template_name then
+                coherency_templates[#coherency_templates + 1] = coh.buff_template_name
+            end
+        end
+    end
+    return entries, coherency_templates
+end
+
+local function _folded_values(folded)
+    return folded and folded.values or nil
 end
 
 -- Group damage-taken terms that share a label (e.g. a Gunners perk buffs 3 breeds to the
@@ -426,6 +466,27 @@ local function _compose_taken(values, prefix)
 end
 
 -- Public API ------------------------------------------------------------
+
+-- Merge source rows by `name`, composing `field` per the stat type: multiplicative
+-- stats multiply (matching the engine), additive/flat stats sum. One row per named
+-- contributor, so a talent granting several same-named buffs collapses to one line.
+function M.merge_sources_by_name(sources, field, stat_type)
+    local merged, by_name = {}, {}
+    local mult = stat_type == 'mult'
+    for i = 1, #sources do
+        local src = sources[i]
+        local existing = by_name[src.name]
+        if existing then
+            existing[field] = mult and (existing[field] * src[field]) or (existing[field] + src[field])
+        else
+            local copy = { name = src.name }
+            copy[field] = src[field]
+            by_name[src.name] = copy
+            merged[#merged + 1] = copy
+        end
+    end
+    return merged
+end
 
 function M.local_player_unit()
     local player = Managers.player and Managers.player:local_player_safe(1)
@@ -538,76 +599,15 @@ function M.compute_max_vitals(folded, archetype, toughness_template, stamina_tem
     return max_health, max_toughness, max_stamina
 end
 
-function M.havoc_debuffs(rank)
-    if not rank or rank <= 0 then
-        return {}
-    end
-    local data = _havoc_tables()
-    local entry = data and data.config[rank]
-    if not entry then
-        return {}
-    end
-    -- Definitions live in modifier_templates; havoc_settings.modifiers is just a name array.
-    local templates = data.settings.modifier_templates
-    local out = {}
-    for name, tier in pairs(entry) do
-        if _HAVOC_PLAYER_FACING[name] then
-            local mod_def = templates and templates[name]
-            local buff_name = mod_def and mod_def[tier] and mod_def[tier].add_player_buff
-            if buff_name and BuffTemplates[buff_name] then
-                out[#out + 1] = buff_name
-            end
-        end
-    end
-    return out
-end
-
-function M.talent_entries(unit, profile)
-    local archetype = profile and profile.archetype
-    if not archetype then
-        return nil, nil
-    end
-    local talent_ext = unit and ScriptUnit.has_extension(unit, 'talent_system')
-    local allocated
-    if talent_ext then
-        local ok, result = pcall(function()
-            return talent_ext.talents and talent_ext:talents()
-        end)
-        allocated = (ok and result) or talent_ext._talents
-    end
-    allocated = allocated or (profile and profile.talents)
-    if not allocated then
-        return nil, nil
-    end
-
-    local entries, coherency_templates, talents = {}, {}, archetype.talents
-    for talent_name, tier in pairs(allocated) do
-        local talent = talents and talents[talent_name]
-        if talent then
-            entries[#entries + 1] = {
-                talent_name = talent_name,
-                tier = tier,
-                buff_template_names = _talent_passive_buffs(talent),
-                display_name = SharedUtils.safe_localize(talent.display_name) or SharedUtils.prettify(talent_name),
-            }
-            local coh = talent.coherency
-            if coh and coh.buff_template_name then
-                coherency_templates[#coherency_templates + 1] = coh.buff_template_name
-            end
-        end
-    end
-    return entries, coherency_templates
-end
-
 -- Builds the assumed-active ceiling: every buff the character is capable of (talents +
 -- related procs + blessings + curios + coherency + havoc), folded at max stacks. Not seeded from
 -- the live snapshot, which would double-count any currently-active buff.
-function M.folded_stat_buffs(live_stat_buffs, unit, profile, player, toggles)
+function M.folded_stat_buffs(unit, profile, player, toggles)
     toggles = toggles or {}
     local result = { values = {}, sources = {} }
     local related = _related_by_talent()
 
-    local entries, coherency_templates = M.talent_entries(unit, profile)
+    local entries, coherency_templates = _talent_entries(unit, profile)
     if entries then
         for i = 1, #entries do
             local entry = entries[i]
@@ -679,7 +679,7 @@ function M.folded_stat_buffs(live_stat_buffs, unit, profile, player, toggles)
     local havoc_rank = toggles.havoc_rank or 0
     if havoc_rank > 0 then
         local havoc_source = mod:localize('havoc_source')
-        for _, name in ipairs(M.havoc_debuffs(havoc_rank)) do
+        for _, name in ipairs(_havoc_debuffs(havoc_rank)) do
             _fold(result, BuffTemplates[name], nil, 1, havoc_source)
         end
     end
@@ -690,8 +690,6 @@ end
 function M.sources_for_stat(folded, stat_key)
     return folded and folded.sources and folded.sources[stat_key] or nil
 end
-
-M._merge_sources_by_name = _merge_sources_by_name
 
 function M.crit_chance(player, unit, wep_template, folded)
     local s = folded and folded.values
@@ -1009,7 +1007,7 @@ end
 -- Toughness.replenish_percentage directly (never in stat_buffs). Returns a per-second fraction
 -- of max toughness, plus contributing sources { name, per_second } (merged by display name).
 function M.toughness_bonus_regen(unit, profile, toggles)
-    local entries = M.talent_entries(unit, profile)
+    local entries = _talent_entries(unit, profile)
     if not entries then
         return nil, nil
     end
@@ -1068,7 +1066,7 @@ function M.toughness_bonus_regen(unit, profile, toggles)
         return nil, nil
     end
 
-    return total, _merge_sources_by_name(sources, 'per_second', 'add')
+    return total, M.merge_sources_by_name(sources, 'per_second', 'add')
 end
 
 function M.has_stat(folded, stat_key)

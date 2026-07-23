@@ -69,7 +69,7 @@ local function _sources(records, folded, stat_key, stat_type)
     if not list or #list == 0 then
         return
     end
-    local merged = Utils._merge_sources_by_name(list, 'delta', stat_type)
+    local merged = Utils.merge_sources_by_name(list, 'delta', stat_type)
     for i = 1, #merged do
         local src = merged[i]
         local value_str
@@ -146,7 +146,7 @@ function build_stats()
         havoc_rank = mod:get('havoc_rank') or 0,
         coherency_allies = mod:get('coherency_allies') or 3,
     }
-    local folded = Utils.folded_stat_buffs(stat_buffs, unit, profile, player, toggles)
+    local folded = Utils.folded_stat_buffs(unit, profile, player, toggles)
 
     -- Derive max_health/max_toughness from base + folded buffs: the live extension reads
     -- return the base value where curio/talent buffs aren't active (e.g. the hub).
