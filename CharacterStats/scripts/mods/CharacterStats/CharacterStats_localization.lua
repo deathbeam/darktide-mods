@@ -14,6 +14,7 @@ return {
         stat_toughness_regen_percent = 'loc_toughness_tutorial',
         stat_dodge_dist = 'loc_weapon_stats_display_dodge_distance',
         stat_dodge_speed = 'loc_weapon_stats_display_dodge_speed',
+        stat_block = 'loc_weapon_stats_display_block_efficiency',
         stat_dodge_count = 'loc_weapon_stats_display_effective_dodges',
         stat_stamina = 'loc_stats_display_stamina_title',
         stat_sprint_speed = 'loc_weapon_stats_display_sprint_speed',
@@ -34,6 +35,11 @@ return {
         variant_flamers = 'loc_breed_flamer_generic_name',
         variant_gunners = 'loc_breed_gunner_generic_name',
         variant_pox_hounds = 'loc_breed_display_name_chaos_hound',
+        variant_armor_unarmored = 'loc_weapon_stats_display_unarmored',
+        variant_armor_armored = 'loc_weapon_stats_display_armored',
+        variant_armor_resistant = 'loc_glossary_armour_type_resistant',
+        variant_armor_berserker = 'loc_weapon_stats_display_berzerker',
+        variant_armor_super_armor = 'loc_weapon_stats_display_super_armor',
         bio_origin = 'loc_character_create_title_bio_origin',
         bio_home_planet = 'loc_character_create_title_home_planet',
         bio_early_life = 'loc_character_create_title_early_life',
@@ -253,6 +259,10 @@ return {
     -- Stat labels: defense
     stat_damage_reduction = {
         en = 'Damage Reduction',
+        ['zh-cn'] = '伤害减免',
+    },
+    stat_damage_resistances = {
+        en = 'Damage Resistance',
         ['zh-cn'] = '伤害抗性',
     },
     stat_tough_reduction = {
@@ -284,6 +294,10 @@ return {
     stat_cleave = {
         en = 'Cleave',
         ['zh-cn'] = '横扫',
+    },
+    stat_armor_damage = {
+        en = 'Armor Damage Bonus',
+        ['zh-cn'] = '护甲伤害加成',
     },
 
     -- Stat labels: mobility

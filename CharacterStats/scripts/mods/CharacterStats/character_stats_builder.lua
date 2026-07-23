@@ -55,6 +55,13 @@ local function _fmt_pct(n)
     return string.format(fmt, pct)
 end
 
+local function _fmt_mult(n)
+    if n == nil then
+        return '-'
+    end
+    return string.format('x%.2f', n)
+end
+
 -- " (Melee, Monsters)" suffix for source rows / variant totals. The tag words come from
 -- the game's own loc keys (melee/ranged) or our variant_* keys, so variants stay consistent.
 local function _variant_tag(tags)
@@ -130,114 +137,93 @@ local function _base_source(records, label, delta, stat_type)
     })
 end
 
--- Render a stat line (delta as %) plus its contributing sources, only when the stat has at
--- least one non-default source. Used by the offense/defense additive-bonus blocks.
--- Render a "base stat + variants" group: one row per variant total (generic first, then each
--- variant as generic+variant), then ALL sources merged below, each annotated with its variant
--- tag. `generic_keys` are always-active; `variants` is a list of
--- { keys={...}, label='stat_xxx', tags={'melee'} } for variant-specific keys.
-local function _stat_group(records, folded, base_label, generic_keys, variants, color)
+-- Unified stat group: mult keys multiply, add keys sum their deltas (final = mult * (1 + Σ add)).
+-- One composition covers additive damage, multiplicative block/resistance, and mixed damage-taken.
+-- `independent` variants (grouped breed resistances) show their key alone, not folded with generic.
+local function _stat_group(records, folded, base_label, generic_keys, variants, color, default_type)
     local v = folded and folded.values
     if not v then
         return
     end
-    local function sum_delta(keys)
-        local d = 0
+    local default = default_type or 'add'
+    local function entry(key)
+        -- Plain strings inherit default_type; a { key, type } entry overrides it.
+        if type(key) == 'table' then
+            return key.key, key.type or default
+        end
+        return key, default
+    end
+    local function compose(keys)
+        local mult, add_delta = 1, 0
         for i = 1, #keys do
-            local val = v[keys[i]]
+            local k, t = entry(keys[i])
+            local val = v[k]
             if type(val) == 'number' and val ~= 1 then
-                d = d + val - 1
+                if t == 'mult' then
+                    mult = mult * val
+                else
+                    add_delta = add_delta + val - 1
+                end
             end
         end
-        return d
+        return mult * (1 + add_delta)
     end
 
-    local generic_delta = sum_delta(generic_keys)
+    local function combined_keys(variant)
+        -- Variants overlay generic keys (mults multiply, adds sum), so fold them together.
+        local combined = {}
+        for i = 1, #generic_keys do
+            combined[#combined + 1] = generic_keys[i]
+        end
+        for i = 1, #variant.keys do
+            combined[#combined + 1] = variant.keys[i]
+        end
+        return combined
+    end
+
+    local generic = compose(generic_keys)
     local has_variant = false
     for i = 1, #variants do
-        if sum_delta(variants[i].keys) ~= 0 then
+        if compose(variants[i].keys) ~= 1 then
             has_variant = true
             break
         end
     end
-    if generic_delta == 0 and not has_variant then
+    if generic == 1 and not has_variant then
         return
     end
 
-    if generic_delta ~= 0 then
-        _stat(records, mod:localize(base_label), _fmt_pct(generic_delta), color)
+    -- x1.20 for mult groups (matches per-source rows); +20% otherwise.
+    local fmt = default == 'mult' and _fmt_mult or function(n)
+        return _fmt_pct(n - 1)
+    end
+
+    if generic ~= 1 then
+        _stat(records, mod:localize(base_label), fmt(generic), color)
     end
     for i = 1, #variants do
-        local var_delta = sum_delta(variants[i].keys)
-        if var_delta ~= 0 then
-            local label = mod:localize(base_label) .. _variant_tag(variants[i].tags)
-            _stat(records, label, _fmt_pct(generic_delta + var_delta), color)
+        local variant = variants[i]
+        -- Independent variants read the first key alone (grouped breeds share one value); others overlay generic.
+        if compose(variant.keys) ~= 1 then
+            local shown = variant.independent and v[variant.keys[1]] or compose(combined_keys(variant))
+            shown = type(shown) == 'number' and shown or 1
+            local label = mod:localize(base_label) .. _variant_tag(variant.tags)
+            _stat(records, label, fmt(shown), color)
         end
     end
 
     for i = 1, #generic_keys do
-        _sources(records, folded, generic_keys[i], 'add')
+        local k, t = entry(generic_keys[i])
+        _sources(records, folded, k, t)
     end
     for i = 1, #variants do
-        local tag = _variant_tag(variants[i].tags)
-        for j = 1, #variants[i].keys do
-            _sources_tagged(records, folded, variants[i].keys[j], 'add', tag)
-        end
-    end
-end
-
--- Damage/toughness reduction group: the engine composes taken-multiplier as
--- mult = <prefix>_multiplier (+ melee/ranged) and mod = <prefix>_modifier (+ melee/ranged),
--- final = mult * mod. Show reduction = 1 - final for generic + each variant that differs,
--- then all sources (mult and add) annotated with their variant tag.
-local function _taken_group(records, folded, base_label, prefix, color)
-    local taken = Utils.compose_taken(folded, prefix)
-    if not taken then
-        return
-    end
-    local has_any = taken.generic ~= 1 or taken.melee ~= 1 or taken.ranged ~= 1
-    if not has_any then
-        return
-    end
-    if taken.generic ~= 1 then
-        _stat(records, mod:localize(base_label), _fmt_pct(1 - taken.generic), color)
-    end
-    if taken.melee ~= taken.generic then
-        _stat(records, mod:localize(base_label) .. _variant_tag({ 'variant_melee' }), _fmt_pct(1 - taken.melee), color)
-    end
-    if taken.ranged ~= taken.generic then
-        _stat(
-            records,
-            mod:localize(base_label) .. _variant_tag({ 'variant_ranged' }),
-            _fmt_pct(1 - taken.ranged),
-            color
-        )
-    end
-    _sources(records, folded, prefix .. '_multiplier', 'mult')
-    _sources(records, folded, prefix .. '_modifier', 'add')
-    local melee_tag = _variant_tag({ 'variant_melee' })
-    local ranged_tag = _variant_tag({ 'variant_ranged' })
-    _sources_tagged(records, folded, 'melee_' .. prefix .. '_multiplier', 'mult', melee_tag)
-    _sources_tagged(records, folded, 'melee_' .. prefix .. '_modifier', 'add', melee_tag)
-    _sources_tagged(records, folded, 'ranged_' .. prefix .. '_multiplier', 'mult', ranged_tag)
-    _sources_tagged(records, folded, 'ranged_' .. prefix .. '_modifier', 'add', ranged_tag)
-end
-
--- Independent multiplicative resistances (Corruption, Gunners, etc.): each is a variant of
--- "Damage Resistance", shown as reduction = 1 - value, with sources from the first key (grouped
--- breed keys share identical sources). Unlike _stat_group, these don't compose additively.
-local function _resistance_group(records, folded, base_label, variants, color)
-    local v = folded and folded.values
-    if not v then
-        return
-    end
-    for i = 1, #variants do
-        local var = variants[i]
-        local value = v[var.keys[1]]
-        if type(value) == 'number' and value ~= 1 then
-            local label = mod:localize(base_label) .. _variant_tag(var.tags)
-            _stat(records, label, _fmt_pct(1 - value), color)
-            _sources(records, folded, var.keys[1], 'mult')
+        local variant = variants[i]
+        local tag = _variant_tag(variant.tags)
+        local keys = variant.keys
+        local n = variant.independent and 1 or #keys
+        for j = 1, n do
+            local k, t = entry(keys[j])
+            _sources_tagged(records, folded, k, t, tag)
         end
     end
 end
@@ -246,7 +232,9 @@ local function _stat_with_sources(records, folded, label, stat_key, color, src_t
     if not Utils.has_stat(folded, stat_key) then
         return
     end
-    _stat(records, mod:localize(label), _fmt_pct(Utils.stat_delta(folded, stat_key)), color)
+    local delta = Utils.stat_delta(folded, stat_key)
+    local display = src_type == 'mult' and _fmt_mult(1 + delta) or _fmt_pct(delta)
+    _stat(records, mod:localize(label), display, color)
     _sources(records, folded, stat_key, src_type or 'add')
 end
 
@@ -398,19 +386,19 @@ function build_stats()
         if mobility.dodge_dist then
             _stat(records, mod:localize('stat_dodge_dist'), string.format('%.1f', mobility.dodge_dist), COLORS.MOBILITY)
         end
-        if mobility.dodge_speed and mobility.dodge_speed ~= 1 then
-            _stat(records, mod:localize('stat_dodge_speed'), _fmt_pct(mobility.dodge_speed), COLORS.MOBILITY)
-        end
-        if Utils.has_stat(folded, 'movement_speed') then
-            _stat(
-                records,
-                mod:localize('stat_movement_speed'),
-                _fmt_pct(Utils.stat_delta(folded, 'movement_speed')),
-                COLORS.MOBILITY
-            )
-            _sources(records, folded, 'movement_speed', 'add')
-            _sources(records, folded, 'sprint_movement_speed', 'add')
-        end
+        _stat_with_sources(records, folded, 'stat_dodge_speed', 'dodge_speed_multiplier', COLORS.MOBILITY, 'mult')
+
+        _stat_group(records, folded, 'stat_block', { 'block_cost_multiplier', 'block_cost_modifier' }, {
+            { keys = { 'block_cost_ranged_multiplier', 'block_cost_ranged_modifier' }, tags = { 'variant_ranged' } },
+        }, COLORS.MOBILITY, 'mult')
+        _stat_group(
+            records,
+            folded,
+            'stat_movement_speed',
+            { 'movement_speed', 'sprint_movement_speed' },
+            {},
+            COLORS.MOBILITY
+        )
         _spacer(records)
     end
 
@@ -451,6 +439,16 @@ function build_stats()
         { keys = { 'damage_vs_staggered' }, tags = { 'variant_staggered' } },
         { keys = { 'damage_vs_suppressed' }, tags = { 'variant_suppressed' } },
         { keys = { 'damage_vs_healthy' }, tags = { 'variant_healthy' } },
+    }, COLORS.OFFENSE)
+
+    -- Armor-type damage: separate multiplicative step (base_damage * stat_buff) from the common
+    -- "+damage vs Armored/Unarmored/etc." perks.
+    _stat_group(records, folded, 'stat_armor_damage', {}, {
+        { keys = { 'unarmored_damage' }, tags = { 'variant_armor_unarmored' } },
+        { keys = { 'armored_damage' }, tags = { 'variant_armor_armored' } },
+        { keys = { 'resistant_damage' }, tags = { 'variant_armor_resistant' } },
+        { keys = { 'berserker_damage' }, tags = { 'variant_armor_berserker' } },
+        { keys = { 'super_armor_damage' }, tags = { 'variant_armor_super_armor' } },
     }, COLORS.OFFENSE)
 
     -- Attack speed: generic + melee/ranged.
@@ -537,30 +535,45 @@ function build_stats()
 
     _section(records, mod:localize('header_defense'), COLORS.DEFENSE)
     if has_health then
-        _taken_group(records, folded, 'stat_damage_reduction', 'damage_taken', COLORS.DEFENSE)
+        _stat_group(records, folded, 'stat_damage_reduction', {
+            { key = 'damage_taken_multiplier', type = 'mult' },
+            { key = 'damage_taken_modifier', type = 'add' },
+        }, {
+            {
+                keys = {
+                    { key = 'melee_damage_taken_multiplier', type = 'mult' },
+                    { key = 'melee_damage_taken_modifier', type = 'add' },
+                },
+                tags = { 'variant_melee' },
+            },
+            {
+                keys = {
+                    { key = 'ranged_damage_taken_multiplier', type = 'mult' },
+                    { key = 'ranged_damage_taken_modifier', type = 'add' },
+                },
+                tags = { 'variant_ranged' },
+            },
+        }, COLORS.DEFENSE, 'mult')
     end
-    _taken_group(records, folded, 'stat_tough_reduction', 'toughness_damage_taken', COLORS.DEFENSE)
-
-    -- Damage Resistance variants: independent multiplicative resistances (corruption, enemy
-    -- types, status effects), each shown as reduction = 1 - value. Grouped breed keys share
-    -- sources, so only the first key's sources render per group.
-    _resistance_group(records, folded, 'stat_damage_reduction', {
-        { keys = { 'corruption_taken_multiplier' }, tags = { 'variant_corruption' } },
-        { keys = { 'corruption_taken_grimoire_multiplier' }, tags = { 'variant_grimoire' } },
-        { keys = { 'damage_taken_from_toxic_gas_multiplier' }, tags = { 'variant_toxic_gas' } },
-        { keys = { 'damage_taken_from_toxin' }, tags = { 'variant_toxin' } },
-        { keys = { 'damage_taken_from_explosions' }, tags = { 'variant_explosions' } },
-        { keys = { 'damage_taken_from_prop_explosions' }, tags = { 'variant_prop_explosions' } },
-        { keys = { 'damage_taken_from_burning' }, tags = { 'variant_burning' } },
-        { keys = { 'damage_taken_from_bleeding' }, tags = { 'variant_bleeding' } },
-        { keys = { 'damage_taken_from_electrocution' }, tags = { 'variant_electrocution' } },
-        { keys = { 'damage_taken_from_kinetic' }, tags = { 'variant_kinetic' } },
+    -- Independent multiplicative resistances (corruption, enemy types, status effects).
+    _stat_group(records, folded, 'stat_damage_resistances', {}, {
+        { keys = { 'corruption_taken_multiplier' }, tags = { 'variant_corruption' }, independent = true },
+        { keys = { 'corruption_taken_grimoire_multiplier' }, tags = { 'variant_grimoire' }, independent = true },
+        { keys = { 'damage_taken_from_toxic_gas_multiplier' }, tags = { 'variant_toxic_gas' }, independent = true },
+        { keys = { 'damage_taken_from_toxin' }, tags = { 'variant_toxin' }, independent = true },
+        { keys = { 'damage_taken_from_explosions' }, tags = { 'variant_explosions' }, independent = true },
+        { keys = { 'damage_taken_from_prop_explosions' }, tags = { 'variant_prop_explosions' }, independent = true },
+        { keys = { 'damage_taken_from_burning' }, tags = { 'variant_burning' }, independent = true },
+        { keys = { 'damage_taken_from_bleeding' }, tags = { 'variant_bleeding' }, independent = true },
+        { keys = { 'damage_taken_from_electrocution' }, tags = { 'variant_electrocution' }, independent = true },
+        { keys = { 'damage_taken_from_kinetic' }, tags = { 'variant_kinetic' }, independent = true },
         {
             keys = {
                 'damage_taken_by_cultist_grenadier_multiplier',
                 'damage_taken_by_renegade_grenadier_multiplier',
             },
             tags = { 'variant_bombers' },
+            independent = true,
         },
         {
             keys = {
@@ -569,6 +582,7 @@ function build_stats()
                 'damage_taken_by_renegade_flamer_mutator_multiplier',
             },
             tags = { 'variant_flamers' },
+            independent = true,
         },
         {
             keys = {
@@ -577,6 +591,7 @@ function build_stats()
                 'damage_taken_by_chaos_ogryn_gunner_multiplier',
             },
             tags = { 'variant_gunners' },
+            independent = true,
         },
         {
             keys = {
@@ -584,6 +599,7 @@ function build_stats()
                 'damage_taken_by_cultist_mutant_mutator_multiplier',
             },
             tags = { 'variant_mutants' },
+            independent = true,
         },
         {
             keys = {
@@ -592,9 +608,31 @@ function build_stats()
                 'damage_taken_by_chaos_armored_hound_multiplier',
             },
             tags = { 'variant_pox_hounds' },
+            independent = true,
         },
-        { keys = { 'damage_taken_by_renegade_sniper_multiplier' }, tags = { 'variant_snipers' } },
-    }, COLORS.DEFENSE)
+        { keys = { 'damage_taken_by_renegade_sniper_multiplier' }, tags = { 'variant_snipers' }, independent = true },
+    }, COLORS.DEFENSE, 'mult')
+
+    _stat_group(records, folded, 'stat_tough_reduction', {
+        { key = 'toughness_damage_taken_multiplier', type = 'mult' },
+        { key = 'toughness_damage_taken_modifier', type = 'add' },
+    }, {
+        {
+            keys = {
+                { key = 'melee_toughness_damage_taken_multiplier', type = 'mult' },
+                { key = 'melee_toughness_damage_taken_modifier', type = 'add' },
+            },
+            tags = { 'variant_melee' },
+        },
+        {
+            keys = {
+                { key = 'ranged_toughness_damage_taken_multiplier', type = 'mult' },
+                { key = 'ranged_toughness_damage_taken_modifier', type = 'add' },
+            },
+            tags = { 'variant_ranged' },
+        },
+    }, COLORS.DEFENSE, 'mult')
+
     _spacer(records)
 
     -- TOUGHNESS regen

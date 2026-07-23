@@ -16,6 +16,7 @@ local FormativeEvent = mod:original_require('scripts/settings/character/formativ
 local Crimes = mod:original_require('scripts/settings/character/crimes')
 local Personalities = mod:original_require('scripts/settings/character/personalities')
 local CrimesCompabilityMap = mod:original_require('scripts/settings/character/crimes_compability_mapping')
+local TraitValueParser = mod:original_require('scripts/utilities/trait_value_parser')
 local SharedUtils = mod:io_dofile('CharacterStats/scripts/mods/CharacterStats/shared/shared_utils')
 
 -- Constants -------------------------------------------------------------
@@ -294,6 +295,14 @@ local function _equip_loadout(player)
     return ScriptUnit.has_extension(player.player_unit, 'visual_loadout_system')
 end
 
+local function _trait_display_name(trait_item, trait_name, trait_level, lerp_value)
+    local ok, text = pcall(TraitValueParser.trait_description, trait_item, trait_level, lerp_value)
+    if ok and type(text) == 'string' and text ~= '' and not text:lower():find('unlocalized') then
+        return text
+    end
+    return nil
+end
+
 local function _display_for_buff(template_name)
     local template = BuffTemplates[template_name]
     return (template and SharedUtils.safe_localize(template.display_name)) or SharedUtils.prettify(template_name)
@@ -335,6 +344,7 @@ local function _weapon_buffs(player, slot_name)
                                 template_name = buff_template_name,
                                 override_data = override,
                                 display_name = SharedUtils.safe_localize(trait_item and trait_item.display_name)
+                                    or _trait_display_name(trait_item, trait_name, rarity, trait.value)
                                     or _display_for_buff(buff_template_name),
                             }
                         end
@@ -368,6 +378,7 @@ local function _gadget_buffs(player)
                         template_name = trait_name,
                         lerp_value = data.value,
                         display_name = SharedUtils.safe_localize(trait_item and trait_item.display_name)
+                            or _trait_display_name(trait_item, trait_name, data.rarity, data.value)
                             or GADGET_STAT_LABEL[trait_name]
                             or SharedUtils.prettify(trait_name),
                     }
@@ -443,27 +454,6 @@ end
 
 local function _folded_values(folded)
     return folded and folded.values or nil
-end
-
--- Group damage-taken terms that share a label (e.g. a Gunners perk buffs 3 breeds to the
--- same value): collapses them into one term carrying all keys, value taken from the first.
--- {label, key, delta} terms for the given stat keys, skipping defaults (multiplier base 1).
--- damage_taken / toughness_damage_taken share the same compose: mult = <prefix>_multiplier,
--- mod = <prefix>_modifier (+ melee/ranged variants), final = mult * mod.
-local function _compose_taken(values, prefix)
-    local function compose(is_melee, is_ranged)
-        local mult = values[prefix .. '_multiplier'] or 1
-        local mod = values[prefix .. '_modifier'] or 1
-        if is_melee then
-            mult = mult * (values['melee_' .. prefix .. '_multiplier'] or 1)
-            mod = mod + (values['melee_' .. prefix .. '_modifier'] or 1) - 1
-        elseif is_ranged then
-            mult = mult * (values['ranged_' .. prefix .. '_multiplier'] or 1)
-            mod = mod + (values['ranged_' .. prefix .. '_modifier'] or 1) - 1
-        end
-        return mult * mod
-    end
-    return { generic = compose(false, false), melee = compose(true, false), ranged = compose(false, true) }
 end
 
 -- Public API ------------------------------------------------------------
@@ -656,14 +646,30 @@ function M.folded_stat_buffs(unit, profile, player, toggles)
             local stacks = _stacks_for(template, toggles)
             local override = entry.override_data
             local source = entry.display_name or entry.template_name
-            _merge(result, (override and override.stat_buffs) or template.stat_buffs, stacks, source)
-            _merge(
-                result,
-                (override and override.conditional_stat_buffs) or template.conditional_stat_buffs,
-                stacks,
-                source
-            )
-            _merge(result, (override and override.proc_stat_buffs) or template.proc_stat_buffs, stacks, source)
+            -- Engine applies override.stat_buffs as per-key replacements within each pass, and
+            -- override.conditional/proc_stat_buffs wholesale. Merging separately double-counts.
+            local stat_overrides = override and override.stat_buffs
+            local function with_overrides(t)
+                if not t then
+                    return nil
+                end
+                if not stat_overrides then
+                    return t
+                end
+                local copy = table.clone(t)
+                for k, v in pairs(stat_overrides) do
+                    if copy[k] ~= nil then
+                        copy[k] = v
+                    end
+                end
+                return copy
+            end
+            local base = with_overrides(template.stat_buffs)
+            local cond = override and override.conditional_stat_buffs or with_overrides(template.conditional_stat_buffs)
+            local proc = override and override.proc_stat_buffs or with_overrides(template.proc_stat_buffs)
+            _merge(result, base, stacks, source)
+            _merge(result, cond, stacks, source)
+            _merge(result, proc, stacks, source)
         end
     end
 
@@ -818,11 +824,6 @@ function M.toughness_regen_delay(unit, live_stat_buffs, tough_template)
     local wep_mod = wep_tough and wep_tough.regeneration_delay_modifier or 1
     local buff_mod = (s.toughness_regen_delay_modifier or 1) * (s.toughness_regen_delay_multiplier or 1)
     return tough_template.regeneration_delay * wep_mod * buff_mod
-end
-
-function M.compose_taken(folded, prefix)
-    local v = _folded_values(folded)
-    return v and _compose_taken(v, prefix) or nil
 end
 
 -- Sum the bonus toughness regen granted by allocated talents' proc/over-time buffs that call
