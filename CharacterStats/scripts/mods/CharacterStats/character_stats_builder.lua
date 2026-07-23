@@ -525,6 +525,11 @@ function build_stats()
         { keys = { 'ranged_impact_modifier' }, tags = { 'variant_ranged' } },
     }, COLORS.OFFENSE)
 
+    _stat_group(records, folded, 'stat_cleave', { 'max_hit_mass_attack_modifier' }, {
+        { keys = { 'max_melee_hit_mass_attack_modifier' }, tags = { 'variant_melee' } },
+        { keys = { 'ranged_max_hit_mass_attack_modifier' }, tags = { 'variant_ranged' } },
+    }, COLORS.OFFENSE)
+
     _spacer(records)
 
     -- DEFENSE

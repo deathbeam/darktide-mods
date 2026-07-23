@@ -281,6 +281,10 @@ return {
         en = 'Impact',
         ['zh-cn'] = '冲击',
     },
+    stat_cleave = {
+        en = 'Cleave',
+        ['zh-cn'] = '横扫',
+    },
 
     -- Stat labels: mobility
     stat_stamina_regen = {
