@@ -151,10 +151,6 @@ mod:hook(
                         hit_weakspot,
                         damage_profile_name
                     )
-
-                    if attack_result == 'died' then
-                        mod.tracker:finish_enemy_engagement(attacked_unit, true)
-                    end
                 elseif
                     player_unit
                     and attacked_unit == player_unit
@@ -166,6 +162,10 @@ mod:hook(
                     if breed then
                         mod.tracker:start_enemy_engagement(attacking_unit, breed)
                     end
+                end
+
+                if attack_result == 'died' and player_unit and attacking_unit == player_unit then
+                    mod.tracker:finish_enemy_engagement(attacked_unit, true)
                 end
             end
         end

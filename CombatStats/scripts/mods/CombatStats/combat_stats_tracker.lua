@@ -218,7 +218,6 @@ end
 
 function CombatStatsTracker:get_engagement_stats()
     local engagements = {}
-
     for _, engagement in ipairs(self._engagements or {}) do
         local stats = new_stats()
         accumulate(stats, engagement.stats or {})
@@ -382,7 +381,6 @@ function CombatStatsTracker:track_enemy_damage(
     -- Update the engagement and the session cache with the same event so the view stays in sync.
     add_damage(engagement.stats, actual_damage, overkill_damage, attack_type, is_critical, is_weakspot, damage_type)
     add_damage(self._session_stats, actual_damage, overkill_damage, attack_type, is_critical, is_weakspot, damage_type)
-
     local breed_type = engagement.type or 'unknown'
     self._session_stats.damage_by_type[breed_type] = (self._session_stats.damage_by_type[breed_type] or 0)
         + actual_damage
@@ -394,14 +392,14 @@ function CombatStatsTracker:finish_enemy_engagement(unit, killed)
         return
     end
 
-    local current_time = self:get_time()
-    engagement.end_time = current_time
+    engagement.end_time = self:get_time()
     engagement.killed = killed or false
     self._active_engagements_by_unit[unit] = nil
-    self._engagements_by_unit[unit] = nil
-    self._enemy_health[unit] = nil
 
     if killed then
+        self._engagements_by_unit[unit] = nil
+        self._enemy_health[unit] = nil
+
         local breed_type = engagement.type or 'unknown'
         local session_stats = self._session_stats
         session_stats.total_kills = session_stats.total_kills + 1
@@ -418,22 +416,21 @@ function CombatStatsTracker:_update_active_engagements()
     local timeout = mod:get('engagement_timeout')
 
     for unit, engagement in pairs(self._active_engagements_by_unit) do
-        local should_end = false
+        local unit_gone = not ALIVE[unit] or not HEALTH_ALIVE[unit]
+        local timed_out = false
 
-        if not ALIVE[unit] or not HEALTH_ALIVE[unit] then
-            should_end = true
-        elseif engagement.last_damage_time then
-            local time_since_damage = current_time - engagement.last_damage_time
-            if time_since_damage >= timeout then
-                should_end = true
-            end
+        if not unit_gone and engagement.last_damage_time then
+            timed_out = (current_time - engagement.last_damage_time) >= timeout
         end
 
-        if should_end then
+        if unit_gone or timed_out then
             engagement.end_time = current_time
             self._active_engagements_by_unit[unit] = nil
-            self._engagements_by_unit[unit] = nil
-            self._enemy_health[unit] = nil
+
+            if unit_gone then
+                self._engagements_by_unit[unit] = nil
+                self._enemy_health[unit] = nil
+            end
         end
     end
 end
