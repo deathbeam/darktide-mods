@@ -5,13 +5,12 @@ local _loc = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/WeaponStats_loc
 SharedUtils.apply_loc_settings(mod, _loc)
 
 -- Register Weapon Stats View (and its ESC-menu button)
-SharedUtils.register_stats_view(
-    mod,
-    'weapon_stats_view',
-    'WeaponStatsView',
-    'WeaponStats/scripts/mods/WeaponStats/weapon_stats_view/weapon_stats_view',
-    'loc_weapon_stats_menu_button'
-)
+SharedUtils.register_stats_view(mod, {
+    view_name = 'weapon_stats_view',
+    class_name = 'WeaponStatsView',
+    path = 'WeaponStats/scripts/mods/WeaponStats/weapon_stats_view/weapon_stats_view',
+    button_text_loc = 'loc_weapon_stats_menu_button',
+})
 
 -- Add a button to the weapon options grid that opens the view
 mod:hook(CLASS.ViewElementGrid, 'present_grid_layout', function(func, self, layout, ...)

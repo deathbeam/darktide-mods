@@ -9,6 +9,12 @@ local stats_view_names = rawget(_G, 'dmf_stats_view_names') or {}
 _G.dmf_stats_view_names = stats_view_names
 SharedUtils.stats_view_names = stats_view_names
 
+-- Per-view setting_ids (set by register_stats_view). shared_view_base reads this to
+-- auto-build the in-view settings list; on_setting_changed refreshes the detail panel.
+local stats_view_setting_ids = rawget(_G, 'dmf_stats_view_setting_ids') or {}
+_G.dmf_stats_view_setting_ids = stats_view_setting_ids
+SharedUtils.stats_view_setting_ids = stats_view_setting_ids
+
 -- Terminal-style {255, r, g, b} color per armor type name. Singletons: callers
 -- store the reference but never mutate it.
 local ARMOR_COLORS = {
@@ -311,10 +317,13 @@ function SharedUtils.armor_color(armor_key)
     return ARMOR_COLORS[armor_key] or ARMOR_COLOR_FALLBACK
 end
 
--- Register a stats view with the framework and add an ESC-menu button that opens
--- it. `button_text_loc` is the localization key for the button label; the button
--- honors the mod's `add_to_esc_menu` setting.
-function SharedUtils.register_stats_view(mod, view_name, class_name, path, button_text_loc)
+function SharedUtils.register_stats_view(mod, config)
+    local view_name = config.view_name
+    local class_name = config.class_name
+    local path = config.path
+    local button_text_loc = config.button_text_loc
+    local setting_ids = config.setting_ids
+
     stats_view_names[#stats_view_names + 1] = view_name
     mod:add_require_path(path)
     mod:register_view({
@@ -349,6 +358,34 @@ function SharedUtils.register_stats_view(mod, view_name, class_name, path, butto
             transition_time = nil,
         },
     })
+
+    if setting_ids and #setting_ids > 0 then
+        stats_view_setting_ids[view_name] = setting_ids
+
+        local refresh_ids = {}
+        for i = 1, #setting_ids do
+            refresh_ids[setting_ids[i]] = true
+        end
+
+        -- Preserve the mod's own on_setting_changed (if any).
+        local previous = mod.on_setting_changed
+        mod.on_setting_changed = function(id)
+            if previous then
+                previous(id)
+            end
+            if not refresh_ids[id] then
+                return
+            end
+            local ui_manager = Managers.ui
+            if not ui_manager or not ui_manager:view_active(view_name) then
+                return
+            end
+            local view = ui_manager:view_instance(view_name)
+            if view and view._present_detail then
+                view:_present_detail(view._detail_entry)
+            end
+        end
+    end
 
     local menu_button = {
         text = button_text_loc,

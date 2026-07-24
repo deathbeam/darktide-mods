@@ -5,10 +5,9 @@ local _loc = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/EnemyStats_locali
 SharedUtils.apply_loc_settings(mod, _loc)
 
 -- Register Enemy Stats View (and its ESC-menu button)
-SharedUtils.register_stats_view(
-    mod,
-    'enemy_stats_view',
-    'EnemyStatsView',
-    'EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_view',
-    'loc_enemy_stats_menu_button'
-)
+SharedUtils.register_stats_view(mod, {
+    view_name = 'enemy_stats_view',
+    class_name = 'EnemyStatsView',
+    path = 'EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_view',
+    button_text_loc = 'loc_enemy_stats_menu_button',
+})

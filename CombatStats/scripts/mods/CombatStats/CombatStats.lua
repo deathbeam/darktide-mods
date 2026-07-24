@@ -21,13 +21,12 @@ mod:register_hud_element({
 })
 
 -- Register Combat Stats View (and its ESC-menu button)
-SharedUtils.register_stats_view(
-    mod,
-    'combat_stats_view',
-    'CombatStatsView',
-    'CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_view',
-    'loc_combat_stats_menu_button'
-)
+SharedUtils.register_stats_view(mod, {
+    view_name = 'combat_stats_view',
+    class_name = 'CombatStatsView',
+    path = 'CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_view',
+    button_text_loc = 'loc_combat_stats_menu_button',
+})
 
 -- Initialize tracker and history
 mod.tracker = CombatStatsTracker:new()

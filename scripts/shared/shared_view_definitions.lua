@@ -4,10 +4,23 @@ local UIFontSettings = require('scripts/managers/ui/ui_font_settings')
 local TextInputPassTemplates = require('scripts/ui/pass_templates/text_input_pass_templates')
 
 -- Build view definitions shared across the stats mods.
--- prefix: the scenegraph/widget name prefix (e.g. "weapon_stats", "enemy_stats", "combat_stats")
--- mod:    the mod instance, used for mod:localize('mod_name') on the title
--- extra_legend_inputs: optional list of legend input entries appended after the close button
-local function make_definitions(prefix, mod, extra_legend_inputs, single_detail)
+-- config:
+--   prefix              - scenegraph/widget name prefix (e.g. "weapon_stats")
+--   mod                 - mod instance, for mod:localize('mod_name') on the title
+--   extra_legend_inputs  - optional list of legend input entries after the close button
+--   single_detail        - skip the left list + search, span the detail panel full-width
+--   search               - show a search bar above the list (two-panel only; default true)
+local function make_definitions(config)
+    local prefix = config.prefix
+    local mod = config.mod
+    local extra_legend_inputs = config.extra_legend_inputs
+    local single_detail = config.single_detail
+    local search = config.search
+    if search == nil then
+        search = not single_detail
+    end
+    local has_list = not single_detail
+
     local screen_width = UIWorkspaceSettings.screen.size[1]
     local screen_height = UIWorkspaceSettings.screen.size[2]
 
@@ -21,31 +34,36 @@ local function make_definitions(prefix, mod, extra_legend_inputs, single_detail)
     local search_gap = 10
 
     local list_width = 500
-    local list_height = screen_height - top_padding - bottom_padding - search_height - search_gap
-    local detail_height = list_height + search_height + search_gap
+    local search_total = search and (search_height + search_gap) or 0
+    local list_height = screen_height - top_padding - bottom_padding - search_total
+    local detail_height = list_height + search_total
     local detail_width = screen_width - list_width - left_padding - right_padding - gap
     if single_detail then
         detail_width = screen_width - left_padding - right_padding
         detail_height = screen_height - top_padding - bottom_padding
     end
 
+    local list_top = top_padding + search_total
+
     local scenegraph_definition = {
         screen = UIWorkspaceSettings.screen,
     }
-    if not single_detail then
-        scenegraph_definition[prefix .. '_search'] = {
-            vertical_alignment = 'top',
-            parent = 'screen',
-            horizontal_alignment = 'left',
-            size = { list_width, search_height },
-            position = { left_padding, top_padding, 1 },
-        }
+    if has_list then
+        if search then
+            scenegraph_definition[prefix .. '_search'] = {
+                vertical_alignment = 'top',
+                parent = 'screen',
+                horizontal_alignment = 'left',
+                size = { list_width, search_height },
+                position = { left_padding, top_padding, 1 },
+            }
+        end
         scenegraph_definition[prefix .. '_list_background'] = {
             vertical_alignment = 'top',
             parent = 'screen',
             horizontal_alignment = 'left',
             size = { list_width, list_height },
-            position = { left_padding, top_padding + search_height + search_gap, 1 },
+            position = { left_padding, list_top, 1 },
         }
         scenegraph_definition[prefix .. '_list_content'] = {
             vertical_alignment = 'top',
@@ -88,12 +106,14 @@ local function make_definitions(prefix, mod, extra_legend_inputs, single_detail)
             },
         }, prefix .. '_title_text'),
     }
-    if not single_detail then
-        widget_definitions[prefix .. '_search'] = UIWidget.create_definition(
-            TextInputPassTemplates.terminal_input_field,
-            prefix .. '_search',
-            { list_width, search_height }
-        )
+    if has_list then
+        if search then
+            widget_definitions[prefix .. '_search'] = UIWidget.create_definition(
+                TextInputPassTemplates.terminal_input_field,
+                prefix .. '_search',
+                { list_width, search_height }
+            )
+        end
         widget_definitions[prefix .. '_list_background'] = UIWidget.create_definition({
             {
                 pass_type = 'rect',
@@ -117,7 +137,7 @@ local function make_definitions(prefix, mod, extra_legend_inputs, single_detail)
     local list_grid_width = list_width
     local list_grid_height = list_height - 13
     local list_grid_settings = nil
-    if not single_detail then
+    if has_list then
         list_grid_settings = {
             grid_id = 'list_grid',
             scrollbar_width = scrollbar_width,

@@ -13,6 +13,15 @@ local function make_view(mod, config)
     local single_detail = config.single_detail
     -- When set, skip the left list + search and show only the detail panel.
 
+    local mod_name = mod:get_name()
+    local SharedSettings = nil
+    local function settings_module()
+        if not SharedSettings then
+            SharedSettings = mod:io_dofile(mod_name .. '/scripts/mods/' .. mod_name .. '/shared/shared_settings')
+        end
+        return SharedSettings
+    end
+
     local ViewElementInputLegend =
         mod:original_require('scripts/ui/view_elements/view_element_input_legend/view_element_input_legend')
     local ViewElementGrid = mod:original_require('scripts/ui/view_elements/view_element_grid/view_element_grid')
@@ -33,15 +42,13 @@ local function make_view(mod, config)
         self:_on_init(settings, context)
     end
 
-    -- Virtual: subclasses set up mod-specific state (weapon list, enemy groups,
-    -- history tracker, initial selection from context, etc).
+    -- Virtual: subclasses set up mod-specific state.
     function View:_on_init(settings, context) end
 
     function View:on_enter()
         View.super.on_enter(self)
 
-        -- Close any other stats view that's open so these don't stack. The registry is
-        -- shared on _G (see shared_utils) since each mod loads its own copy of it.
+        -- Close any other stats view that's open so these don't stack.
         local ui_manager = Managers.ui
         if ui_manager then
             local names = SharedUtils.stats_view_names
@@ -64,6 +71,11 @@ local function make_view(mod, config)
         self:_setup_detail_grid()
         if not single_detail then
             self:_setup_entries()
+        end
+
+        -- Settings views need the focused-widget draw hook (see shared_settings).
+        if self:_setting_ids() then
+            settings_module().install_focus_hook(mod, self.view_name .. '_list_grid')
         end
     end
 
@@ -176,9 +188,17 @@ local function make_view(mod, config)
 
     -- List selection ---------------------------------------------------------
 
-    -- Virtual: subclasses build the filtered entry list and present it on the
-    -- list grid via present_grid_layout.
-    function View:_setup_entries() end
+    function View:_setup_entries()
+        local setting_ids = self:_setting_ids()
+        if not setting_ids then
+            return
+        end
+        local width = self:_list_width()
+        local entries = settings_module().build_entries(mod, setting_ids)
+        local blueprints = settings_module().make_blueprints(width)
+        local left_click_callback = callback(self, 'cb_on_list_entry_left_pressed')
+        self._list_grid:present_grid_layout(entries, blueprints, left_click_callback)
+    end
 
     function View:_cb_on_list_presented()
         local entries = self._filtered_list
@@ -191,11 +211,17 @@ local function make_view(mod, config)
         self:_select_entry(entries[1])
     end
 
+    -- Settings rows activate internally; list clicks do nothing in settings mode.
     function View:cb_on_list_entry_left_pressed(widget, element)
-        self:_select_entry(element)
+        if not self:_setting_ids() then
+            self:_select_entry(element)
+        end
     end
 
     function View:_select_entry(entry)
+        if self:_setting_ids() then
+            return
+        end
         if entry and not entry.disabled then
             local index = self._list_grid:index_by_element(entry) or self._list_grid:selected_grid_index()
             if index then
@@ -232,7 +258,12 @@ local function make_view(mod, config)
     function View:update(dt, t, input_service)
         self:_on_update(dt, t, input_service)
 
-        if not single_detail then
+        -- Synced here, not in _on_update, so subclasses can override _on_update.
+        if self:_setting_ids() then
+            settings_module().sync_focus(self._list_grid)
+        end
+
+        if not single_detail and not self:_setting_ids() then
             local search_widget = self._widgets_by_name[prefix .. '_search']
             if search_widget then
                 local current_search = search_widget.content.input_text or ''
@@ -246,8 +277,12 @@ local function make_view(mod, config)
         return View.super.update(self, dt, t, input_service)
     end
 
-    -- Virtual: subclasses with per-frame work before the search check (e.g.
-    -- deferred history-entry loads) override this.
+    -- The setting_ids this view registered, if any.
+    function View:_setting_ids()
+        return SharedUtils.stats_view_setting_ids and SharedUtils.stats_view_setting_ids[self.view_name]
+    end
+
+    -- Virtual: subclasses with per-frame work override this.
     function View:_on_update(dt, t, input_service) end
 
     function View:on_exit()

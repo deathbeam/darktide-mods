@@ -14,7 +14,6 @@ local CharacterStatsView = make_view(mod, {
     class_name = 'CharacterStatsView',
     prefix = 'character_stats',
     shared_utils = SharedUtils,
-    single_detail = true,
     icon_packages = ICON_PACKAGES,
     definitions_path = 'CharacterStats/scripts/mods/CharacterStats/character_stats_view/character_stats_view_definitions',
     list_blueprints_path = 'CharacterStats/scripts/mods/CharacterStats/character_stats_view/character_stats_view_blueprints',
@@ -25,15 +24,7 @@ function CharacterStatsView:_on_init(settings, context)
     self._detail_built = false
 end
 
--- Refresh the detail panel on enter
-local _base_on_enter = CharacterStatsView.on_enter
-function CharacterStatsView:on_enter(...)
-    self._detail_built = false
-    _base_on_enter(self, ...)
-end
-
--- Detail panel: render the builder's record list through the shared stat/section/spacer
--- blueprints. No left list in single_detail mode, so on_enter kicks off the build directly.
+-- The left panel holds settings, not list entries, so on_enter kicks off the detail build.
 function CharacterStatsView:_present_detail()
     if not self._detail_grid then
         return
@@ -90,8 +81,7 @@ function CharacterStatsView:_present_detail()
         end
     end
 
-    -- Real data is present once build_stats returns records beyond the placeholder. The
-    -- builder returns a single placeholder stat when the player unit isn't loaded yet.
+    -- Placeholder until the player unit loads.
     self._detail_built = #records > 1 or (#records == 1 and records[1].value ~= mod:localize('no_character'))
 
     local left_click_callback = callback(self, 'cb_on_detail_entry_left_pressed')
@@ -99,6 +89,7 @@ function CharacterStatsView:_present_detail()
     self._detail_grid:present_grid_layout(layout, blueprints, left_click_callback)
 end
 
+-- Retry the detail build until the player unit is loaded.
 function CharacterStatsView:_on_update(dt, t, input_service)
     if self._detail_built then
         return

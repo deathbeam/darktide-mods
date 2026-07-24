@@ -50,4 +50,8 @@ local extra_legend_inputs = {
     },
 }
 
-return make_shared_definitions('combat_stats', mod, extra_legend_inputs)
+return make_shared_definitions({
+    prefix = 'combat_stats',
+    mod = mod,
+    extra_legend_inputs = extra_legend_inputs,
+})
