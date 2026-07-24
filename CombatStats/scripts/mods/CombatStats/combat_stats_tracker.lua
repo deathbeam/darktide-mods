@@ -160,7 +160,7 @@ function CombatStatsTracker:load_from_history(history_data)
             type = eng_data.type,
             start_time = eng_data.start_time,
             end_time = eng_data.end_time,
-            killed = eng_data.killed ~= nil and eng_data.killed or true,
+            killed = eng_data.killed ~= false,
 
             buffs = eng_data.buffs or {},
             stats = eng_data.stats or new_stats(),
