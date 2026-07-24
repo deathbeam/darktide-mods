@@ -102,29 +102,6 @@ local function add_chain(records, title, chain)
     add(records, { type = 'chain', title = title, chain = chain })
 end
 
-local function fmt_num(n)
-    if n == nil then
-        return '-'
-    end
-    if math.abs(n - math.floor(n)) < 0.05 then
-        return string.format('%d', math.floor(n + 0.5))
-    end
-    if math.abs(n) >= 100 then
-        return string.format('%.0f', n)
-    end
-    return string.format('%.1f', n)
-end
-
-local function fmt_mult(n)
-    if n == nil then
-        return '-'
-    end
-    if math.abs(n - 1) < 0.005 then
-        return '1.00x'
-    end
-    return string.format('%.2fx', n)
-end
-
 -- weapon_handling is keyed by a per-action identifier from get_template_identifiers,
 -- not the raw weapon_handling_template name.
 local function handling_template_for_action(weapon_template, weapon_tweak_templates, action_name)
@@ -502,10 +479,6 @@ local function _compute_adm_values(profile, target_settings, action_lerp, is_ran
     return { rows = rows, any_crit = any_crit }
 end
 
-local function _fmt_pct(value)
-    return string.format('%.0f%%', value * 100)
-end
-
 -- Formats the computed ADM values into a generic table record. Decides whether crit
 -- columns are worth showing and builds near→far cells for ranged profiles.
 local function render_adm_table(records, profile, target_settings, action_lerp, is_ranged, target_index)
@@ -537,9 +510,9 @@ local function render_adm_table(records, profile, target_settings, action_lerp, 
 
     -- Ranged cells append a near→far pair; melee cells use a single value.
     local function cell(value, far_value, color)
-        local text = _fmt_pct(value)
+        local text = SharedUtils.fmt_pct(value)
         if far_value ~= nil then
-            text = text .. ' → ' .. _fmt_pct(far_value)
+            text = text .. ' → ' .. SharedUtils.fmt_pct(far_value)
         end
         return { text = text, color = color }
     end
@@ -596,13 +569,13 @@ local function render_profile(records, ctx)
     if base_attack and (math.abs(base_attack) > 0.01 or extra_attack > 0.01) then
         local total = (base_attack or 0) + extra_attack
         if math.abs(total) > 0.01 then
-            add_stat(records, mod:localize('stat_damage'), fmt_num(total), COLORS.DAMAGE)
+            add_stat(records, mod:localize('stat_damage'), SharedUtils.fmt_num(total), COLORS.DAMAGE)
         end
     end
     if base_impact and (math.abs(base_impact) > 0.01 or extra_impact > 0.01) then
         local total = (base_impact or 0) + extra_impact
         if math.abs(total) > 0.01 then
-            add_stat(records, mod:localize('stat_impact'), fmt_num(total), COLORS.IMPACT)
+            add_stat(records, mod:localize('stat_impact'), SharedUtils.fmt_num(total), COLORS.IMPACT)
         end
     end
 
@@ -653,15 +626,15 @@ local function render_profile(records, ctx)
     if profile.suppression_value ~= nil then
         local sup = Utils.lerp_entry(profile.suppression_value, Utils.lerp_from_path(action_lerp, 'suppression_value'))
         if sup and math.abs(sup) > 0.01 then
-            per_hit_sup = fmt_num(sup)
+            per_hit_sup = SharedUtils.fmt_num(sup)
         end
     end
     local aoe_sup, aoe_radius = Utils.explosion_suppression(ctx.action, ctx.template_index)
     local aoe_sup_text
     if aoe_sup then
-        aoe_sup_text = fmt_num(aoe_sup)
+        aoe_sup_text = SharedUtils.fmt_num(aoe_sup)
         if aoe_radius then
-            aoe_sup_text = aoe_sup_text .. ' (' .. fmt_num(aoe_radius) .. 'm)'
+            aoe_sup_text = aoe_sup_text .. ' (' .. SharedUtils.fmt_num(aoe_radius) .. 'm)'
         end
     end
     if per_hit_sup or aoe_sup_text then
@@ -716,13 +689,19 @@ local function render_profile(records, ctx)
     if has_weakspot or has_crit or has_crit_weakspot or chance_modifier or has_crit_strings then
         add_subheader(records, mod:localize('stat_finesse_and_crit'))
         if has_weakspot then
-            add_stat(records, mod:localize('stat_weakspot'), fmt_mult(weakspot_mult), COLORS.CRIT, 1)
+            add_stat(records, mod:localize('stat_weakspot'), SharedUtils.fmt_mult(weakspot_mult), COLORS.CRIT, 1)
         end
         if has_crit then
-            add_stat(records, mod:localize('stat_crit'), fmt_mult(crit_mult), COLORS.CRIT, 1)
+            add_stat(records, mod:localize('stat_crit'), SharedUtils.fmt_mult(crit_mult), COLORS.CRIT, 1)
         end
         if has_crit_weakspot then
-            add_stat(records, mod:localize('stat_crit_plus_weakspot'), fmt_mult(crit_weakspot_mult), COLORS.CRIT, 1)
+            add_stat(
+                records,
+                mod:localize('stat_crit_plus_weakspot'),
+                SharedUtils.fmt_mult(crit_weakspot_mult),
+                COLORS.CRIT,
+                1
+            )
         end
         if chance_modifier then
             add_stat(

@@ -36,32 +36,6 @@ local function _spacer(records)
     _add(records, { type = 'spacer', size = 'group' })
 end
 
-local function _fmt_num(n)
-    if n == nil then
-        return '-'
-    end
-    if math.abs(n - math.floor(n)) < 0.05 then
-        return string.format('%d', math.floor(n + 0.5))
-    end
-    return string.format('%.1f', n)
-end
-
-local function _fmt_pct(n)
-    if n == nil then
-        return '-'
-    end
-    local pct = n * 100
-    local fmt = math.abs(pct - math.floor(pct)) < 0.05 and '%.0f%%' or '%.1f%%'
-    return string.format(fmt, pct)
-end
-
-local function _fmt_mult(n)
-    if n == nil then
-        return '-'
-    end
-    return string.format('x%.2f', n)
-end
-
 -- " (Melee, Monsters)" suffix for source rows / variant totals. The tag words come from
 -- the game's own loc keys (melee/ranged) or our variant_* keys, so variants stay consistent.
 local function _variant_tag(tags)
@@ -73,6 +47,16 @@ local function _variant_tag(tags)
         parts[i] = mod:localize(tags[i])
     end
     return ' (' .. table.concat(parts, ', ') .. ')'
+end
+
+-- Format a source row's value by stat type: xN.NN for mult, +N for flat, +N.N% for add.
+local function _fmt_source_value(delta, stat_type)
+    if stat_type == 'mult' then
+        return SharedUtils.fmt_mult(delta)
+    elseif stat_type == 'flat' then
+        return (delta >= 0 and '+' or '') .. SharedUtils.fmt_num(delta)
+    end
+    return (delta >= 0 and '+' or '') .. SharedUtils.fmt_pct(delta)
 end
 
 -- Render the contributing sources for a stat as indented sub-rows, merged by display name so
@@ -90,14 +74,7 @@ local function _sources_tagged(records, folded, stat_key, stat_type, tag)
     local merged = Utils.merge_sources_by_name(list, 'delta', stat_type)
     for i = 1, #merged do
         local src = merged[i]
-        local value_str
-        if stat_type == 'mult' then
-            value_str = string.format('x%.2f', src.delta)
-        elseif stat_type == 'flat' then
-            value_str = string.format('%s%.0f', src.delta >= 0 and '+' or '', src.delta)
-        else
-            value_str = (src.delta >= 0 and '+' or '') .. _fmt_pct(src.delta)
-        end
+        local value_str = _fmt_source_value(src.delta, stat_type)
         _add(records, {
             type = 'stat',
             label = src.name .. tag,
@@ -120,12 +97,7 @@ local function _base_source(records, label, delta, stat_type)
     if not delta or delta == 0 then
         return
     end
-    local value_str
-    if stat_type == 'flat' then
-        value_str = string.format('%s%.0f', delta >= 0 and '+' or '', delta)
-    else
-        value_str = (delta >= 0 and '+' or '') .. _fmt_pct(delta)
-    end
+    local value_str = _fmt_source_value(delta, stat_type)
     _add(records, {
         type = 'stat',
         label = label,
@@ -194,9 +166,10 @@ local function _stat_group(records, folded, base_label, generic_keys, variants, 
     end
 
     -- x1.20 for mult groups (matches per-source rows); +20% otherwise.
-    local fmt = default == 'mult' and _fmt_mult or function(n)
-        return _fmt_pct(n - 1)
-    end
+    local fmt = default == 'mult' and SharedUtils.fmt_mult
+        or function(n)
+            return SharedUtils.fmt_pct(n - 1)
+        end
 
     if generic ~= 1 then
         _stat(records, mod:localize(base_label), fmt(generic), color)
@@ -233,7 +206,7 @@ local function _stat_with_sources(records, folded, label, stat_key, color, src_t
         return
     end
     local delta = Utils.stat_delta(folded, stat_key)
-    local display = src_type == 'mult' and _fmt_mult(1 + delta) or _fmt_pct(delta)
+    local display = src_type == 'mult' and SharedUtils.fmt_mult(1 + delta) or SharedUtils.fmt_pct(delta)
     _stat(records, mod:localize(label), display, color)
     _sources(records, folded, stat_key, src_type or 'add')
 end
@@ -317,16 +290,16 @@ function build_stats()
     -- VITALS
     _section(records, mod:localize('header_vitals'), COLORS.VITAL)
     if max_health then
-        _stat(records, mod:localize('stat_health'), _fmt_num(max_health), COLORS.VITAL)
+        _stat(records, mod:localize('stat_health'), SharedUtils.fmt_num(max_health), COLORS.VITAL)
         _base_source(records, mod:localize('source_base'), vitals.archetype and vitals.archetype.health, 'flat')
         _sources(records, folded, 'max_health_modifier', 'add')
         _sources(records, folded, 'max_health_multiplier', 'add')
     end
     if vitals.max_wounds then
-        _stat(records, mod:localize('stat_wounds'), _fmt_num(vitals.max_wounds), COLORS.VITAL)
+        _stat(records, mod:localize('stat_wounds'), SharedUtils.fmt_num(vitals.max_wounds), COLORS.VITAL)
     end
     if vitals.max_toughness then
-        _stat(records, mod:localize('stat_toughness'), _fmt_num(vitals.max_toughness), COLORS.VITAL)
+        _stat(records, mod:localize('stat_toughness'), SharedUtils.fmt_num(vitals.max_toughness), COLORS.VITAL)
         _base_source(
             records,
             mod:localize('source_base'),
@@ -344,7 +317,7 @@ function build_stats()
     if mobility then
         _section(records, mod:localize('header_mobility'), COLORS.MOBILITY)
         if mobility.max_stamina then
-            _stat(records, mod:localize('stat_stamina'), _fmt_num(mobility.max_stamina), COLORS.MOBILITY)
+            _stat(records, mod:localize('stat_stamina'), SharedUtils.fmt_num(mobility.max_stamina), COLORS.MOBILITY)
             _sources(records, folded, 'stamina_modifier', 'flat')
         end
         if mobility.stamina_regen then
@@ -381,7 +354,7 @@ function build_stats()
             )
         end
         if mobility.dodge_count then
-            _stat(records, mod:localize('stat_dodge_count'), _fmt_num(mobility.dodge_count), COLORS.MOBILITY)
+            _stat(records, mod:localize('stat_dodge_count'), SharedUtils.fmt_num(mobility.dodge_count), COLORS.MOBILITY)
         end
         if mobility.dodge_dist then
             _stat(records, mod:localize('stat_dodge_dist'), string.format('%.1f', mobility.dodge_dist), COLORS.MOBILITY)
@@ -461,7 +434,7 @@ function build_stats()
     -- add on top of the generic. The base + weapon crit are injected into critical_strike_chance.
     local crit = Utils.crit_chance(folded, wep_template)
     if crit and crit > 0 then
-        _stat(records, mod:localize('stat_crit_chance'), _fmt_pct(crit), COLORS.OFFENSE)
+        _stat(records, mod:localize('stat_crit_chance'), SharedUtils.fmt_pct(crit), COLORS.OFFENSE)
         _sources(records, folded, 'critical_strike_chance', 'add')
         _sources_tagged(records, folded, 'melee_critical_strike_chance', 'add', _variant_tag({ 'variant_melee' }))
         _sources_tagged(records, folded, 'ranged_critical_strike_chance', 'add', _variant_tag({ 'variant_ranged' }))

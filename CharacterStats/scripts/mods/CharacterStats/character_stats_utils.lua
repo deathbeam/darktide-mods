@@ -452,10 +452,6 @@ local function _talent_entries(unit, profile)
     return entries, coherency_templates
 end
 
-local function _folded_values(folded)
-    return folded and folded.values or nil
-end
-
 -- Public API ------------------------------------------------------------
 
 -- Merge source rows by `name`, composing `field` per the stat type: multiplicative

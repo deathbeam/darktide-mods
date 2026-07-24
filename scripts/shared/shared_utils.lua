@@ -70,6 +70,38 @@ function SharedUtils.safe_localize(text)
     return nil
 end
 
+-- Number: integer when whole (within 0.05), else one decimal. '-' for nil.
+function SharedUtils.fmt_num(n)
+    if n == nil then
+        return '-'
+    end
+    if math.abs(n - math.floor(n)) < 0.05 then
+        return string.format('%d', math.floor(n + 0.5))
+    end
+    if math.abs(n) >= 100 then
+        return string.format('%.0f', n)
+    end
+    return string.format('%.1f', n)
+end
+
+-- Percentage: 0 or 1 decimal (whole% drops the decimal). '-' for nil. Takes a fraction (0.2 -> 20%).
+function SharedUtils.fmt_pct(n)
+    if n == nil then
+        return '-'
+    end
+    local pct = n * 100
+    local fmt = math.abs(pct - math.floor(pct)) < 0.05 and '%.0f%%' or '%.1f%%'
+    return string.format(fmt, pct)
+end
+
+-- Multiplier: xN.NN. '-' for nil.
+function SharedUtils.fmt_mult(n)
+    if n == nil then
+        return '-'
+    end
+    return string.format('x%.2f', n)
+end
+
 -- Convert a snake_case key to Title Case (e.g. "base_damage" -> "Base Damage").
 function SharedUtils.prettify(key)
     if type(key) ~= 'string' then

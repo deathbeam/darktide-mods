@@ -488,16 +488,6 @@ local function _fmt_time(n)
     return string.format('%.2fs', n)
 end
 
-local function _fmt_num(n)
-    if n == nil then
-        return '-'
-    end
-    if math.abs(n - math.floor(n)) < 0.05 then
-        return string.format('%d', math.floor(n + 0.5))
-    end
-    return string.format('%.1f', n)
-end
-
 -- Base damage for a minion attack at a given challenge level. Mirrors the game's
 -- base_ui_damage path (same as WeaponStats), but seeds power_level from the breed's
 -- power_level_type resolved against the action's attack-type key, exactly as
@@ -597,7 +587,7 @@ local function _melee_rows(breed, actions)
                             { text = _fmt_range(hit_min, hit_max), color = Color.ui_terminal(255, true) },
                             { text = _fmt_range(dur_min, dur_max) },
                             { text = _fmt_range(rec_min, rec_max) },
-                            { text = _fmt_num(damage), color = Color.ui_orange_medium(255, true) },
+                            { text = SharedUtils.fmt_num(damage), color = Color.ui_orange_medium(255, true) },
                             { text = reach and string.format('%.1f', reach) or '-' },
                         },
                     }
@@ -666,7 +656,7 @@ local function _ranged_rows(breed, actions)
                     { text = _fmt_time(windup), color = Color.ui_terminal(255, true) },
                     { text = num_shots and string.format('%d', num_shots) or '-' },
                     { text = _fmt_time(time_per_shot) },
-                    { text = _fmt_num(damage), color = Color.ui_orange_medium(255, true) },
+                    { text = SharedUtils.fmt_num(damage), color = Color.ui_orange_medium(255, true) },
                     { text = max_range and string.format('%.0f', max_range) or '-' },
                     { text = spread and string.format('%.1f°', spread) or '-' },
                 },
