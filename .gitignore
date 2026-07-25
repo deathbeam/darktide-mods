@@ -5,6 +5,8 @@ luac.out
 *.src.rock
 *.zip
 *.tar.gz
+*.7z
+*.collection.json
 
 # Object files
 *.o
@@ -40,5 +42,4 @@ luac.out
 *.hex
 
 
-# Build-time copied shared files (synced from scripts/shared/ by CI or dev script)
 */scripts/mods/*/shared/

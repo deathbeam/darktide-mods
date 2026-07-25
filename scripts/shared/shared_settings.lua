@@ -238,11 +238,6 @@ function SharedSettings.build_entries(mod, setting_ids)
     end
 
     local function add(widget_data)
-        entries[#entries + 1] = {
-            widget_type = 'setting_label',
-            display_name = widget_data.title or widget_data.setting_id,
-        }
-
         local entry = {
             on_activated = function(new_value)
                 mod:set(widget_data.setting_id, new_value, true)
@@ -254,11 +249,14 @@ function SharedSettings.build_entries(mod, setting_ids)
         }
 
         local wtype = widget_data.type
+        local handled = false
         if wtype == 'checkbox' then
+            handled = true
             entry.widget_type = 'setting'
             entry.control_type = 'checkbox'
             entry.default_value = widget_data.default_value
         elseif wtype == 'dropdown' then
+            handled = true
             entry.widget_type = 'setting'
             entry.control_type = 'dropdown'
             entry.default_value = widget_data.default_value
@@ -268,10 +266,11 @@ function SharedSettings.build_entries(mod, setting_ids)
                 local src = opts[i]
                 entry.options[i] = {
                     value = src.value,
-                    display_name = src.text,
+                    display_name = src.display_name or src.text,
                 }
             end
         elseif wtype == 'numeric' then
+            handled = true
             entry.widget_type = 'setting'
             entry.control_type = 'value_slider'
             entry.default_value = widget_data.default_value
@@ -295,6 +294,16 @@ function SharedSettings.build_entries(mod, setting_ids)
             entry.apply_on_drag = true
         end
 
+        -- Skip widgets whose type we didn't recognise so the grid never sees a nil
+        -- widget_type, which would crash _create_entry_widget_from_config.
+        if not handled then
+            return
+        end
+
+        entries[#entries + 1] = {
+            widget_type = 'setting_label',
+            display_name = widget_data.title or widget_data.setting_id,
+        }
         entries[#entries + 1] = entry
     end
 
