@@ -364,38 +364,77 @@ def get_my_collections(api: NexusAPI, game_domain: str) -> list[dict]:
 def build_collection_manifest(
     mods: list[dict], author_name: str, author_url: str, name: str, summary: str, description: str
 ) -> dict:
-    # Nexus Mods collection.json schema uses camelCase keys (matching Vortex's
-    # ICollection/ICollectionMod TypeScript types) and requires a modRules array.
+    # The API POST payload (CollectionManifestInfo schema) uses snake_case. The
+    # collection.json embedded in the archive (Vortex ICollection schema) uses
+    # camelCase — _to_camel_case_manifest converts a copy for the archive only.
     return {
         "info": {
             "author": author_name,
-            "authorUrl": author_url,
+            "author_url": author_url,
             "name": name,
             "summary": summary or None,
             "description": description or None,
-            "domainName": GAME_DOMAIN,
+            "domain_name": GAME_DOMAIN,
         },
         "mods": [
             {
                 "name": m["name"],
                 "version": m["version"],
                 "optional": False,
-                "domainName": GAME_DOMAIN,
+                "domain_name": GAME_DOMAIN,
                 "author": author_name,
                 "source": {
                     "type": "nexus",
-                    "modId": int(m["mod_id"]),
-                    "fileId": int(m["file_id"]),
-                    "fileSize": m.get("file_size_kb"),
-                    "logicalFilename": m.get("logical_filename"),
-                    "updatePolicy": "exact",
+                    "mod_id": str(m["mod_id"]),
+                    "file_id": str(m["file_id"]),
+                    "file_size": m.get("file_size_kb"),
+                    "logical_filename": m.get("logical_filename"),
+                    "update_policy": "exact",
                 },
             }
             for m in mods
         ],
-        "modRules": [],
+        "mod_rules": [],
     }
 
+
+def _to_camel_case_manifest(manifest: dict) -> dict:
+    """Convert the snake_case API manifest to the camelCase Vortex collection.json.
+
+    Vortex's ICollection schema expects modId/fileId as numbers, while the API
+    CollectionManifestInfo schema wants mod_id/file_id as strings.
+    """
+    # snake_case manifest keys (API payload) → camelCase keys (Vortex archive).
+    camel = {
+        "author_url": "authorUrl",
+        "domain_name": "domainName",
+        "mod_id": "modId",
+        "file_id": "fileId",
+        "file_size": "fileSize",
+        "logical_filename": "logicalFilename",
+        "update_policy": "updatePolicy",
+        "mod_rules": "modRules",
+    }
+
+    def fix(obj):
+        if isinstance(obj, dict):
+            out = {}
+            for k, v in obj.items():
+                if v is None:
+                    continue
+                nk = camel.get(k, k)
+                # mod_id/file_id are strings in the API payload but numbers in
+                # the Vortex archive schema.
+                if k in ("mod_id", "file_id") and v != "":
+                    out[nk] = int(v)
+                else:
+                    out[nk] = fix(v)
+            return out
+        if isinstance(obj, list):
+            return [fix(v) for v in obj]
+        return obj
+
+    return fix(manifest)
 
 def create_collection_archive(manifest: dict, out_path: str) -> None:
     """Pack the manifest into a .7z archive (Nexus expects 7z for collections)."""
@@ -496,10 +535,11 @@ def sync_collection(
             log_info(f'would create new revision on "{name}" (slug: {existing["slug"]})')
         else:
             log_info(f'would create new collection "{name}"')
-        _dump_collection(manifest, name)
+        _dump_collection(_to_camel_case_manifest(manifest), name)
         return
 
-    upload_id = upload_collection_archive(api, manifest)
+    archive_manifest = _to_camel_case_manifest(manifest)
+    upload_id = upload_collection_archive(api, archive_manifest)
 
     if existing:
         log_info(f'creating new revision on "{name}" (slug: {existing["slug"]})')
@@ -530,8 +570,8 @@ def main() -> int:
         "--force",
         metavar="target",
         choices=["mods", "collection", "all"],
-        default="all",
-        help="force re-upload of mods, collection, or both (default: all)",
+        default=None,
+        help="force re-upload of mods, collection, or both (default: off — skip up-to-date mods)",
     )
     parser.add_argument("--mod", metavar="Name", help="only publish this mod folder")
     parser.add_argument("--collection", metavar="Name", help="sync a collection with this name")
@@ -629,7 +669,7 @@ def main() -> int:
 
     if args.collection:
         try:
-            sync_collection(api, args.collection, uploaded, dry_run, args.force)
+            sync_collection(api, args.collection, uploaded, dry_run, args.force or "none")
         except Exception as e:
             log_fail(f"collection sync failed: {e}")
 
