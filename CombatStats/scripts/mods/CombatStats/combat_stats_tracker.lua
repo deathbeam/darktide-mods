@@ -1,5 +1,7 @@
 local mod = get_mod('CombatStats')
 
+local SharedUtils = mod:io_dofile('CombatStats/scripts/mods/CombatStats/shared/shared_utils')
+
 local SESSION_STAT_KEYS = {
     'total_damage',
     'overkill_damage',
@@ -27,6 +29,19 @@ local SESSION_STAT_KEYS = {
     'ranged_crit_hits',
     'ranged_weakspot_hits',
 }
+
+local function breed_category(breed)
+    local category = SharedUtils.classify_breed(breed)
+    if category == 'monstrosity' or category == 'captain' then
+        category = 'boss'
+    elseif category == 'disabler' or category == 'specialist' or category == 'ritualist' then
+        category = 'specialist'
+    elseif category == 'horde' or category == 'roamer' or category == 'unknown' then
+        category = 'horde'
+    end
+    return category
+end
+
 local function new_stats(base)
     local stats = base or {}
 
@@ -278,23 +293,7 @@ function CombatStatsTracker:start_enemy_engagement(unit, breed)
     end
 
     local breed_name = breed.name
-    local breed_type = 'unknown'
-    if breed.tags then
-        if breed.tags.monster or breed.tags.captain or breed.tags.cultist_captain then
-            breed_type = 'monster'
-        elseif breed.tags.ritualist then
-            breed_type = 'ritualist'
-        elseif breed.tags.disabler then
-            breed_type = 'disabler'
-        elseif breed.tags.special then
-            breed_type = 'special'
-        elseif breed.tags.elite then
-            breed_type = 'elite'
-        elseif breed.tags.horde or breed.tags.roamer then
-            breed_type = 'horde'
-        end
-    end
-
+    local breed_type = breed_category(breed)
     if not mod:get('breed_' .. breed_type) then
         return
     end

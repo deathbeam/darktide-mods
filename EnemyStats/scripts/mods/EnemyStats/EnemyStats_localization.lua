@@ -82,21 +82,33 @@ return {
     },
 
     -- Enemy categories
-    kind_regular = {
-        en = 'Infantry',
-        ['zh-cn'] = '普通步兵',
-    },
-    kind_elite = {
-        en = 'Elite',
-        ['zh-cn'] = '精英',
+    kind_horde = {
+        en = 'Horde',
+        ['zh-cn'] = '群怪',
     },
     kind_specialist = {
         en = 'Specialist',
         ['zh-cn'] = '专家',
     },
-    kind_boss = {
+    kind_ritualist = {
+        en = 'Ritualist',
+        ['zh-cn'] = '仪式师',
+    },
+    kind_elite = {
+        en = 'Elite',
+        ['zh-cn'] = '精英',
+    },
+    kind_captain = {
+        en = 'Captain',
+        ['zh-cn'] = '队长',
+    },
+    kind_monstrosity = {
         en = 'Monstrosity',
         ['zh-cn'] = '怪物',
+    },
+    kind_unknown = {
+        en = 'Unknown',
+        ['zh-cn'] = '未知',
     },
 
     -- Size class

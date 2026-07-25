@@ -141,6 +141,10 @@ return {
         en = 'Specialists',
         ['zh-cn'] = '专家',
     },
+    variant_captains = {
+        en = 'Captains',
+        ['zh-cn'] = '队长',
+    },
     variant_monsters = {
         en = 'Monsters',
         ['zh-cn'] = '怪物',

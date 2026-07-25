@@ -234,6 +234,28 @@ return {
     },
 
     -- Breed Types
+    breed_boss = {
+        en = 'Boss',
+        ['zh-cn'] = '怪物',
+        ['zh-tw'] = '巨獸',
+    },
+    breed_specialist = {
+        en = 'Specialist',
+        ['zh-cn'] = '专家',
+        ['zh-tw'] = '專家',
+    },
+    breed_elite = {
+        en = 'Elite',
+        ['zh-cn'] = '精英',
+        ['zh-tw'] = '精英',
+    },
+    breed_horde = {
+        en = 'Horde',
+        ['zh-cn'] = '尸潮',
+        ['zh-tw'] = '屍潮',
+    },
+
+    -- Legacy breed types (FIXME: remove later)
     breed_monster = {
         en = 'monster',
         ['zh-cn'] = '怪物',
@@ -253,16 +275,6 @@ return {
         en = 'special',
         ['zh-cn'] = '专家',
         ['zh-tw'] = '專家',
-    },
-    breed_elite = {
-        en = 'elite',
-        ['zh-cn'] = '精英',
-        ['zh-tw'] = '精英',
-    },
-    breed_horde = {
-        en = 'horde',
-        ['zh-cn'] = '尸潮',
-        ['zh-tw'] = '屍潮',
     },
     breed_unknown = {
         en = 'unknown',

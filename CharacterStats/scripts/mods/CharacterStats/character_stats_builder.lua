@@ -392,6 +392,8 @@ function build_stats()
             tags = { 'variant_melee', 'variant_heavy', 'variant_elites' },
         },
         { keys = { 'damage_vs_specials' }, tags = { 'variant_specials' } },
+        { keys = { 'damage_vs_captains' }, tags = { 'variant_captains' } },
+        { keys = { 'ranged_damage_vs_captains' }, tags = { 'variant_ranged', 'variant_captains' } },
         { keys = { 'damage_vs_monsters' }, tags = { 'variant_monsters' } },
         {
             keys = { 'ranged_damage_vs_monsters' },

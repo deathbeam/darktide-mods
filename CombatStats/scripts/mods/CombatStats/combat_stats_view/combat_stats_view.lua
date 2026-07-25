@@ -274,9 +274,9 @@ function CombatStatsView:_present_detail(entry)
                 local pct = (damage / stats.total_damage * 100)
 
                 local color = Color.white(255, true)
-                if breed_type == 'monster' then
+                if breed_type == 'boss' then
                     color = Color.ui_red_medium(255, true)
-                elseif breed_type == 'disabler' or breed_type == 'special' then
+                elseif breed_type == 'specialist' then
                     color = { 255, 255, 165, 0 }
                 elseif breed_type == 'elite' then
                     color = Color.ui_hud_yellow_medium(255, true)

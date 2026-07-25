@@ -57,14 +57,6 @@ local HIT_ZONE_ORDER = {
     'lower_tail',
 }
 
--- Specialist classification for breeds whose tags don't carry an explicit category.
-local SPECIALIST_TAGS = {
-    special = true,
-    disabler = true,
-    sniper = true,
-    interrupter = true,
-}
-
 local MELEE_CHALLENGE = 3 -- heresy midpoint for the representative damage value
 
 local MELEE_ATTACK_COLUMNS = {
@@ -85,22 +77,15 @@ local RANGED_ATTACK_COLUMNS = {
 }
 
 local function breed_category(breed)
-    local tags = breed.tags or {}
-    if breed.is_boss or tags.monster then
-        return 'boss'
+    local category = SharedUtils.classify_breed(breed)
+    if category == 'disabler' then
+        category = 'specialist'
+    elseif category == 'roamer' then
+        category = 'horde'
     end
-    if tags.elite then
-        return 'elite'
-    end
-    for tag in pairs(SPECIALIST_TAGS) do
-        if tags[tag] then
-            return 'specialist'
-        end
-    end
-    return 'regular'
+    return category
 end
 
--- 'monster' outranks 'ogryn' so daemonhosts/plague ogryns show as Monster.
 local function breed_size(breed)
     local tags = breed.tags or {}
     if tags.monster or breed.is_boss then

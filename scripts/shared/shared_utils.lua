@@ -36,20 +36,55 @@ local ARMOR_COLOR_FALLBACK = { 255, 200, 200, 200 }
 -- (horde/special/disabler/elite/monster). Mods map their category names to
 -- these via their own lookup; this is just the icon set.
 local CATEGORY_ICONS = {
-    regular = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_uprising',
     horde = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_uprising',
     unknown = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_uprising',
-    specialist = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
-    special = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
-    disabler = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
     ritualist = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
+    specialist = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
     elite = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_heresy',
+    captain = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_damnation',
+    monstrosity = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_damnation',
     boss = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_damnation',
-    monster = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_damnation',
 }
 
 function SharedUtils.category_icon(category)
     return CATEGORY_ICONS[category]
+end
+
+-- Canonical breed classification shared across the stats mods. Returns one of:
+-- monstrosity, captain, disabler, specialist, elite, horde, roamer, ritualist, unknown.
+-- Order matters — most specific first. All disabler-tagged breeds also carry special,
+-- and all is_boss breeds carry either monster or captain/cultist_captain.
+function SharedUtils.classify_breed(breed)
+    if not breed then
+        return 'unknown'
+    end
+
+    local tags = breed.tags
+    if tags then
+        if tags.monster then
+            return 'monstrosity'
+        elseif tags.captain or tags.cultist_captain then
+            return 'captain'
+        elseif tags.disabler then
+            return 'disabler'
+        elseif tags.special then
+            return 'specialist'
+        elseif tags.elite then
+            return 'elite'
+        elseif tags.ritualist then
+            return 'ritualist'
+        elseif tags.horde then
+            return 'horde'
+        elseif tags.roamer then
+            return 'roamer'
+        end
+    end
+
+    if breed.is_boss then
+        return 'monstrosity'
+    end
+
+    return 'unknown'
 end
 
 -- Localize a game loc key, returning nil on miss or when the game has no entry.

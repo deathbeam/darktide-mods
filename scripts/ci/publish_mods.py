@@ -75,6 +75,14 @@ def log_info(msg: str) -> None:
     print(f"  {_c('36', '→')} {msg}")
 
 
+def _dump_collection(manifest: dict, name: str) -> None:
+    # Write the manifest next to the other build artefacts for inspection.
+    safe = name.replace(" ", "_").lower()
+    out = Path(f"{safe}.collection.json")
+    out.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+    log_info(f"wrote {out}")
+
+
 def log_step(msg: str) -> None:
     print(f"      {msg}")
 
@@ -356,33 +364,36 @@ def get_my_collections(api: NexusAPI, game_domain: str) -> list[dict]:
 def build_collection_manifest(
     mods: list[dict], author_name: str, author_url: str, name: str, summary: str, description: str
 ) -> dict:
+    # Nexus Mods collection.json schema uses camelCase keys (matching Vortex's
+    # ICollection/ICollectionMod TypeScript types) and requires a modRules array.
     return {
         "info": {
             "author": author_name,
-            "author_url": author_url,
+            "authorUrl": author_url,
             "name": name,
             "summary": summary or None,
             "description": description or None,
-            "domain_name": GAME_DOMAIN,
+            "domainName": GAME_DOMAIN,
         },
         "mods": [
             {
                 "name": m["name"],
                 "version": m["version"],
                 "optional": False,
-                "domain_name": GAME_DOMAIN,
+                "domainName": GAME_DOMAIN,
                 "author": author_name,
                 "source": {
                     "type": "nexus",
-                    "mod_id": str(m["mod_id"]),
-                    "file_id": str(m["file_id"]),
-                    "file_size": m.get("file_size_kb"),
-                    "logical_filename": m.get("logical_filename"),
-                    "update_policy": "exact",
+                    "modId": int(m["mod_id"]),
+                    "fileId": int(m["file_id"]),
+                    "fileSize": m.get("file_size_kb"),
+                    "logicalFilename": m.get("logical_filename"),
+                    "updatePolicy": "exact",
                 },
             }
             for m in mods
         ],
+        "modRules": [],
     }
 
 
@@ -415,7 +426,11 @@ def upload_collection_archive(api: NexusAPI, manifest: dict) -> str:
 
 
 def sync_collection(
-    api: NexusAPI, name: str, uploaded_mods: list[str], dry_run: bool, force: bool
+    api: NexusAPI,
+    name: str,
+    uploaded_mods: list[str],
+    dry_run: bool,
+    force: str,
 ) -> None:
     log_section(f"Collection: {name}")
 
@@ -471,8 +486,9 @@ def sync_collection(
     my_collections = get_my_collections(api, GAME_DOMAIN)
     existing = next((c for c in my_collections if c["name"] == name), None)
 
-    if existing and not uploaded_mods and not force:
-        log_skip(f'"{name}" exists, no mods uploaded — skipping (use --force to revise)')
+    force_collection = force in ("collection", "all")
+    if existing and not uploaded_mods and not force_collection:
+        log_skip(f'"{name}" exists, no mods uploaded — skipping (use --force collection to revise)')
         return
 
     if dry_run:
@@ -480,6 +496,7 @@ def sync_collection(
             log_info(f'would create new revision on "{name}" (slug: {existing["slug"]})')
         else:
             log_info(f'would create new collection "{name}"')
+        _dump_collection(manifest, name)
         return
 
     upload_id = upload_collection_archive(api, manifest)
@@ -509,7 +526,13 @@ def sync_collection(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Publish Darktide mods to Nexus Mods.")
     parser.add_argument("--dry-run", action="store_true", help="check versions, no uploads")
-    parser.add_argument("--force", action="store_true", help="upload even if the version matches")
+    parser.add_argument(
+        "--force",
+        metavar="target",
+        choices=["mods", "collection", "all"],
+        default="all",
+        help="force re-upload of mods, collection, or both (default: all)",
+    )
     parser.add_argument("--mod", metavar="Name", help="only publish this mod folder")
     parser.add_argument("--collection", metavar="Name", help="sync a collection with this name")
     args = parser.parse_args()
@@ -559,7 +582,8 @@ def main() -> int:
         published_version = published_file["version"] if published_file else None
 
         pub = f"v{published_version}" if published_version else "none"
-        if not args.force and cur["version"] == published_version:
+        force_mods = args.force in ("mods", "all")
+        if not force_mods and cur["version"] == published_version:
             log_skip(f"{mod_name} v{cur['version']}: up to date (published {pub})")
             skipped.append(mod_name)
             continue
