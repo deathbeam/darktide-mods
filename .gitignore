@@ -41,5 +41,6 @@ luac.out
 *.x86_64
 *.hex
 
-
+# Data and stuff
 */scripts/mods/*/shared/
+localization_export_*

@@ -839,4 +839,71 @@ function WeaponStatsUtils.crit_chance_modifier(action, weapon_template, weapon_t
     return chance_modifier
 end
 
+-- Ammo clip and reserve from the resolved ammo tweak template.
+function WeaponStatsUtils.ammo_clip_and_reserve(weapon_tweak_templates)
+    local templates = weapon_tweak_templates and weapon_tweak_templates['ammo']
+    local _, ammo = next(templates or {})
+    if not ammo then
+        return nil, nil
+    end
+    local clips = ammo.ammunition_clips
+    local clip = clips and clips[1]
+    clip = type(clip) == 'number' and clip or nil
+    local reserve = ammo.ammunition_reserve
+    reserve = type(reserve) == 'number' and reserve or nil
+    if not clip and not reserve then
+        return nil, nil
+    end
+    return clip, reserve
+end
+
+-- Full reload time: reload_state is a single action; reload_shotgun pairs a start
+-- action with a loop action repeated once per refill to cover the clip.
+function WeaponStatsUtils.reload_time(weapon_template, ammo_clip_size)
+    local actions = weapon_template and weapon_template.actions
+    if type(actions) ~= 'table' then
+        return nil
+    end
+
+    local state_time
+    local start_time, start_refill
+    local loop_time, loop_refill
+
+    for _, action in pairs(actions) do
+        if type(action) == 'table' then
+            local kind = action.kind
+            local total = action.total_time
+            if type(total) ~= 'number' or total <= 0 then
+                -- skip
+            elseif kind == 'reload_state' and state_time == nil then
+                state_time = total
+            elseif kind == 'reload_shotgun' then
+                local refill = action.reload_settings and action.reload_settings.refill_amount
+                refill = type(refill) == 'number' and refill or 0
+                if action.start_input then
+                    if start_time == nil then
+                        start_time, start_refill = total, refill
+                    end
+                elseif loop_time == nil then
+                    loop_time, loop_refill = total, refill
+                end
+            end
+        end
+    end
+
+    if start_time and loop_time and loop_refill and loop_refill > 0 then
+        local clip = type(ammo_clip_size) == 'number' and ammo_clip_size or 0
+        local ammo_to_refill = math.ceil((clip - start_refill) / loop_refill)
+        if ammo_to_refill < 0 then
+            ammo_to_refill = 0
+        end
+        return start_time + loop_time * ammo_to_refill
+    elseif start_time then
+        return start_time
+    elseif state_time then
+        return state_time
+    end
+    return nil
+end
+
 return WeaponStatsUtils

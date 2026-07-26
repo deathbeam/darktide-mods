@@ -888,6 +888,42 @@ local function build_mobility_stats(records, weapon_tweak_templates)
     add_spacer(records, 'group')
 end
 
+-- Ammo, reload, and charge for ranged weapons.
+local function build_resource_stats(records, weapon_template, weapon_tweak_templates)
+    if not WeaponTemplate.is_ranged(weapon_template) then
+        return
+    end
+
+    local hud = weapon_template.hud_configuration or {}
+    local uses_ammo = hud.uses_ammunition == true
+    local clip, reserve
+    if uses_ammo then
+        clip, reserve = Utils.ammo_clip_and_reserve(weapon_tweak_templates)
+    end
+    local reload = Utils.reload_time(weapon_template, clip)
+
+    local pending = {}
+    if clip and clip > 0 then
+        pending[#pending + 1] = { mod:localize('stat_magazine'), string.format('%d', math.floor(clip)) }
+    end
+    if reserve and reserve > 0 then
+        pending[#pending + 1] = { mod:localize('stat_ammo_reserve'), string.format('%d', math.floor(reserve)) }
+    end
+    if reload and reload > 0 then
+        pending[#pending + 1] = { mod:localize('stat_reload'), string.format('%.2f s', reload) }
+    end
+    if #pending == 0 then
+        return
+    end
+
+    add_section(records, mod:localize('header_resources'))
+    add_spacer(records, 'tight')
+    for i = 1, #pending do
+        add_stat(records, pending[i][1], pending[i][2], COLORS.META)
+    end
+    add_spacer(records, 'group')
+end
+
 local function build_chain_overview(records, weapon_template)
     local displayed = weapon_template.displayed_attacks
     if not displayed then
@@ -1004,6 +1040,7 @@ local function build_stats(item)
     local records = {}
     build_chain_overview(records, weapon_template)
     build_mobility_stats(records, weapon_tweak_templates)
+    build_resource_stats(records, weapon_template, weapon_tweak_templates)
     local blessings = Utils.weapon_blessings(item)
     if blessings and #blessings > 0 then
         add_section(records, mod:localize('header_blessings'))

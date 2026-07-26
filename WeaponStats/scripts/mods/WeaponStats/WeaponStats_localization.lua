@@ -38,6 +38,10 @@ return {
         stat_crit = 'loc_weapon_details_crit',
         stat_crit_plus_weakspot = 'loc_weapon_details_crit_hs',
         stat_finesse_and_crit = 'loc_stats_display_finesse_stat',
+        -- Ranged resource stats
+        stat_magazine = 'loc_weapon_stats_display_clip_size',
+        stat_ammo_reserve = 'loc_weapon_stats_display_reserve_ammo',
+        stat_reload = 'loc_weapon_stats_display_reload_speed',
     },
 
     mod_name = {
@@ -88,6 +92,9 @@ return {
     },
     header_special_active = {
         en = 'SPECIAL ACTIVE ATTACKS',
+    },
+    header_resources = {
+        en = 'RESOURCES',
     },
 
     -- Stat keys
