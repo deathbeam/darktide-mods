@@ -8,7 +8,7 @@ Automatically uses blitzes and stimms when equipped. Combination of various mods
 
 ## [SimpleMovement](mods/SimpleMovement)
 
-Auto run, CTRL to walk, hold to dodge etc
+Sprint by default, hold sprint to walk
 
 ## [CharacterStats](mods/CharacterStats)
 
