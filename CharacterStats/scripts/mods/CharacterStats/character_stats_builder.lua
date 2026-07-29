@@ -613,17 +613,19 @@ function build_stats()
     -- TOUGHNESS regen
     if vitals.toughness_template then
         local tough_template = vitals.toughness_template
-        local coherency_regen, percent_regen =
+        local regen_total, regen_sources =
             Utils.toughness_regen(unit, stat_buffs, tough_template, vitals.max_toughness, folded)
         local regen_delay = Utils.toughness_regen_delay(unit, stat_buffs, tough_template)
-        local bonus_regen, bonus_sources = Utils.toughness_bonus_regen(unit, profile, toggles)
+        local bonus_regen, bonus_sources = Utils.toughness_bonus_regen(unit, profile, toggles, stat_buffs, folded)
 
         _section(records, mod:localize('header_toughness'), COLORS.DEFENSE)
-        if coherency_regen then
+        if regen_total then
+            local max_tough = vitals.max_toughness or 0
+            local total_pct = max_tough > 0 and (regen_total / max_tough * 100) or 0
             _stat(
                 records,
-                mod:localize('stat_toughness_regen'),
-                string.format('%.1f/s', coherency_regen),
+                mod:localize('stat_toughness_regen_percent'),
+                string.format('%.1f/s (%.1f%%/s)', regen_total, total_pct),
                 COLORS.DEFENSE
             )
             _sources(records, folded, 'toughness_regen_rate_modifier', 'add')
@@ -631,21 +633,33 @@ function build_stats()
             _sources(records, folded, 'toughness_coherency_regen_rate_modifier', 'add')
             _sources(records, folded, 'toughness_extra_regen_rate', 'add')
             _sources(records, folded, 'toughness_coherency_regen_rate_multiplier', 'mult')
+            if regen_sources then
+                for i = 1, #regen_sources do
+                    local src = regen_sources[i]
+                    local flat = src.per_second * max_tough
+                    _add(records, {
+                        type = 'stat',
+                        label = src.name,
+                        value = string.format('%.1f/s (%.1f%%/s)', flat, src.per_second * 100),
+                        label_color = COLORS.META,
+                        value_color = COLORS.META,
+                        indent = 1,
+                        stripe = true,
+                    })
+                end
+            end
         end
-        if percent_regen and percent_regen ~= 0 then
-            _stat(
-                records,
-                mod:localize('stat_toughness_regen_percent'),
-                string.format('%.1f/s', percent_regen),
-                COLORS.DEFENSE
-            )
-            _sources(records, folded, 'toughness_regen_percent', 'add')
-        end
-        -- Bonus regen from proc/over-time talents: these call Toughness.replenish_percentage
-        -- directly (not stat buffs), so they are computed separately and shown per-source.
+        -- Proc talents call Toughness.replenish_percentage directly, separate from the regen_rate path.
         if bonus_regen and vitals.max_toughness then
             local bonus_per_s = bonus_regen * vitals.max_toughness
-            _stat(records, mod:localize('stat_tough_bonus_regen'), string.format('%.1f/s', bonus_per_s), COLORS.DEFENSE)
+            _stat(
+                records,
+                mod:localize('stat_tough_bonus_regen'),
+                string.format('%.1f/s (%.1f%%/s)', bonus_per_s, bonus_regen * 100),
+                COLORS.DEFENSE
+            )
+            _sources(records, folded, 'toughness_replenish_modifier', 'add')
+            _sources(records, folded, 'toughness_replenish_multiplier', 'mult')
             if bonus_sources then
                 for i = 1, #bonus_sources do
                     local src = bonus_sources[i]

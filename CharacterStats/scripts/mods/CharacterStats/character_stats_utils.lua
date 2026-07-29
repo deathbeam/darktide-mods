@@ -782,9 +782,7 @@ function M.mobility(unit, live_stat_buffs, folded)
     }
 end
 
--- Mirrors PlayerUnitToughnessExtension._update_toughness. The coherency-gated rate
--- (line 149) and the always-on toughness_regen_percent term (line 161) are separate
--- mechanisms, so they're returned apart for distinct display.
+-- Mirrors PlayerUnitToughnessExtension._update_toughness: coherency rate + toughness_regen_percent summed into one regen_rate.
 function M.toughness_regen(unit, live_stat_buffs, tough_template, max_toughness, folded)
     local s = live_stat_buffs
     if not s or not tough_template then
@@ -807,8 +805,21 @@ function M.toughness_regen(unit, live_stat_buffs, tough_template, max_toughness,
     local coherency_modifier = coherency_value
         * (fv and fv.toughness_coherency_regen_rate_multiplier or s.toughness_coherency_regen_rate_multiplier or 1)
     local coherency_regen = base_rate * wep_mod * rate_modifier * coherency_modifier
-    local percent_regen = (fv and fv.toughness_regen_percent or s.toughness_regen_percent or 0) * (max_toughness or 0)
-    return coherency_regen, percent_regen
+    local percent_fraction = (fv and fv.toughness_regen_percent or s.toughness_regen_percent or 0)
+    local total_regen = coherency_regen + percent_fraction * (max_toughness or 0)
+
+    local percent_sources = nil
+    local list = M.sources_for_stat(folded, 'toughness_regen_percent')
+    if list and #list > 0 then
+        local merged = M.merge_sources_by_name(list, 'delta', 'add')
+        for i = 1, #merged do
+            merged[i].per_second = merged[i].delta
+            merged[i].delta = nil
+        end
+        percent_sources = merged
+    end
+
+    return total_regen, percent_sources
 end
 
 function M.toughness_regen_delay(unit, live_stat_buffs, tough_template)
@@ -822,10 +833,8 @@ function M.toughness_regen_delay(unit, live_stat_buffs, tough_template)
     return tough_template.regeneration_delay * wep_mod * buff_mod
 end
 
--- Sum the bonus toughness regen granted by allocated talents' proc/over-time buffs that call
--- Toughness.replenish_percentage directly (never in stat_buffs). Returns a per-second fraction
--- of max toughness, plus contributing sources { name, per_second } (merged by display name).
-function M.toughness_bonus_regen(unit, profile, toggles)
+-- Proc/over-time talents that call Toughness.replenish_percentage directly; replenish modifiers applied to match in-game recovery.
+function M.toughness_bonus_regen(unit, profile, toggles, live_stat_buffs, folded)
     local entries = _talent_entries(unit, profile)
     if not entries then
         return nil, nil
@@ -879,6 +888,19 @@ function M.toughness_bonus_regen(unit, profile, toggles)
                 fold(BuffTemplates[bname .. '_stack'], display)
             end
         end
+    end
+
+    local fv = folded and folded.values
+    local replenish_mod = (fv and fv.toughness_replenish_modifier)
+        or (live_stat_buffs and live_stat_buffs.toughness_replenish_modifier)
+        or 1
+    local replenish_mult = (fv and fv.toughness_replenish_multiplier)
+        or (live_stat_buffs and live_stat_buffs.toughness_replenish_multiplier)
+        or 1
+    local multiplier = replenish_mod * replenish_mult
+    total = total * multiplier
+    for i = 1, #sources do
+        sources[i].per_second = sources[i].per_second * multiplier
     end
 
     if total == 0 and #sources == 0 then

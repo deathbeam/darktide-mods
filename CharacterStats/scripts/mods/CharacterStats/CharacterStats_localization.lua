@@ -10,7 +10,6 @@ return {
         },
     },
     game_loc = {
-        stat_toughness_regen = 'loc_player_buff_coherency_toughness_regen',
         stat_toughness_regen_percent = 'loc_toughness_tutorial',
         stat_dodge_dist = 'loc_weapon_stats_display_dodge_distance',
         stat_dodge_speed = 'loc_weapon_stats_display_dodge_speed',
