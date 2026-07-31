@@ -20,8 +20,8 @@ return {
         stat_attack_speed = 'loc_weapon_stats_display_attack_speed',
         stat_reload_speed = 'loc_stats_display_reload_speed_stat',
         stat_spread = 'loc_weapon_stats_display_spread',
-        stat_power_level = 'loc_weapon_stats_display_power',
         stat_weakspot = 'loc_weapon_details_weakspot',
+        pool_strength = 'loc_weapon_stats_display_power',
         variant_melee = 'loc_setting_melee',
         variant_ranged = 'loc_setting_ranged',
         variant_ogryn = 'loc_character_class_ogryn',
@@ -183,6 +183,9 @@ return {
     variant_heavy = {
         en = 'Heavy',
         ['zh-cn'] = '重击',
+    },
+    variant_weakspot = {
+        en = 'loc_weapon_details_weakspot',
     },
     variant_bombers = {
         en = 'Bombers',

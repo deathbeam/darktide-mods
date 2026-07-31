@@ -49,10 +49,21 @@ local function _variant_tag(tags)
     return ' (' .. table.concat(parts, ', ') .. ')'
 end
 
--- Format a source row's value by stat type: xN.NN for mult, +N for flat, +N.N% for add.
-local function _fmt_source_value(delta, stat_type)
+-- A mult_pool entry names its pool (e.g. pool = 'strength') so the factor can be labelled
+-- (strength -> "Power") and several pools render as separate labelled xN.NN steps. The loc key is
+-- auto-derived as 'pool_' .. name, falling back to prettify when no entry exists.
+local function _pool_label(name)
+    return name and SharedUtils.localize_or_prettify(mod, 'pool_', name) or nil
+end
+
+-- Format a source row's value by stat type: xN.NN for mult/mult_pool (+ optional pool label),
+-- +N for flat, +N.N% for add.
+local function _fmt_source_value(delta, stat_type, pool_label)
     if stat_type == 'mult' then
         return SharedUtils.fmt_mult(delta)
+    elseif stat_type == 'mult_pool' then
+        local s = SharedUtils.fmt_mult(1 + delta)
+        return pool_label and s .. ' (' .. pool_label .. ')' or s
     elseif stat_type == 'flat' then
         return (delta >= 0 and '+' or '') .. SharedUtils.fmt_num(delta)
     end
@@ -63,7 +74,7 @@ end
 -- duplicate curios / multi-template talents collapse to one row with summed deltas.
 -- Like _sources but appends `tag` (e.g. " (Melee)") to each source's label, so a merged
 -- variant group shows which variant each source contributes to.
-local function _sources_tagged(records, folded, stat_key, stat_type, tag)
+local function _sources_tagged(records, folded, stat_key, stat_type, tag, pool_label)
     if not folded then
         return
     end
@@ -74,7 +85,7 @@ local function _sources_tagged(records, folded, stat_key, stat_type, tag)
     local merged = Utils.merge_sources_by_name(list, 'delta', stat_type)
     for i = 1, #merged do
         local src = merged[i]
-        local value_str = _fmt_source_value(src.delta, stat_type)
+        local value_str = _fmt_source_value(src.delta, stat_type, pool_label)
         _add(records, {
             type = 'stat',
             label = src.name .. tag,
@@ -87,8 +98,8 @@ local function _sources_tagged(records, folded, stat_key, stat_type, tag)
     end
 end
 
-local function _sources(records, folded, stat_key, stat_type)
-    _sources_tagged(records, folded, stat_key, stat_type, '')
+local function _sources(records, folded, stat_key, stat_type, pool_label)
+    _sources_tagged(records, folded, stat_key, stat_type, '', pool_label)
 end
 
 -- A source row for a base (non-buff) value: the archetype/weapon contribution that
@@ -109,9 +120,9 @@ local function _base_source(records, label, delta, stat_type)
     })
 end
 
--- Unified stat group: mult keys multiply, add keys sum their deltas (final = mult * (1 + Σ add)).
--- One composition covers additive damage, multiplicative block/resistance, and mixed damage-taken.
--- `independent` variants (grouped breed resistances) show their key alone, not folded with generic.
+-- 'mult' multiplies keys, 'add' sums deltas (1 + Σ), 'mult_pool' sums deltas into a named
+-- × (1 + Σ) pool. Strength (power_level_modifier = 1 + Σ, applied as × S on power level) is
+-- multiplicative to the additive damage pool, so it carries pool = 'strength'.
 local function _stat_group(records, folded, base_label, generic_keys, variants, color, default_type)
     local v = folded and folded.values
     if not v then
@@ -119,28 +130,34 @@ local function _stat_group(records, folded, base_label, generic_keys, variants, 
     end
     local default = default_type or 'add'
     local function entry(key)
-        -- Plain strings inherit default_type; a { key, type } entry overrides it.
         if type(key) == 'table' then
-            return key.key, key.type or default
+            return key.key, key.type or default, key.pool
         end
-        return key, default
+        return key, default, nil
     end
     local function compose(keys)
         local mult, add_delta = 1, 0
+        local pools = {}
         for i = 1, #keys do
-            local k, t = entry(keys[i])
+            local k, t, pool_name = entry(keys[i])
             local val = v[k]
             if type(val) == 'number' and val ~= 1 then
                 if t == 'mult' then
                     mult = mult * val
+                elseif t == 'mult_pool' then
+                    local name = pool_name or ''
+                    pools[name] = (pools[name] or 0) + val - 1
                 else
                     add_delta = add_delta + val - 1
                 end
             end
         end
-        return mult * (1 + add_delta)
+        local pool_product = 1
+        for _, delta in pairs(pools) do
+            pool_product = pool_product * (1 + delta)
+        end
+        return mult * (1 + add_delta) * pool_product
     end
-
     local function combined_keys(variant)
         -- Variants overlay generic keys (mults multiply, adds sum), so fold them together.
         local combined = {}
@@ -165,14 +182,15 @@ local function _stat_group(records, folded, base_label, generic_keys, variants, 
         return
     end
 
-    -- x1.20 for mult groups (matches per-source rows); +20% otherwise.
-    local fmt = default == 'mult' and SharedUtils.fmt_mult
-        or function(n)
-            return SharedUtils.fmt_pct(n - 1)
+    local function fmt_group(total)
+        if default == 'mult' then
+            return SharedUtils.fmt_mult(total)
         end
+        return SharedUtils.fmt_pct(total - 1)
+    end
 
     if generic ~= 1 then
-        _stat(records, mod:localize(base_label), fmt(generic), color)
+        _stat(records, mod:localize(base_label), fmt_group(generic), color)
     end
     for i = 1, #variants do
         local variant = variants[i]
@@ -181,13 +199,13 @@ local function _stat_group(records, folded, base_label, generic_keys, variants, 
             local shown = variant.independent and v[variant.keys[1]] or compose(combined_keys(variant))
             shown = type(shown) == 'number' and shown or 1
             local label = mod:localize(base_label) .. _variant_tag(variant.tags)
-            _stat(records, label, fmt(shown), color)
+            _stat(records, label, fmt_group(shown), color)
         end
     end
 
     for i = 1, #generic_keys do
-        local k, t = entry(generic_keys[i])
-        _sources(records, folded, k, t)
+        local k, t, pool_name = entry(generic_keys[i])
+        _sources(records, folded, k, t, _pool_label(pool_name))
     end
     for i = 1, #variants do
         local variant = variants[i]
@@ -195,8 +213,8 @@ local function _stat_group(records, folded, base_label, generic_keys, variants, 
         local keys = variant.keys
         local n = variant.independent and 1 or #keys
         for j = 1, n do
-            local k, t = entry(keys[j])
-            _sources_tagged(records, folded, k, t, tag)
+            local k, t, pool_name = entry(keys[j])
+            _sources_tagged(records, folded, k, t, tag, _pool_label(pool_name))
         end
     end
 end
@@ -380,11 +398,28 @@ function build_stats()
 
     -- Damage: generic + melee/ranged weapon-type variants + damage-vs-X variants, all under
     -- one group with annotated sources.
-    _stat_group(records, folded, 'stat_damage', { 'damage', 'power_level_modifier' }, {
-        { keys = { 'melee_damage', 'melee_power_level_modifier' }, tags = { 'variant_melee' } },
+    _stat_group(records, folded, 'stat_damage', {
+        'damage',
+        { key = 'power_level_modifier', type = 'mult_pool', pool = 'strength' },
+    }, {
         {
-            keys = { 'ranged_damage', 'ranged_power_level_modifier' },
+            keys = { 'melee_damage', { key = 'melee_power_level_modifier', type = 'mult_pool', pool = 'strength' } },
+            tags = { 'variant_melee' },
+        },
+        {
+            keys = { 'ranged_damage', { key = 'ranged_power_level_modifier', type = 'mult_pool', pool = 'strength' } },
             tags = { 'variant_ranged' },
+        },
+        {
+            keys = { { key = 'melee_heavy_power_level_modifier', type = 'mult_pool', pool = 'strength' } },
+            tags = { 'variant_melee', 'variant_heavy' },
+        },
+        {
+            keys = {
+                { key = 'weakspot_power_level_modifier', type = 'mult_pool', pool = 'strength' },
+                { key = 'melee_weakspot_power_modifier', type = 'mult_pool', pool = 'strength' },
+            },
+            tags = { 'variant_weakspot' },
         },
         { keys = { 'damage_vs_elites' }, tags = { 'variant_elites' } },
         {
@@ -484,23 +519,71 @@ function build_stats()
         { keys = { 'warp_attacks_rending_multiplier' }, tags = { 'variant_warp' } },
     }, COLORS.OFFENSE)
 
-    _stat_with_sources(records, folded, 'stat_power_level', 'power_level_modifier', COLORS.OFFENSE)
-    _sources(records, folded, 'melee_power_level_modifier', 'add')
-    _sources(records, folded, 'ranged_power_level_modifier', 'add')
-
     if Utils.is_ranged(wep_template) then
         _stat_with_sources(records, folded, 'stat_reload_speed', 'reload_speed', COLORS.OFFENSE)
         _stat_with_sources(records, folded, 'stat_spread', 'spread_modifier', COLORS.OFFENSE)
     end
 
-    _stat_group(records, folded, 'stat_impact', { 'impact_modifier' }, {
-        { keys = { 'melee_impact_modifier' }, tags = { 'variant_melee' } },
-        { keys = { 'ranged_impact_modifier' }, tags = { 'variant_ranged' } },
+    _stat_group(records, folded, 'stat_impact', {
+        'impact_modifier',
+        { key = 'power_level_modifier', type = 'mult_pool', pool = 'strength' },
+    }, {
+        {
+            keys = {
+                'melee_impact_modifier',
+                { key = 'melee_power_level_modifier', type = 'mult_pool', pool = 'strength' },
+            },
+            tags = { 'variant_melee' },
+        },
+        {
+            keys = {
+                'ranged_impact_modifier',
+                { key = 'ranged_power_level_modifier', type = 'mult_pool', pool = 'strength' },
+            },
+            tags = { 'variant_ranged' },
+        },
+        {
+            keys = { { key = 'melee_heavy_power_level_modifier', type = 'mult_pool', pool = 'strength' } },
+            tags = { 'variant_melee', 'variant_heavy' },
+        },
+        {
+            keys = {
+                { key = 'weakspot_power_level_modifier', type = 'mult_pool', pool = 'strength' },
+                { key = 'melee_weakspot_power_modifier', type = 'mult_pool', pool = 'strength' },
+            },
+            tags = { 'variant_weakspot' },
+        },
     }, COLORS.OFFENSE)
 
-    _stat_group(records, folded, 'stat_cleave', { 'max_hit_mass_attack_modifier' }, {
-        { keys = { 'max_melee_hit_mass_attack_modifier' }, tags = { 'variant_melee' } },
-        { keys = { 'ranged_max_hit_mass_attack_modifier' }, tags = { 'variant_ranged' } },
+    _stat_group(records, folded, 'stat_cleave', {
+        'max_hit_mass_attack_modifier',
+        { key = 'power_level_modifier', type = 'mult_pool', pool = 'strength' },
+    }, {
+        {
+            keys = {
+                'max_melee_hit_mass_attack_modifier',
+                { key = 'melee_power_level_modifier', type = 'mult_pool', pool = 'strength' },
+            },
+            tags = { 'variant_melee' },
+        },
+        {
+            keys = {
+                'ranged_max_hit_mass_attack_modifier',
+                { key = 'ranged_power_level_modifier', type = 'mult_pool', pool = 'strength' },
+            },
+            tags = { 'variant_ranged' },
+        },
+        {
+            keys = { { key = 'melee_heavy_power_level_modifier', type = 'mult_pool', pool = 'strength' } },
+            tags = { 'variant_melee', 'variant_heavy' },
+        },
+        {
+            keys = {
+                { key = 'weakspot_power_level_modifier', type = 'mult_pool', pool = 'strength' },
+                { key = 'melee_weakspot_power_modifier', type = 'mult_pool', pool = 'strength' },
+            },
+            tags = { 'variant_weakspot' },
+        },
     }, COLORS.OFFENSE)
 
     _spacer(records)
