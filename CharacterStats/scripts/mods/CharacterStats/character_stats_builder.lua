@@ -158,14 +158,55 @@ local function _stat_group(records, folded, base_label, generic_keys, variants, 
         end
         return mult * (1 + add_delta) * pool_product
     end
+    local function _is_subset_tags(super, sub)
+        for j = 1, #sub do
+            local found = false
+            for k = 1, #super do
+                if super[k] == sub[j] then
+                    found = true
+                    break
+                end
+            end
+            if not found then
+                return false
+            end
+        end
+        return true
+    end
+
+    local generic_names = {}
+    for i = 1, #generic_keys do
+        generic_names[entry(generic_keys[i])] = true
+    end
+
+    -- A combined variant overlays generic keys plus any parent variant whose tags are a strict
+    -- subset of its own (so "Ranged, Ogryn" inherits the "Ranged" stack), then its own keys.
     local function combined_keys(variant)
-        -- Variants overlay generic keys (mults multiply, adds sum), so fold them together.
-        local combined = {}
+        if variant.independent then
+            return { variant.keys[1] }
+        end
+        local combined, seen = {}, {}
+        local function add(key)
+            local k = type(key) == 'table' and key.key or key
+            if not seen[k] then
+                seen[k] = true
+                combined[#combined + 1] = key
+            end
+        end
         for i = 1, #generic_keys do
-            combined[#combined + 1] = generic_keys[i]
+            add(generic_keys[i])
+        end
+        local tags = variant.tags
+        for i = 1, #variants do
+            local parent = variants[i]
+            if parent ~= variant and not parent.independent and _is_subset_tags(tags, parent.tags) then
+                for j = 1, #parent.keys do
+                    add(parent.keys[j])
+                end
+            end
         end
         for i = 1, #variant.keys do
-            combined[#combined + 1] = variant.keys[i]
+            add(variant.keys[i])
         end
         return combined
     end
@@ -191,30 +232,28 @@ local function _stat_group(records, folded, base_label, generic_keys, variants, 
 
     if generic ~= 1 then
         _stat(records, mod:localize(base_label), fmt_group(generic), color)
+        for i = 1, #generic_keys do
+            local k, t, pool_name = entry(generic_keys[i])
+            _sources(records, folded, k, t, _pool_label(pool_name))
+        end
     end
+    -- Each variant header is followed by its own sources only; inherited parent keys are already
+    -- listed under their own headers, so combined rows stay free of repeated inherited sources.
     for i = 1, #variants do
         local variant = variants[i]
-        -- Independent variants read the first key alone (grouped breeds share one value); others overlay generic.
         if compose(variant.keys) ~= 1 then
             local shown = variant.independent and v[variant.keys[1]] or compose(combined_keys(variant))
             shown = type(shown) == 'number' and shown or 1
-            local label = mod:localize(base_label) .. _variant_tag(variant.tags)
-            _stat(records, label, fmt_group(shown), color)
-        end
-    end
-
-    for i = 1, #generic_keys do
-        local k, t, pool_name = entry(generic_keys[i])
-        _sources(records, folded, k, t, _pool_label(pool_name))
-    end
-    for i = 1, #variants do
-        local variant = variants[i]
-        local tag = _variant_tag(variant.tags)
-        local keys = variant.keys
-        local n = variant.independent and 1 or #keys
-        for j = 1, n do
-            local k, t, pool_name = entry(keys[j])
-            _sources_tagged(records, folded, k, t, tag, _pool_label(pool_name))
+            local tag = _variant_tag(variant.tags)
+            _stat(records, mod:localize(base_label) .. tag, fmt_group(shown), color)
+            local keys = variant.keys
+            local n = variant.independent and 1 or #keys
+            for j = 1, n do
+                local k, t, pool_name = entry(keys[j])
+                if not generic_names[k] then
+                    _sources_tagged(records, folded, k, t, tag, _pool_label(pool_name))
+                end
+            end
         end
     end
 end
@@ -411,7 +450,10 @@ function build_stats()
             tags = { 'variant_ranged' },
         },
         {
-            keys = { { key = 'melee_heavy_power_level_modifier', type = 'mult_pool', pool = 'strength' } },
+            keys = {
+                'melee_heavy_damage',
+                { key = 'melee_heavy_power_level_modifier', type = 'mult_pool', pool = 'strength' },
+            },
             tags = { 'variant_melee', 'variant_heavy' },
         },
         {
@@ -486,16 +528,27 @@ function build_stats()
         _sources_tagged(records, folded, 'ranged_critical_strike_chance', 'add', _variant_tag({ 'variant_ranged' }))
     end
 
-    -- Crit damage bonus: generic + melee/ranged.
-    _stat_group(records, folded, 'stat_crit_damage', { 'critical_strike_damage' }, {
+    -- Crit damage bonus: generic finesse + crit stats + melee/ranged variants + crit-weakspot.
+    _stat_group(records, folded, 'stat_crit_damage', {
+        'critical_strike_damage',
+        'finesse_modifier_bonus',
+    }, {
         { keys = { 'melee_critical_strike_damage' }, tags = { 'variant_melee' } },
         { keys = { 'ranged_critical_strike_damage' }, tags = { 'variant_ranged' } },
+        { keys = { 'melee_finesse_modifier_bonus' }, tags = { 'variant_melee' } },
+        { keys = { 'ranged_finesse_modifier_bonus' }, tags = { 'variant_ranged' } },
+        { keys = { 'critical_strike_weakspot_damage' }, tags = { 'variant_weakspot' } },
     }, COLORS.OFFENSE)
 
-    -- Weakspot damage bonus: generic + melee/ranged.
-    _stat_group(records, folded, 'stat_weakspot', { 'weakspot_damage' }, {
+    -- Weakspot damage bonus: generic + melee/ranged; finesse_modifier_bonus applies to all weakspot hits.
+    _stat_group(records, folded, 'stat_weakspot', {
+        'weakspot_damage',
+        'finesse_modifier_bonus',
+    }, {
         { keys = { 'melee_weakspot_damage' }, tags = { 'variant_melee' } },
         { keys = { 'ranged_weakspot_damage' }, tags = { 'variant_ranged' } },
+        { keys = { 'melee_finesse_modifier_bonus' }, tags = { 'variant_melee' } },
+        { keys = { 'ranged_finesse_modifier_bonus' }, tags = { 'variant_ranged' } },
     }, COLORS.OFFENSE)
 
     -- Rending: generic + melee/ranged + conditional variants, all under one sum.
@@ -561,6 +614,10 @@ function build_stats()
                 { key = 'melee_weakspot_power_modifier', type = 'mult_pool', pool = 'strength' },
             },
             tags = { 'variant_weakspot' },
+        },
+        {
+            keys = { 'melee_weakspot_impact_modifier' },
+            tags = { 'variant_melee', 'variant_weakspot' },
         },
     }, COLORS.OFFENSE)
 
