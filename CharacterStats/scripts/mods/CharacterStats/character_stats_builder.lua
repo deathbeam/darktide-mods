@@ -423,21 +423,30 @@ function build_stats()
         },
         { keys = { 'damage_vs_elites' }, tags = { 'variant_elites' } },
         {
-            keys = { 'melee_heavy_damage_vs_elites' },
+            keys = { 'damage_vs_elites', 'melee_heavy_damage_vs_elites' },
             tags = { 'variant_melee', 'variant_heavy', 'variant_elites' },
         },
         { keys = { 'damage_vs_specials' }, tags = { 'variant_specials' } },
         { keys = { 'damage_vs_captains' }, tags = { 'variant_captains' } },
-        { keys = { 'ranged_damage_vs_captains' }, tags = { 'variant_ranged', 'variant_captains' } },
-        { keys = { 'damage_vs_monsters' }, tags = { 'variant_monsters' } },
         {
-            keys = { 'ranged_damage_vs_monsters' },
+            keys = { 'damage_vs_captains', 'ranged_damage_vs_captains' },
+            tags = { 'variant_ranged', 'variant_captains' },
+        },
+        {
+            keys = { 'damage_vs_monsters', 'damage_vs_ogryn_and_monsters' },
+            tags = { 'variant_monsters' },
+        },
+        {
+            keys = { 'damage_vs_monsters', 'ranged_damage_vs_monsters', 'damage_vs_ogryn_and_monsters' },
             tags = { 'variant_ranged', 'variant_monsters' },
         },
-        { keys = { 'damage_vs_ogryn' }, tags = { 'variant_ogryn' } },
         {
-            keys = { 'damage_vs_ogryn_and_monsters' },
-            tags = { 'variant_ogryn', 'variant_monsters' },
+            keys = { 'damage_vs_ogryn', 'damage_vs_ogryn_and_monsters' },
+            tags = { 'variant_ogryn' },
+        },
+        {
+            keys = { 'damage_vs_ogryn', 'ranged_damage_vs_ogryn', 'damage_vs_ogryn_and_monsters' },
+            tags = { 'variant_ranged', 'variant_ogryn' },
         },
         { keys = { 'damage_vs_horde' }, tags = { 'variant_horde' } },
         { keys = { 'damage_vs_bleeding' }, tags = { 'variant_bleeding' } },

@@ -8,6 +8,7 @@ local WeaponTraitTemplates = mod:original_require('scripts/settings/equipment/we
 local WeaponHandlingTemplates =
     mod:original_require('scripts/settings/equipment/weapon_handling_templates/weapon_handling_templates')
 local WeaponTweakTemplates = mod:original_require('scripts/extension_systems/weapon/utilities/weapon_tweak_templates')
+local Weapon = mod:original_require('scripts/extension_systems/weapon/weapon')
 local MasterItems = mod:original_require('scripts/backend/master_items')
 local HomePlanets = mod:original_require('scripts/settings/character/home_planets')
 local Childhood = mod:original_require('scripts/settings/character/childhood')
@@ -70,21 +71,42 @@ local function _weapon_toughness_template(unit)
     return weapon_ext and weapon_ext:toughness_template() or nil
 end
 
--- Max crit chance_modifier across the weapon template's actions. Ninja weapons (combat knife,
--- hatchets, saws, shivs) carry a crit bump on their handling template. The template is
--- preparsed at load, which mutates each action's weapon_handling_template into a lookup key,
--- so the original name is recovered via get_template_identifiers().base_identifier.
-local function _weapon_crit_modifier(wep_template)
+-- Max crit chance_modifier across the weapon's handling templates. Resolved per-item (the
+-- chance_modifier is lerped by the item's stat rolls); falls back to base templates at midpoint.
+local function _weapon_crit_modifier(wep_template, item)
     if not wep_template or not wep_template.__base_template_lookup then
         return nil
     end
+
+    if item then
+        local ok, tweak_templates = pcall(Weapon._init_traits, nil, wep_template, item, nil, nil)
+        local handling = ok and tweak_templates and tweak_templates.weapon_handling
+        if handling then
+            local best = nil
+            for _, stats in pairs(handling) do
+                local mod = stats and stats.critical_strike and stats.critical_strike.chance_modifier
+                if type(mod) == 'number' and (best == nil or mod > best) then
+                    best = mod
+                end
+            end
+            if best ~= nil then
+                return best
+            end
+        end
+    end
+
     local best = nil
     for action_name in pairs(wep_template.actions or EMPTY) do
         local base_id = WeaponTweakTemplates.get_template_identifiers(wep_template, 'weapon_handling', action_name)
         local cs = base_id and WeaponHandlingTemplates[base_id] and WeaponHandlingTemplates[base_id].critical_strike
         local mod = cs and cs.chance_modifier
         if type(mod) == 'table' then
-            mod = mod.lerp_perfect or mod.lerp_basic
+            local lo, hi = mod.lerp_basic, mod.lerp_perfect
+            if type(lo) == 'number' and type(hi) == 'number' then
+                mod = math.lerp(lo, hi, 0.5)
+            else
+                mod = mod.lerp_perfect or mod.lerp_basic
+            end
         end
         if type(mod) == 'number' and (best == nil or mod > best) then
             best = mod
@@ -675,10 +697,10 @@ function M.folded_stat_buffs(unit, profile, player, toggles)
         _inject_source(result, 'critical_strike_chance', base_crit, mod:localize('source_base'))
     end
     local wep_template = M.wielded_weapon_template(unit, weapon_slot)
-    local crit_mod = _weapon_crit_modifier(wep_template)
+    local vl = unit and ScriptUnit.has_extension(unit, 'visual_loadout_system')
+    local item = vl and weapon_slot and vl:item_from_slot(weapon_slot)
+    local crit_mod = _weapon_crit_modifier(wep_template, item)
     if crit_mod and crit_mod ~= 0 then
-        local vl = unit and ScriptUnit.has_extension(unit, 'visual_loadout_system')
-        local item = vl and weapon_slot and vl:item_from_slot(weapon_slot)
         local weapon_name = (item and SharedUtils.safe_localize(item.display_name))
             or (wep_template and wep_template.name)
             or mod:localize('mod_name')
