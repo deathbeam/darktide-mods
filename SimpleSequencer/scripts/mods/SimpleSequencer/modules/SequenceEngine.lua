@@ -227,6 +227,7 @@ function SequenceEngine:init(mod, mode_manager)
     self.context = nil
     self.context_key = nil
     self.primary_down = false
+    self.primary_rearm_pending = false
     self.ranged_mode = 'hip'
     self.last_action_token = nil
     self.previous_command = nil
@@ -259,6 +260,7 @@ end
 
 function SequenceEngine:reset()
     self.primary_down = false
+    self.primary_rearm_pending = false
     self.index = 1
     self.completed = false
     self.last_action_token = nil
@@ -613,6 +615,25 @@ function SequenceEngine:handle_input(action_name, raw_value)
         released_primary = previous_primary_down and not self.primary_down
     elseif action_name == 'action_one_pressed' and raw_value then
         self.primary_down = true
+    end
+
+    if self.primary_down and current_action == 'quick_wield' then
+        self.primary_rearm_pending = true
+    end
+
+    if self.primary_rearm_pending and current_action ~= 'quick_wield' and current_action ~= 'idle' then
+        self.primary_rearm_pending = false
+    end
+
+    if
+        action_name == 'action_one_pressed'
+        and not raw_value
+        and current_action == 'idle'
+        and self.primary_rearm_pending
+    then
+        local should_rearm = self.primary_down and self.context.kind == 'RANGED'
+        self.primary_rearm_pending = false
+        raw_value = should_rearm or raw_value
     end
 
     if released_primary then
