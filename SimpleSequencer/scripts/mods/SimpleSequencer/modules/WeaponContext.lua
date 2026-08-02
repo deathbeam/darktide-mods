@@ -201,6 +201,14 @@ function WeaponContext.charge_level(context)
     return charge_component and charge_component.charge_level or 0
 end
 
+function WeaponContext.max_charge(context)
+    local extension = context and context.extension
+    local charge_component = extension and extension._action_module_charge_component
+    local max_charge = charge_component and charge_component.max_charge
+
+    return max_charge and max_charge > 0 and max_charge or nil
+end
+
 function WeaponContext.charge_start_time(context)
     local extension = context and context.extension
     local charge_component = extension and extension._action_module_charge_component

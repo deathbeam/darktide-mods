@@ -50,7 +50,10 @@ local CURRENT_ACTION_HOLD_OVERRIDES = {
     },
     shoot = {
         idle = true,
-        charge = false,
+        charge = true,
+    },
+    charge = {
+        shoot = false,
     },
 }
 
@@ -103,6 +106,8 @@ local function _classify_action(action_name, action_settings, expected_command)
         return 'special_action'
     elseif start_input == 'start_attack' then
         return 'start_attack'
+    elseif kind == 'charge_ammo' then
+        return 'charge'
     elseif start_input == 'shoot_pressed' then
         return 'shoot'
     elseif start_input == 'charge' then
@@ -130,6 +135,8 @@ local function _classify_action(action_name, action_settings, expected_command)
         return 'light_attack'
     elseif expected_command == 'heavy_attack' and kind == 'sweep' then
         return 'heavy_attack'
+    elseif expected_command == 'shoot' and (kind == 'chain_lightning' or kind == 'damage_target') then
+        return 'shoot'
     end
 
     if string.find(action_name, 'wield', 1, true) then
@@ -325,14 +332,15 @@ function SequenceEngine:_current_action()
     return current_action, start_t, chain_ready, action_settings
 end
 
-function SequenceEngine:_charge_ready(start_t)
+function SequenceEngine:_charge_ready(start_t, action_settings)
     local threshold = (self.profile and self.profile.auto_charge_threshold or 100) / 100
+    local max_charge = WeaponContext.max_charge(self.context)
+    threshold = max_charge and math.min(threshold, max_charge) or threshold
     local charge_start_t = WeaponContext.charge_start_time(self.context)
-
-    if charge_start_t and start_t and charge_start_t < start_t then
+    local keep_charge = action_settings and action_settings.keep_charge
+    if charge_start_t and start_t and charge_start_t < start_t and not keep_charge then
         return false
     end
-
     return WeaponContext.charge_level(self.context) >= threshold
 end
 
@@ -360,14 +368,12 @@ function SequenceEngine:_advance()
     self.fire_token = nil
 end
 
-function SequenceEngine:_maybe_advance(current_action, start_t, chain_ready)
+function SequenceEngine:_maybe_advance(current_action, start_t, chain_ready, action_settings)
     local command = self:_command()
-
     if not command then
         return
     end
-
-    if command == 'charge' and current_action == 'charge' and not self:_charge_ready(start_t) then
+    if command == 'charge' and current_action == 'charge' and not self:_charge_ready(start_t, action_settings) then
         return
     end
 
@@ -480,7 +486,7 @@ function SequenceEngine:_fire_pulse(current_action, raw_value, chain_ready)
     return true
 end
 
-function SequenceEngine:_override(action_name, raw_value, current_action, command, chain_ready)
+function SequenceEngine:_override(action_name, raw_value, current_action, command, chain_ready, action_settings)
     if action_name == 'action_one_hold' then
         local current_action_overrides = CURRENT_ACTION_HOLD_OVERRIDES[current_action]
         local current_action_override = current_action_overrides and current_action_overrides[command]
@@ -489,7 +495,9 @@ function SequenceEngine:_override(action_name, raw_value, current_action, comman
             return current_action_override
         elseif command == 'idle' then
             return false
-        elseif command == 'charge' or EXTRA_COMMANDS[command] or command == 'block' or command == 'push' then
+        elseif command == 'charge' then
+            return raw_value
+        elseif EXTRA_COMMANDS[command] or command == 'block' or command == 'push' then
             return false
         end
 
@@ -519,7 +527,32 @@ function SequenceEngine:_override(action_name, raw_value, current_action, comman
                 or current_action == 'push'
         end
     elseif action_name == 'action_two_hold' then
-        if command == 'shoot' and self.automatic_fire == 'charged' and current_action == 'charge' then
+        local action_inputs = self.context and self.context.template and self.context.template.action_inputs
+        local start_input = action_settings and action_settings.start_input
+        local input_settings = start_input and action_inputs and action_inputs[start_input]
+        local input_sequence = input_settings and input_settings.input_sequence
+        local first_input = input_sequence and input_sequence[1] and input_sequence[1].input
+        local primary_charge = first_input == 'action_one_hold'
+        local aim_transition = action_settings and (action_settings.kind == 'aim' or action_settings.kind == 'unaim')
+        local actions = self.context and self.context.template and self.context.template.actions
+        if not primary_charge and not start_input then
+            for _, settings in pairs(actions or {}) do
+                local kind = settings.kind
+                local start = settings.start_input
+                local input = start and action_inputs and action_inputs[start]
+                local sequence = input and input.input_sequence
+                local first = sequence and sequence[1] and sequence[1].input
+                if kind and string.find(kind, 'charge', 1, true) and first == 'action_one_hold' then
+                    primary_charge = true
+                    break
+                end
+            end
+        end
+        if primary_charge then
+            return raw_value
+        elseif aim_transition then
+            return raw_value
+        elseif command == 'shoot' and self.automatic_fire == 'charged' and current_action == 'charge' then
             return true
         elseif self:_required(command, action_name) then
             return true
@@ -552,10 +585,15 @@ function SequenceEngine:handle_input(action_name, raw_value)
         local ranged_mode = raw_value and 'ads' or 'hip'
 
         if self.ranged_mode ~= ranged_mode then
+            local primary_down = self.primary_down
             self.ranged_mode = ranged_mode
             self.context_key = nil
-            self:reset()
             context = self:_refresh_context()
+            local active_action, active_start_t = self:_current_action()
+            if active_action ~= 'idle' then
+                self.last_action_token = _action_token(active_action, active_start_t)
+            end
+            self.primary_down = primary_down
         end
     end
 
@@ -582,7 +620,7 @@ function SequenceEngine:handle_input(action_name, raw_value)
         return raw_value
     end
 
-    self:_maybe_advance(current_action, start_t, chain_ready)
+    self:_maybe_advance(current_action, start_t, chain_ready, action_settings)
     if self:_restore_after_no_repeat() then
         return raw_value
     end
@@ -616,7 +654,7 @@ function SequenceEngine:handle_input(action_name, raw_value)
         return raw_value
     end
 
-    return self:_override(action_name, raw_value, current_action, command, chain_ready)
+    return self:_override(action_name, raw_value, current_action, command, chain_ready, action_settings)
 end
 
 function SequenceEngine:update()
@@ -626,8 +664,8 @@ function SequenceEngine:update()
         return
     end
 
-    local current_action, start_t, chain_ready = self:_current_action()
-    self:_maybe_advance(current_action, start_t, chain_ready)
+    local current_action, start_t, chain_ready, action_settings = self:_current_action()
+    self:_maybe_advance(current_action, start_t, chain_ready, action_settings)
     self:_restore_after_no_repeat()
 end
 
