@@ -77,7 +77,7 @@ local DEFINITIONS = {
                     text_horizontal_alignment = 'left',
                     text_vertical_alignment = 'center',
                     text_color = UIHudSettings.color_tint_main_1,
-                    offset = { 228, 0, 2 },
+                    offset = { 218, 0, 2 },
                 },
             },
         }, 'mode_indicator'),
