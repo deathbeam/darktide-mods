@@ -210,24 +210,24 @@ function ModeManager:_use_current_weapon(kind)
     end
 
     self.selected_weapons[self.editing_mode][kind] = weapon_name
-    self:_edit_profile(kind)
+    self:_edit_profile(kind, true)
     self:_save()
     self:_sync_kind(kind)
 
     return true
 end
 
-function ModeManager:_edit_profile(kind)
+function ModeManager:_edit_profile(kind, create_override)
     local mode_data = self.data[self.editing_mode]
     local profiles = mode_data[kind]
     local weapon_key = self.selected_weapons[self.editing_mode][kind]
     local global_key = kind == 'MELEE' and 'global_melee' or 'global_ranged'
 
-    if weapon_key ~= global_key and not profiles[weapon_key] then
+    if create_override and weapon_key ~= global_key and not profiles[weapon_key] then
         profiles[weapon_key] = Profiles.clone(profiles[global_key])
     end
 
-    return profiles[weapon_key]
+    return profiles[weapon_key] or profiles[global_key]
 end
 
 function ModeManager:_save()
@@ -241,7 +241,7 @@ function ModeManager:_save()
 end
 
 function ModeManager:_sync_kind(kind)
-    local profile = self:_edit_profile(kind)
+    local profile = self:_edit_profile(kind, false)
     local prefix = string.lower(kind) .. '_'
 
     self.mod:set(prefix .. 'weapon_selection', self.selected_weapons[self.editing_mode][kind], false)
@@ -326,14 +326,13 @@ function ModeManager:on_setting_changed(setting_name)
 
     if key == 'weapon_selection' then
         self.selected_weapons[self.editing_mode][kind] = self.mod:get(setting_name)
-        self:_edit_profile(kind)
         self:_save()
         self:_sync_kind(kind)
 
         return true
     end
 
-    local profile = self:_edit_profile(kind)
+    local profile = self:_edit_profile(kind, true)
     profile[key] = self.mod:get(setting_name)
     self:_save()
 
