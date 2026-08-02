@@ -24,10 +24,6 @@ local CHAIN_TIME_OVERRIDES = {
     },
 }
 
-local MELEE_WHILE_NOT_AIMING = {
-    ogryn_gauntlet_p1_m1 = true,
-}
-
 local function _is_aiming_action(action_name)
     return action_name
         and (
@@ -68,9 +64,12 @@ function WeaponContext.read()
     if slot == 'slot_primary' then
         kind = 'MELEE'
     elseif slot == 'slot_secondary' or slot == 'slot_grenade_ability' then
-        local action_name = WeaponContext.action({ extension = extension })
+        local action_name, _, action_settings = WeaponContext.action({ extension = extension })
+        local primary_attack = template and template.displayed_attacks and template.displayed_attacks.primary
+        local primary_is_melee = primary_attack and primary_attack.type == 'melee'
+        local is_aiming = _is_aiming_action(action_name) or action_settings and action_settings.start_input == 'brace'
 
-        kind = MELEE_WHILE_NOT_AIMING[name] and not _is_aiming_action(action_name) and 'MELEE' or 'RANGED'
+        kind = primary_is_melee and not is_aiming and 'MELEE' or 'RANGED'
     elseif template and template.keywords then
         for _, keyword in ipairs(template.keywords) do
             if keyword == 'melee' then

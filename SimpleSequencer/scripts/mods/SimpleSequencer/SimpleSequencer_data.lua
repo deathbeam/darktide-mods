@@ -286,6 +286,15 @@ local MELEE_OPTIONS = {
     { text = 'wield', value = 'wield' },
 }
 
+local RANGED_FIRE_OPTIONS = {
+    { text = 'none', value = 'none' },
+    { text = 'standard', value = 'standard' },
+    { text = 'charged', value = 'charged' },
+    { text = 'special', value = 'special' },
+    { text = 'special_charged', value = 'special_charged' },
+    { text = 'special_standard', value = 'special_standard' },
+}
+
 local CYCLE_OPTIONS = { { text = 'no_repeat', value = 'no_repeat' } }
 
 for i = 1, SEQUENCE_STEP_COUNT do
@@ -344,27 +353,13 @@ local ranged_widgets = {
         setting_id = RANGED_PREFIX .. 'automatic_fire_hip',
         type = 'dropdown',
         default_value = 'none',
-        options = {
-            { text = 'none', value = 'none' },
-            { text = 'standard', value = 'standard' },
-            { text = 'charged', value = 'charged' },
-            { text = 'special', value = 'special' },
-            { text = 'special_charged', value = 'special_charged' },
-            { text = 'special_standard', value = 'special_standard' },
-        },
+        options = _clone_options(RANGED_FIRE_OPTIONS),
     },
     {
         setting_id = RANGED_PREFIX .. 'automatic_fire_ads',
         type = 'dropdown',
         default_value = 'none',
-        options = {
-            { text = 'none', value = 'none' },
-            { text = 'standard', value = 'standard' },
-            { text = 'charged', value = 'charged' },
-            { text = 'special', value = 'special' },
-            { text = 'special_charged', value = 'special_charged' },
-            { text = 'special_standard', value = 'special_standard' },
-        },
+        options = _clone_options(RANGED_FIRE_OPTIONS),
     },
     {
         setting_id = RANGED_PREFIX .. 'auto_charge_threshold',

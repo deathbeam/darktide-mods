@@ -69,7 +69,7 @@ end
 
 function mod.on_disabled()
     enabled = false
-    mod.engine:reset('disabled')
+    mod.engine:reset()
 end
 
 function mod.on_all_mods_loaded()
@@ -84,12 +84,12 @@ function mod.on_setting_changed(setting_name)
     end
 
     if setting_name == 'reset_on_interrupt' then
-        mod.engine:reset('setting_changed')
+        mod.engine:reset()
     end
 end
 
 function mod.on_game_state_changed()
-    mod.engine:reset('game_state_changed')
+    mod.engine:reset()
     mod.engine:invalidate()
 end
 
@@ -148,7 +148,7 @@ mod:hook_safe(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(self)
     local player = Managers.player and Managers.player:local_player_safe(1)
 
     if player and player.player_unit == self._unit then
-        mod.engine:reset('weapon_changed')
+        mod.engine:reset()
         mod.engine:invalidate()
     end
 end)
@@ -157,7 +157,7 @@ mod:hook_safe(CLASS.PlayerCharacterStateStunned, 'on_enter', function(self, unit
     local player = Managers.player and Managers.player:local_player_safe(1)
 
     if mod.ready() and player and player.player_unit == unit then
-        mod.engine:reset('stunned')
+        mod.engine:reset()
     end
 end)
 

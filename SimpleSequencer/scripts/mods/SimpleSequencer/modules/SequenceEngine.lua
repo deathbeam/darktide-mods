@@ -4,7 +4,6 @@ local WeaponContext = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequence
 
 local HEAVY_WINDUP_COMMANDS = {
     heavy_attack = 'heavy_attack',
-    special_heavy_attack = 'special_heavy_attack',
     special_heavy_execute = 'special_heavy_execute',
 }
 
@@ -52,9 +51,6 @@ local CURRENT_ACTION_HOLD_OVERRIDES = {
     shoot = {
         idle = true,
         charge = false,
-    },
-    charge = {
-        shoot_alt = false,
     },
 }
 
@@ -239,13 +235,13 @@ function SequenceEngine:invalidate()
 end
 
 function SequenceEngine:is_in_action()
-    local action_name = select(1, WeaponContext.action(self.context))
+    local action_name = WeaponContext.action(self.context)
 
     return action_name ~= 'idle'
 end
 
 function SequenceEngine:is_safe_to_switch_mode()
-    local current_action, _, _, chain_ready = self:_current_action()
+    local current_action, _, chain_ready = self:_current_action()
 
     return current_action == 'idle' or chain_ready
 end
@@ -273,15 +269,7 @@ end
 
 function SequenceEngine:_refresh_context()
     local context = WeaponContext.read()
-    local key = tostring(self.mode_manager.revision)
-        .. ':'
-        .. self.mode_manager:active()
-        .. ':'
-        .. context.kind
-        .. ':'
-        .. context.name
-        .. ':'
-        .. self.ranged_mode
+    local key = self.mode_manager:active() .. ':' .. context.kind .. ':' .. context.name .. ':' .. self.ranged_mode
 
     if self.context_key == key then
         return context
@@ -334,7 +322,7 @@ function SequenceEngine:_current_action()
         chain_ready = WeaponContext.can_chain_shoot(action_settings, start_t, self.context.name)
     end
 
-    return current_action, start_t, action_name, chain_ready, action_settings
+    return current_action, start_t, chain_ready, action_settings
 end
 
 function SequenceEngine:_charge_ready(start_t)
@@ -429,14 +417,6 @@ function SequenceEngine:_restore_after_no_repeat()
     return true
 end
 
-function SequenceEngine:_profile_allows_input()
-    if not self.profile or self.completed then
-        return false
-    end
-
-    return true
-end
-
 function SequenceEngine:_required(command, action_name)
     if action_name == 'action_one_hold' then
         return PRIMARY_HOLD_COMMANDS[command] or false
@@ -444,8 +424,6 @@ function SequenceEngine:_required(command, action_name)
         return command == 'charge' or command == 'block' or command == 'push' or command == 'push_follow_up'
     elseif action_name == 'weapon_extra_pressed' or action_name == 'weapon_extra_hold' then
         return EXTRA_COMMANDS[command] or false
-    elseif action_name == 'weapon_reload_hold' then
-        return command == 'weapon_reload'
     elseif action_name == 'quick_wield' then
         return command == 'quick_wield'
     end
@@ -550,7 +528,7 @@ function SequenceEngine:_override(action_name, raw_value, current_action, comman
         if self:_required(command, action_name) then
             return true
         end
-    elseif action_name == 'weapon_reload_hold' or action_name == 'quick_wield' then
+    elseif action_name == 'quick_wield' then
         if self:_required(command, action_name) then
             return true
         end
@@ -576,12 +554,12 @@ function SequenceEngine:handle_input(action_name, raw_value)
         if self.ranged_mode ~= ranged_mode then
             self.ranged_mode = ranged_mode
             self.context_key = nil
-            self:reset('ranged_mode_changed')
+            self:reset()
             context = self:_refresh_context()
         end
     end
 
-    local current_action, start_t, _, chain_ready, action_settings = self:_current_action()
+    local current_action, start_t, chain_ready, action_settings = self:_current_action()
     local preserve_primary_hold = action_settings and PRESERVE_PRIMARY_HOLD_ACTIONS[action_settings.kind]
 
     -- Automatic venting aborts the pending shot action, so held autofire must rearm afterward.
@@ -628,7 +606,7 @@ function SequenceEngine:handle_input(action_name, raw_value)
         return raw_value
     end
 
-    if not command or not self:_profile_allows_input() then
+    if not command or not self.profile or self.completed then
         return raw_value
     end
 
@@ -648,7 +626,7 @@ function SequenceEngine:update()
         return
     end
 
-    local current_action, start_t, _, chain_ready = self:_current_action()
+    local current_action, start_t, chain_ready = self:_current_action()
     self:_maybe_advance(current_action, start_t, chain_ready)
     self:_restore_after_no_repeat()
 end

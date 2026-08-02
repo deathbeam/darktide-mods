@@ -79,7 +79,6 @@ function ModeManager:init(mod_instance)
     self.previous_mode = 'mode_2'
     self.pending_mode = nil
     self.editing_mode = mod_instance:get('editing_mode') or 'mode_1'
-    self.revision = 0
 
     for _, mode in ipairs(MODES) do
         local defaults = DISPLAY_DEFAULTS[mode]
@@ -142,10 +141,9 @@ function ModeManager:_activate(mode)
     self.active_mode = mode
     self.previous_mode = previous_mode
     self.pending_mode = nil
-    self.revision = self.revision + 1
-
     if self.mod.engine then
-        self.mod.engine:reset('mode_changed')
+        self.mod.engine:invalidate()
+        self.mod.engine:reset()
     end
 end
 
@@ -233,7 +231,6 @@ end
 function ModeManager:_save()
     self.mod:set(PROFILE_DATA_KEY, self.data, false)
     self.mod:set(SELECTED_WEAPONS_KEY, self.selected_weapons, false)
-    self.revision = self.revision + 1
 
     if self.mod.engine then
         self.mod.engine:invalidate()
