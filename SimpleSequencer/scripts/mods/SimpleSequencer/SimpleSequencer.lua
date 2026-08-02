@@ -3,6 +3,16 @@ local mod = get_mod('SimpleSequencer')
 local ModeManager = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ModeManager')
 local SequenceEngine = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceEngine')
 
+local RESET_STATE_CLASSES = {
+    CLASS.PlayerCharacterStateStunned,
+    CLASS.PlayerCharacterStateKnockedDown,
+    CLASS.PlayerCharacterStateNetted,
+    CLASS.PlayerCharacterStatePounced,
+    CLASS.PlayerCharacterStateGrabbed,
+    CLASS.PlayerCharacterStateHogtied,
+    CLASS.PlayerCharacterStateDead,
+}
+
 mod:register_hud_element({
     class_name = 'HudElementSimpleSequencer',
     filename = 'SimpleSequencer/scripts/mods/SimpleSequencer/modules/HudElementSimpleSequencer',
@@ -32,6 +42,13 @@ local function _input_hook(func, self, action_name, ...)
     end
 
     return mod.engine:handle_input(action_name, value)
+end
+
+local function _reset_for_disruptive_state(_, unit)
+    local player = Managers.player and Managers.player:local_player_safe(1)
+    if mod.ready() and player and player.player_unit == unit then
+        mod.engine:reset()
+    end
 end
 
 local function _refresh_mode_display_name_input(view)
@@ -153,13 +170,11 @@ mod:hook_safe(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(self)
     end
 end)
 
-mod:hook_safe(CLASS.PlayerCharacterStateStunned, 'on_enter', function(self, unit, dt, t, previous_state, params)
-    local player = Managers.player and Managers.player:local_player_safe(1)
-
-    if mod.ready() and player and player.player_unit == unit then
-        mod.engine:reset()
+for _, state_class in pairs(RESET_STATE_CLASSES) do
+    if state_class then
+        mod:hook_safe(state_class, 'on_enter', _reset_for_disruptive_state)
     end
-end)
+end
 
 mod:hook_safe(CLASS.ActionSweep, '_reset_sweep_component', function()
     if mod.ready() then
