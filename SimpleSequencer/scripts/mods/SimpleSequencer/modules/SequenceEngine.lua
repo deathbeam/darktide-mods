@@ -105,6 +105,8 @@ local function _classify_action(action_name, action_settings, expected_command)
         return 'special_heavy_execute'
     elseif start_input == 'special_action' then
         return 'special_action'
+    elseif start_input == 'start_attack' then
+        return 'start_attack'
     elseif start_input == 'shoot_pressed' then
         return 'shoot'
     elseif start_input == 'charge' then
@@ -114,7 +116,14 @@ local function _classify_action(action_name, action_settings, expected_command)
     end
 
     if
-        expected_command == 'special_start_attack' and (kind == 'windup' or string.find(action_name, 'start', 1, true))
+        (expected_command == 'start_attack' or expected_command == 'light_attack' or expected_command == 'heavy_attack')
+        and string.find(action_name, 'start', 1, true)
+        and string.find(action_name, 'special', 1, true)
+    then
+        return 'start_attack'
+    elseif
+        expected_command == 'special_start_attack'
+        and (kind == 'windup' or string.find(action_name, 'start', 1, true))
     then
         return 'special_start_attack'
     elseif expected_command == 'special_light_attack' and kind == 'sweep' then
