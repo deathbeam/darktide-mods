@@ -10,6 +10,11 @@ Automatically uses blitzes and stimms when equipped. Combination of various mods
 
 Sprint by default, hold sprint to walk
 
+## [SimpleSequencer](mods/SimpleSequencer)
+
+Attack sequencer, similar to Skitarius but works on active modes and switching between modes, always requires holding primary or
+secondary attack for executing sequences.
+
 ## [CharacterStats](mods/CharacterStats)
 
 Show derived character stats
