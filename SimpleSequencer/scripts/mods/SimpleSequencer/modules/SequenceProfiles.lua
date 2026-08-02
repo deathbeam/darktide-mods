@@ -4,6 +4,25 @@ local WeaponTemplates
 
 local SEQUENCE_STEP_COUNT = 6
 local SEQUENCE_STEP_PREFIX = 'sequence_step_'
+local PROFILE_KINDS = { 'MELEE', 'RANGED' }
+local PROFILE_DEFAULTS = {
+    MELEE = {
+        sequence_cycle_point = 'sequence_step_1',
+        sequence_step_1 = 'none',
+        sequence_step_2 = 'none',
+        sequence_step_3 = 'none',
+        sequence_step_4 = 'none',
+        sequence_step_5 = 'none',
+        sequence_step_6 = 'none',
+    },
+    RANGED = {
+        automatic_fire_hip = 'none',
+        automatic_fire_ads = 'none',
+        auto_charge_threshold = 100,
+        rate_of_fire_hip = 0,
+        rate_of_fire_ads = 0,
+    },
+}
 
 -- Profile commands expand into the action states observed by the weapon system.
 local COMMAND_STEPS = {
@@ -54,35 +73,26 @@ local function _clone(value)
     return result
 end
 
-local function _new_melee_profile()
-    local profile = {
-        sequence_cycle_point = 'sequence_step_1',
-    }
-
-    for i = 1, SEQUENCE_STEP_COUNT do
-        profile[SEQUENCE_STEP_PREFIX .. i] = 'none'
-    end
-
-    return profile
+local function _new_profile(kind)
+    return _clone(PROFILE_DEFAULTS[kind])
 end
 
-local function _new_ranged_profile()
-    return {
-        automatic_fire_hip = 'none',
-        automatic_fire_ads = 'none',
-        auto_charge_threshold = 100,
-        rate_of_fire_hip = 0,
-        rate_of_fire_ads = 0,
-    }
+local function _merge_defaults(profile, defaults)
+    for key, value in pairs(defaults) do
+        if profile[key] == nil then
+            profile[key] = value
+        end
+    end
 end
 
 local function _ensure_profile(data, mode, kind, weapon_key)
-    data[mode] = data[mode] or { MELEE = {}, RANGED = {} }
-    data[mode][kind] = data[mode][kind] or {}
-    data[mode][kind][weapon_key] = data[mode][kind][weapon_key]
-        or _clone(kind == 'MELEE' and _new_melee_profile() or _new_ranged_profile())
+    local mode_data = data[mode] or {}
+    local profiles = mode_data[kind] or {}
+    mode_data[kind] = profiles
+    data[mode] = mode_data
+    profiles[weapon_key] = profiles[weapon_key] or _new_profile(kind)
 
-    return data[mode][kind][weapon_key]
+    return profiles[weapon_key]
 end
 
 function Profiles.new_data()
@@ -91,8 +101,8 @@ function Profiles.new_data()
     for i = 1, 4 do
         local mode = 'mode_' .. i
         data[mode] = {
-            MELEE = { global_melee = _new_melee_profile() },
-            RANGED = { global_ranged = _new_ranged_profile() },
+            MELEE = { global_melee = _new_profile('MELEE') },
+            RANGED = { global_ranged = _new_profile('RANGED') },
         }
     end
 
@@ -104,36 +114,19 @@ function Profiles.ensure(data)
 
     for i = 1, 4 do
         local mode = 'mode_' .. i
-        local melee = _ensure_profile(data, mode, 'MELEE', 'global_melee')
-        local ranged = _ensure_profile(data, mode, 'RANGED', 'global_ranged')
-        local melee_defaults = _new_melee_profile()
-        local ranged_defaults = _new_ranged_profile()
+        local mode_data = data[mode] or {}
+        data[mode] = mode_data
 
-        for key, value in pairs(melee_defaults) do
-            if melee[key] == nil then
-                melee[key] = value
-            end
-        end
+        for _, kind in ipairs(PROFILE_KINDS) do
+            local profiles = mode_data[kind] or {}
+            mode_data[kind] = profiles
 
-        for key, value in pairs(ranged_defaults) do
-            if ranged[key] == nil then
-                ranged[key] = value
-            end
-        end
+            local global_key = kind == 'MELEE' and 'global_melee' or 'global_ranged'
+            _ensure_profile(data, mode, kind, global_key)
 
-        for _, profile in pairs(data[mode].MELEE) do
-            for key, value in pairs(melee_defaults) do
-                if profile[key] == nil then
-                    profile[key] = value
-                end
-            end
-        end
-
-        for _, profile in pairs(data[mode].RANGED) do
-            for key, value in pairs(ranged_defaults) do
-                if profile[key] == nil then
-                    profile[key] = value
-                end
+            local defaults = PROFILE_DEFAULTS[kind]
+            for _, profile in pairs(profiles) do
+                _merge_defaults(profile, defaults)
             end
         end
     end
@@ -146,21 +139,15 @@ function Profiles.clone(value)
 end
 
 function Profiles.keys(kind)
-    if kind == 'MELEE' then
-        local keys = {}
-        for i = 1, SEQUENCE_STEP_COUNT do
-            keys[#keys + 1] = SEQUENCE_STEP_PREFIX .. i
-        end
-        return keys
+    local defaults = PROFILE_DEFAULTS[kind]
+    local keys = {}
+
+    for key in pairs(defaults or {}) do
+        keys[#keys + 1] = key
     end
 
-    return {
-        'automatic_fire_hip',
-        'automatic_fire_ads',
-        'auto_charge_threshold',
-        'rate_of_fire_hip',
-        'rate_of_fire_ads',
-    }
+    table.sort(keys)
+    return keys
 end
 
 function Profiles.get(data, mode, kind, weapon_name)

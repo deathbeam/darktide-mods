@@ -181,39 +181,18 @@ local function _chain_ready(settings, start_t, chain_name, weapon_name)
     return current_time and current_time - start_t > chain_time
 end
 
-function WeaponContext.can_chain_start_attack(settings, start_t)
-    return _chain_ready(settings, start_t, 'start_attack')
-end
-
-function WeaponContext.can_chain_shoot(settings, start_t, weapon_name)
-    local chain_name = settings and settings.start_input or 'shoot_pressed'
+function WeaponContext.can_chain(settings, start_t, chain_name, weapon_name)
     return _chain_ready(settings, start_t, chain_name, weapon_name)
 end
 
-function WeaponContext.can_chain_heavy_attack(settings, start_t, weapon_name)
-    return _chain_ready(settings, start_t, 'heavy_attack', weapon_name)
-end
-
-function WeaponContext.charge_level(context)
-    local extension = context and context.extension
-    local charge_component = extension and extension._action_module_charge_component
-
-    return charge_component and charge_component.charge_level or 0
-end
-
-function WeaponContext.max_charge(context)
+function WeaponContext.charge_state(context)
     local extension = context and context.extension
     local charge_component = extension and extension._action_module_charge_component
     local max_charge = charge_component and charge_component.max_charge
 
-    return max_charge and max_charge > 0 and max_charge or nil
-end
-
-function WeaponContext.charge_start_time(context)
-    local extension = context and context.extension
-    local charge_component = extension and extension._action_module_charge_component
-
-    return charge_component and charge_component.charge_start_time or nil
+    return charge_component and charge_component.charge_level or 0,
+        max_charge and max_charge > 0 and max_charge or nil,
+        charge_component and charge_component.charge_start_time or nil
 end
 
 return WeaponContext

@@ -42,9 +42,11 @@ describe('SimpleSequencer WeaponContext', function()
         mock:set_charge(0.5, 0.75, 2)
         local context = WeaponContext.read()
 
-        assert.are.equal(0.5, WeaponContext.charge_level(context))
-        assert.are.equal(0.75, WeaponContext.max_charge(context))
-        assert.are.equal(2, WeaponContext.charge_start_time(context))
+        local charge_level, max_charge, charge_start_time = WeaponContext.charge_state(context)
+
+        assert.are.equal(0.5, charge_level)
+        assert.are.equal(0.75, max_charge)
+        assert.are.equal(2, charge_start_time)
     end)
 
     it('detects a ranged action at its chain boundary', function()
@@ -59,6 +61,6 @@ describe('SimpleSequencer WeaponContext', function()
         mock:set_action('action_shoot', settings, 1)
         mock.now = 1.3
 
-        assert.is_true(WeaponContext.can_chain_shoot(settings, 1, 'test_ranged'))
+        assert.is_true(WeaponContext.can_chain(settings, 1, 'shoot_pressed', 'test_ranged'))
     end)
 end)

@@ -55,4 +55,25 @@ describe('SimpleSequencer SequenceProfiles', function()
         assert.are.equal('none', profile.sequence_step_2)
         assert.are.equal('sequence_step_1', profile.sequence_cycle_point)
     end)
+
+    it('derives setting keys from profile defaults', function()
+        local function contains(keys, expected)
+            for _, key in ipairs(keys) do
+                if key == expected then
+                    return true
+                end
+            end
+
+            return false
+        end
+
+        local melee_keys = Profiles.keys('MELEE')
+        local ranged_keys = Profiles.keys('RANGED')
+
+        assert.are.equal(7, #melee_keys)
+        assert.is_true(contains(melee_keys, 'sequence_cycle_point'))
+        assert.is_true(contains(melee_keys, 'sequence_step_6'))
+        assert.are.equal(5, #ranged_keys)
+        assert.is_true(contains(ranged_keys, 'rate_of_fire_ads'))
+    end)
 end)

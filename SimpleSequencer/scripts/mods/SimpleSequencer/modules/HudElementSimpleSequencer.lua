@@ -11,27 +11,26 @@ local HUB_GAME_MODES = {
 }
 
 local HUD_DISPLAY_DISABLED = 'disabled'
-local HUD_DISPLAY_ICON = 'icon'
-local HUD_DISPLAY_NAME = 'name'
-local HUD_DISPLAY_ICON_AND_NAME = 'icon_and_name'
-
-local VALID_DISPLAY_MODES = {
-    [HUD_DISPLAY_DISABLED] = true,
-    [HUD_DISPLAY_ICON] = true,
-    [HUD_DISPLAY_NAME] = true,
-    [HUD_DISPLAY_ICON_AND_NAME] = true,
-}
-
-local DISPLAY_LAYOUTS = {
-    [HUD_DISPLAY_ICON] = {
+local DISPLAY_MODES = {
+    [HUD_DISPLAY_DISABLED] = {
+        show_icon = false,
+        show_name = false,
+    },
+    icon = {
+        show_icon = true,
+        show_name = false,
         icon_offset_x = 236,
         text_offset_x = 0,
     },
-    [HUD_DISPLAY_NAME] = {
+    name = {
+        show_icon = false,
+        show_name = true,
         icon_offset_x = 0,
         text_offset_x = 125,
     },
-    [HUD_DISPLAY_ICON_AND_NAME] = {
+    icon_and_name = {
+        show_icon = true,
+        show_name = true,
         icon_offset_x = 190,
         text_offset_x = 218,
     },
@@ -47,7 +46,7 @@ end
 local function _display_mode()
     local display_mode = mod:get('hud_display_mode')
 
-    return VALID_DISPLAY_MODES[display_mode] and display_mode or HUD_DISPLAY_DISABLED
+    return DISPLAY_MODES[display_mode] and display_mode or HUD_DISPLAY_DISABLED
 end
 
 local DEFINITIONS = {
@@ -136,10 +135,8 @@ function HudElementSimpleSequencer:update(dt, t, ui_renderer, render_settings, i
         return
     end
 
+    local layout = DISPLAY_MODES[display_mode]
     local display = manager:display()
-    local layout = DISPLAY_LAYOUTS[display_mode]
-    local show_icon = display_mode == HUD_DISPLAY_ICON or display_mode == HUD_DISPLAY_ICON_AND_NAME
-    local show_name = display_mode == HUD_DISPLAY_NAME or display_mode == HUD_DISPLAY_ICON_AND_NAME
     local position_x = tonumber(mod:get('hud_position_x')) or 0
     local position_y = tonumber(mod:get('hud_position_y')) or 70
 
@@ -147,8 +144,8 @@ function HudElementSimpleSequencer:update(dt, t, ui_renderer, render_settings, i
     widget.offset[2] = position_y
     widget.style.mode_icon.offset[1] = layout.icon_offset_x
     widget.style.mode_text.offset[1] = layout.text_offset_x
-    widget.content.mode_icon = show_icon and display.icon or ''
-    widget.content.mode_text = show_name and display.name or ''
+    widget.content.mode_icon = layout.show_icon and display.icon or ''
+    widget.content.mode_text = layout.show_name and display.name or ''
     widget.style.mode_icon.color = display.color
     widget.style.mode_text.text_color = display.color
     self:set_visible(true, ui_renderer)
