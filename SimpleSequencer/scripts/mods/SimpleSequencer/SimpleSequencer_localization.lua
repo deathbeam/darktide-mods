@@ -11,26 +11,14 @@ local localizations = {
     global_ranged = {
         en = 'All Ranged Weapons',
     },
-    general_settings = {
-        en = 'General Settings',
-    },
     hud_enabled = {
         en = 'Show Mode HUD',
     },
     reset_on_interrupt = {
         en = 'Reset On Manual Interrupt',
     },
-    mode_keybinds = {
-        en = 'Modes and Keybinds',
-    },
     editing_mode = {
         en = 'Mode to Configure',
-    },
-    melee_settings = {
-        en = 'Melee Sequence',
-    },
-    ranged_settings = {
-        en = 'Ranged Sequence',
     },
     melee_weapon_selection = {
         en = 'Weapon Override',
@@ -57,10 +45,10 @@ local localizations = {
         en = 'Charge Threshold %%',
     },
     ranged_rate_of_fire_hip = {
-        en = 'Hipfire Attack Delay (ms)',
+        en = 'Minimum Hipfire Attack Delay (ms)',
     },
     ranged_rate_of_fire_ads = {
-        en = 'ADS Attack Delay (ms)',
+        en = 'Minimum ADS Attack Delay (ms)',
     },
     select_mode_previous = {
         en = 'Previous Mode',

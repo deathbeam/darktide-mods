@@ -240,10 +240,6 @@ function SequenceEngine:_command()
     return self.index and self.commands[self.index]
 end
 
-function SequenceEngine:current_command()
-    return self:_command()
-end
-
 function SequenceEngine:reset()
     self.primary_down = false
     self.index = 1

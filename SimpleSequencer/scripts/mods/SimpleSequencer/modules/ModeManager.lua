@@ -118,6 +118,24 @@ function ModeManager:active()
     return self.active_mode
 end
 
+function ModeManager:display(mode)
+    mode = mode or self.active_mode
+
+    local defaults = DISPLAY_DEFAULTS[mode] or DISPLAY_DEFAULTS.mode_1
+    local default_color = defaults.color
+    local name = _display_value(self.mod:get(_display_setting_key(mode, 'name')), defaults.name)
+    local icon = _display_value(self.mod:get(_display_setting_key(mode, 'icon')), defaults.icon)
+    local red = tonumber(self.mod:get(_display_setting_key(mode, 'color_r'))) or default_color[1]
+    local green = tonumber(self.mod:get(_display_setting_key(mode, 'color_g'))) or default_color[2]
+    local blue = tonumber(self.mod:get(_display_setting_key(mode, 'color_b'))) or default_color[3]
+
+    return {
+        name = tostring(name),
+        icon = icon,
+        color = { 255, red, green, blue },
+    }
+end
+
 function ModeManager:_activate(mode)
     local previous_mode = self.active_mode
 

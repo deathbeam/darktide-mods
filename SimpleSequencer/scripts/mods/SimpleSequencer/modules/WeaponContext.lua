@@ -209,33 +209,4 @@ function WeaponContext.charge_start_time(context)
     return charge_component and charge_component.charge_start_time or nil
 end
 
-function WeaponContext.is_aiming(context)
-    local action_name = WeaponContext.action(context)
-
-    return _is_aiming_action(action_name)
-end
-
-function WeaponContext.is_sprinting(context)
-    local unit = context and context.unit or _player_unit()
-    local unit_data = unit and ScriptUnit.has_extension(unit, 'unit_data_system')
-    local sprint = unit_data and unit_data:read_component('sprint_character_state')
-
-    return sprint and sprint.is_sprinting or false
-end
-
-function WeaponContext.is_sliding(context)
-    local unit = context and context.unit or _player_unit()
-    local unit_data = unit and ScriptUnit.has_extension(unit, 'unit_data_system')
-    local movement = unit_data and unit_data:read_component('movement_state')
-
-    return movement and movement.method == 'sliding' or false
-end
-
-function WeaponContext.special_active(context)
-    local weapon = context and context.weapon
-    local component = weapon and weapon.inventory_slot_component
-
-    return component and component.special_active or false
-end
-
 return WeaponContext

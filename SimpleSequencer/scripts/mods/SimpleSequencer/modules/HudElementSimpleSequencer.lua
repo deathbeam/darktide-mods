@@ -10,38 +10,6 @@ local HUB_GAME_MODES = {
     hub_singleplay = true,
 }
 
-local function _display_setting(mode, field)
-    local value = mod:get(mode .. '_' .. field)
-
-    if type(value) == 'table' then
-        return value[1]
-    end
-
-    return value
-end
-
-local function _mode_display(mode)
-    local mode_number = tonumber(string.sub(mode, 6)) or 1
-    local name = _display_setting(mode, 'name')
-
-    if name == nil or name == '' then
-        name = 'Mode ' .. tostring(mode_number)
-    end
-
-    local color = {
-        255,
-        tonumber(_display_setting(mode, 'color_r')) or 255,
-        tonumber(_display_setting(mode, 'color_g')) or 255,
-        tonumber(_display_setting(mode, 'color_b')) or 255,
-    }
-
-    return {
-        name = tostring(name),
-        icon = _display_setting(mode, 'icon') or '',
-        color = color,
-    }
-end
-
 local function _is_in_mission()
     local game_mode_manager = Managers.state and Managers.state.game_mode
     local game_mode_name = game_mode_manager and game_mode_manager:game_mode_name()
@@ -131,8 +99,7 @@ function HudElementSimpleSequencer:update(dt, t, ui_renderer, render_settings, i
         return
     end
 
-    local mode = manager:active()
-    local display = _mode_display(mode)
+    local display = manager:display()
     local position_x = tonumber(mod:get('hud_position_x')) or 0
     local position_y = tonumber(mod:get('hud_position_y')) or 70
 
