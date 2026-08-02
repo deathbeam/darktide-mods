@@ -101,41 +101,44 @@ local ICON_OPTIONS = {
 
 ICON_OPTIONS.localize = false
 
-local function _try_localize(key)
+local function _localized(key)
     if type(Localize) ~= 'function' then
         return nil
     end
 
-    local ok, value = pcall(Localize, key)
+    local success, value = pcall(Localize, key)
 
-    if not ok or type(value) ~= 'string' or value == '' or value == '<' .. key .. '>' then
+    if not success or type(value) ~= 'string' or value == '' then
         return nil
     end
 
-    if string.find(value, '<unlocalized', 1, true) then
+    if value == '<' .. key .. '>' or string.find(value, '<unlocalized', 1, true) then
         return nil
     end
 
     return value
 end
 
-local function _weapon_display_name(name, family_name, family_data)
-    local mark = _try_localize('loc_weapon_mark_' .. name)
-    local pattern = _try_localize('loc_weapon_pattern_' .. name)
+local function _weapon_label(name, family_name, family_data)
+    local mark = _localized('loc_weapon_mark_' .. name)
+    local pattern = _localized('loc_weapon_pattern_' .. name)
+    local family_key = family_data and family_data.display_name or 'loc_weapon_family_' .. family_name
+    local family = _localized(family_key)
 
     if not pattern then
-        pattern = _try_localize('loc_weapon_pattern_' .. string.gsub(name, '_m%d+$', '_m1'))
+        pattern = _localized('loc_weapon_pattern_' .. string.gsub(name, '_m%d+$', '_m1'))
     end
 
-    local family_key = family_data.display_name or 'loc_weapon_family_' .. family_name
-    local family = _try_localize(family_key)
+    if pattern and mark then
+        local parts = { pattern, mark }
 
-    if pattern and mark and family then
-        return string.format('%s %s %s', pattern, mark, family)
-    elseif pattern and mark then
-        return string.format('%s %s', pattern, mark)
+        if family then
+            parts[#parts + 1] = family
+        end
+
+        return table.concat(parts, ' ')
     elseif mark and family then
-        return string.format('%s %s', mark, family)
+        return table.concat({ mark, family }, ' ')
     end
 
     return mark
@@ -143,28 +146,32 @@ end
 
 local function _weapon_options(kind)
     local global_value = kind == 'MELEE' and 'global_melee' or 'global_ranged'
-    local global_text = mod:localize(global_value)
-    local options = { { text = global_text, value = global_value } }
+    local options = {
+        { text = mod:localize(global_value), value = global_value },
+    }
     local seen = { [global_value] = true }
+    local expected_kind = string.lower(kind)
 
     for family_name, family_data in pairs(UiSettings.weapon_patterns or {}) do
         if string.sub(family_name, 1, 4) ~= 'bot_' then
             for _, mark in ipairs(family_data.marks or {}) do
                 local name = mark.name
-                local template = WeaponTemplates[name]
-                local keywords = template and template.keywords or {}
+                local template = name and WeaponTemplates[name]
+                local keywords = template and template.keywords
                 local matches = false
 
-                for _, keyword in ipairs(keywords) do
-                    if keyword == string.lower(kind) then
-                        matches = true
-                        break
+                if keywords then
+                    for i = 1, #keywords do
+                        if keywords[i] == expected_kind then
+                            matches = true
+                            break
+                        end
                     end
                 end
 
-                if matches and not seen[name] then
+                if matches and name and not seen[name] then
                     options[#options + 1] = {
-                        text = _weapon_display_name(name, family_name, family_data) or name,
+                        text = _weapon_label(name, family_name, family_data) or name,
                         value = name,
                     }
                     seen[name] = true
@@ -177,7 +184,7 @@ local function _weapon_options(kind)
         for _, name in ipairs({ 'psyker_throwing_knives', 'psyker_chain_lightning' }) do
             if not seen[name] then
                 options[#options + 1] = {
-                    text = _try_localize(SPECIAL_DISPLAY_NAMES[name]) or name,
+                    text = _localized(SPECIAL_DISPLAY_NAMES[name]) or name,
                     value = name,
                 }
                 seen[name] = true

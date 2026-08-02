@@ -5,7 +5,8 @@ local WeaponTemplates
 local SEQUENCE_STEP_COUNT = 6
 local SEQUENCE_STEP_PREFIX = 'sequence_step_'
 
-local MELEE_EXPANSIONS = {
+-- Profile commands expand into the action states observed by the weapon system.
+local COMMAND_STEPS = {
     light_attack = { 'start_attack', 'light_attack', 'idle' },
     heavy_attack = { 'start_attack', 'heavy_attack', 'idle' },
     special_action = { 'special_action', 'idle' },
@@ -15,9 +16,6 @@ local MELEE_EXPANSIONS = {
     push = { 'block', 'push', 'idle' },
     push_attack = { 'block', 'push', 'push_follow_up' },
     wield = { 'quick_wield' },
-}
-
-local RANGED_EXPANSIONS = {
     standard = { 'shoot', 'idle' },
     charged = { 'charge', 'shoot', 'idle' },
     special = { 'special_start_attack', 'special_light_attack', 'idle' },
@@ -184,7 +182,7 @@ function Profiles.get(data, mode, kind, weapon_name)
 end
 
 local function _append_expansion(queue, action)
-    local expansion = MELEE_EXPANSIONS[action] or RANGED_EXPANSIONS[action]
+    local expansion = COMMAND_STEPS[action]
 
     if expansion then
         for i = 1, #expansion do
