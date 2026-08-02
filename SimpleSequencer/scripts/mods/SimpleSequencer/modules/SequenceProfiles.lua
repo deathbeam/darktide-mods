@@ -2,20 +2,8 @@ local Profiles = {}
 
 local WeaponTemplates
 
-local MELEE_STEPS = {
-    'sequence_step_one',
-    'sequence_step_two',
-    'sequence_step_three',
-    'sequence_step_four',
-    'sequence_step_five',
-    'sequence_step_six',
-    'sequence_step_seven',
-    'sequence_step_eight',
-    'sequence_step_nine',
-    'sequence_step_ten',
-    'sequence_step_eleven',
-    'sequence_step_twelve',
-}
+local SEQUENCE_STEP_COUNT = 6
+local SEQUENCE_STEP_PREFIX = 'sequence_step_'
 
 local MELEE_EXPANSIONS = {
     light_attack = { 'start_attack', 'light_attack', 'idle' },
@@ -73,8 +61,8 @@ local function _new_melee_profile()
         sequence_cycle_point = 'sequence_step_1',
     }
 
-    for i = 1, #MELEE_STEPS do
-        profile[MELEE_STEPS[i]] = 'none'
+    for i = 1, SEQUENCE_STEP_COUNT do
+        profile[SEQUENCE_STEP_PREFIX .. i] = 'none'
     end
 
     return profile
@@ -161,21 +149,11 @@ end
 
 function Profiles.keys(kind)
     if kind == 'MELEE' then
-        return {
-            'sequence_cycle_point',
-            'sequence_step_one',
-            'sequence_step_two',
-            'sequence_step_three',
-            'sequence_step_four',
-            'sequence_step_five',
-            'sequence_step_six',
-            'sequence_step_seven',
-            'sequence_step_eight',
-            'sequence_step_nine',
-            'sequence_step_ten',
-            'sequence_step_eleven',
-            'sequence_step_twelve',
-        }
+        local keys = {}
+        for i = 1, SEQUENCE_STEP_COUNT do
+            keys[#keys + 1] = SEQUENCE_STEP_PREFIX .. i
+        end
+        return keys
     end
 
     return {
@@ -230,12 +208,12 @@ function Profiles.build(profile, kind, weapon_name, ranged_mode)
         repeating = not no_repeat
         local cycle_step = tonumber(string.match(cycle_point, '%d+')) or 1
 
-        for i = 1, #MELEE_STEPS do
+        for i = 1, SEQUENCE_STEP_COUNT do
             if not no_repeat and cycle_step == i then
                 cycle_index = #queue + 1
             end
 
-            local action = profile[MELEE_STEPS[i]]
+            local action = profile[SEQUENCE_STEP_PREFIX .. i]
 
             if action and action ~= 'none' then
                 _append_expansion(queue, action)

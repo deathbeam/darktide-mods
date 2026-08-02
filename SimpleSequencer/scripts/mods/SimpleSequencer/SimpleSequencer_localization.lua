@@ -1,3 +1,5 @@
+local SEQUENCE_STEP_COUNT = 6
+local SEQUENCE_STEP_PREFIX = 'sequence_step_'
 local localizations = {
     mod_name = {
         en = 'Simple Sequencer',
@@ -145,8 +147,8 @@ local localizations = {
     },
 }
 
-for i = 1, 12 do
-    localizations['sequence_step_' .. i] = { en = 'Sequence Step ' .. i }
+for i = 1, SEQUENCE_STEP_COUNT do
+    localizations[SEQUENCE_STEP_PREFIX .. i] = { en = 'Sequence Step ' .. i }
 end
 
 for i = 1, 4 do

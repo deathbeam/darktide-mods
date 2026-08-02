@@ -3,17 +3,6 @@ local mod = get_mod('SimpleSequencer')
 local ModeManager = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ModeManager')
 local SequenceEngine = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceEngine')
 
-local MONITORED_ACTIONS = {
-    action_one_pressed = true,
-    action_one_hold = true,
-    action_two_hold = true,
-    weapon_extra_pressed = true,
-    weapon_extra_hold = true,
-    weapon_reload_hold = true,
-    quick_wield = true,
-    sprint = true,
-}
-
 mod:register_hud_element({
     class_name = 'HudElementSimpleSequencer',
     filename = 'SimpleSequencer/scripts/mods/SimpleSequencer/modules/HudElementSimpleSequencer',
@@ -39,8 +28,6 @@ local function _input_hook(func, self, action_name, ...)
     local value = func(self, action_name, ...)
 
     if not initialized or not enabled or _ui_using_input() then
-        return value
-    elseif not MONITORED_ACTIONS[action_name] then
         return value
     end
 
@@ -115,28 +102,26 @@ function mod.update()
     mod.engine:update()
 end
 
-function mod.select_mode_one()
+local function _select_mode(index)
     if not _ui_using_input() then
-        mod.mode_manager:select_index(1)
+        mod.mode_manager:select_index(index)
     end
 end
 
-function mod.select_mode_two()
-    if not _ui_using_input() then
-        mod.mode_manager:select_index(2)
-    end
+function mod.select_mode_1()
+    _select_mode(1)
 end
 
-function mod.select_mode_three()
-    if not _ui_using_input() then
-        mod.mode_manager:select_index(3)
-    end
+function mod.select_mode_2()
+    _select_mode(2)
 end
 
-function mod.select_mode_four()
-    if not _ui_using_input() then
-        mod.mode_manager:select_index(4)
-    end
+function mod.select_mode_3()
+    _select_mode(3)
+end
+
+function mod.select_mode_4()
+    _select_mode(4)
 end
 
 function mod.select_mode_previous()

@@ -547,6 +547,14 @@ function SequenceEngine:_override(action_name, raw_value, current_action, comman
 end
 
 function SequenceEngine:handle_input(action_name, raw_value)
+    if
+        action_name ~= 'action_one_pressed'
+        and action_name ~= 'action_one_hold'
+        and not ACTION_INTERRUPTS[action_name]
+    then
+        return raw_value
+    end
+
     local context = self:_refresh_context()
 
     if action_name == 'action_two_hold' and context.kind == 'RANGED' then
