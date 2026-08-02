@@ -319,6 +319,8 @@ function SequenceEngine:_current_action()
         chain_ready = true
     elseif current_action == 'light_attack' or current_action == 'heavy_attack' then
         chain_ready = WeaponContext.can_chain_start_attack(action_settings, start_t)
+    elseif current_action == 'shoot' then
+        chain_ready = WeaponContext.can_chain_shoot(action_settings, start_t, self.context.name)
     end
 
     return current_action, start_t, action_name, chain_ready
@@ -449,7 +451,7 @@ function SequenceEngine:_fire_delay()
     return math.max(configured, 0.05)
 end
 
-function SequenceEngine:_fire_pulse(current_action, raw_value)
+function SequenceEngine:_fire_pulse(current_action, raw_value, chain_ready)
     if raw_value then
         self.last_fire_time = _time()
         self.fire_token = self.index
@@ -457,7 +459,8 @@ function SequenceEngine:_fire_pulse(current_action, raw_value)
         return true
     end
 
-    local can_fire_after_charge = current_action == 'charge'
+    local can_fire_after_charge = chain_ready
+        or current_action == 'charge'
         or current_action == 'special_action'
         or current_action == 'special_light_attack'
 
@@ -477,7 +480,7 @@ function SequenceEngine:_fire_pulse(current_action, raw_value)
     return true
 end
 
-function SequenceEngine:_override(action_name, raw_value, current_action, command)
+function SequenceEngine:_override(action_name, raw_value, current_action, command, chain_ready)
     if action_name == 'action_one_hold' then
         local current_action_overrides = CURRENT_ACTION_HOLD_OVERRIDES[current_action]
         local current_action_override = current_action_overrides and current_action_overrides[command]
@@ -503,7 +506,7 @@ function SequenceEngine:_override(action_name, raw_value, current_action, comman
         end
 
         if command == 'shoot' then
-            return self:_fire_pulse(current_action, raw_value)
+            return self:_fire_pulse(current_action, raw_value, chain_ready)
         end
 
         if command == 'start_attack' then
@@ -598,7 +601,7 @@ function SequenceEngine:handle_input(action_name, raw_value)
         return raw_value
     end
 
-    return self:_override(action_name, raw_value, current_action, command)
+    return self:_override(action_name, raw_value, current_action, command, chain_ready)
 end
 
 function SequenceEngine:update()

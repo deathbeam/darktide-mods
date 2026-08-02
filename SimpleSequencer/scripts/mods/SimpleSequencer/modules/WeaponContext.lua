@@ -186,6 +186,11 @@ function WeaponContext.can_chain_start_attack(settings, start_t)
     return _chain_ready(settings, start_t, 'start_attack')
 end
 
+function WeaponContext.can_chain_shoot(settings, start_t, weapon_name)
+    local chain_name = settings and settings.start_input or 'shoot_pressed'
+    return _chain_ready(settings, start_t, chain_name, weapon_name)
+end
+
 function WeaponContext.can_chain_heavy_attack(settings, start_t, weapon_name)
     return _chain_ready(settings, start_t, 'heavy_attack', weapon_name)
 end
