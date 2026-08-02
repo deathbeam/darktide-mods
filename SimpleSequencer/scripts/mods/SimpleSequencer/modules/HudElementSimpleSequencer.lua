@@ -10,11 +10,44 @@ local HUB_GAME_MODES = {
     hub_singleplay = true,
 }
 
+local HUD_DISPLAY_DISABLED = 'disabled'
+local HUD_DISPLAY_ICON = 'icon'
+local HUD_DISPLAY_NAME = 'name'
+local HUD_DISPLAY_ICON_AND_NAME = 'icon_and_name'
+
+local VALID_DISPLAY_MODES = {
+    [HUD_DISPLAY_DISABLED] = true,
+    [HUD_DISPLAY_ICON] = true,
+    [HUD_DISPLAY_NAME] = true,
+    [HUD_DISPLAY_ICON_AND_NAME] = true,
+}
+
+local DISPLAY_LAYOUTS = {
+    [HUD_DISPLAY_ICON] = {
+        icon_offset_x = 236,
+        text_offset_x = 0,
+    },
+    [HUD_DISPLAY_NAME] = {
+        icon_offset_x = 0,
+        text_offset_x = 125,
+    },
+    [HUD_DISPLAY_ICON_AND_NAME] = {
+        icon_offset_x = 190,
+        text_offset_x = 218,
+    },
+}
+
 local function _is_in_mission()
     local game_mode_manager = Managers.state and Managers.state.game_mode
     local game_mode_name = game_mode_manager and game_mode_manager:game_mode_name()
 
     return game_mode_name and not HUB_GAME_MODES[game_mode_name] or false
+end
+
+local function _display_mode()
+    local display_mode = mod:get('hud_display_mode')
+
+    return VALID_DISPLAY_MODES[display_mode] and display_mode or HUD_DISPLAY_DISABLED
 end
 
 local DEFINITIONS = {
@@ -60,6 +93,9 @@ local DEFINITIONS = {
                     text_color = UIHudSettings.color_tint_main_1,
                     offset = { 218, 0, 2 },
                 },
+                visibility_function = function(content)
+                    return content.mode_text ~= nil and content.mode_text ~= ''
+                end,
             },
         }, 'mode_indicator'),
     },
@@ -85,6 +121,7 @@ function HudElementSimpleSequencer:update(dt, t, ui_renderer, render_settings, i
 
     local widget = self._widgets_by_name.mode_indicator
     local manager = mod.mode_manager
+    local display_mode = _display_mode()
 
     if
         not widget
@@ -92,7 +129,7 @@ function HudElementSimpleSequencer:update(dt, t, ui_renderer, render_settings, i
         or not mod.ready
         or not mod.ready()
         or not _is_in_mission()
-        or not mod:get('hud_enabled')
+        or display_mode == HUD_DISPLAY_DISABLED
     then
         self:set_visible(false, ui_renderer)
 
@@ -100,20 +137,25 @@ function HudElementSimpleSequencer:update(dt, t, ui_renderer, render_settings, i
     end
 
     local display = manager:display()
+    local layout = DISPLAY_LAYOUTS[display_mode]
+    local show_icon = display_mode == HUD_DISPLAY_ICON or display_mode == HUD_DISPLAY_ICON_AND_NAME
+    local show_name = display_mode == HUD_DISPLAY_NAME or display_mode == HUD_DISPLAY_ICON_AND_NAME
     local position_x = tonumber(mod:get('hud_position_x')) or 0
     local position_y = tonumber(mod:get('hud_position_y')) or 70
 
     widget.offset[1] = position_x
     widget.offset[2] = position_y
-    widget.content.mode_icon = display.icon
-    widget.content.mode_text = display.name
+    widget.style.mode_icon.offset[1] = layout.icon_offset_x
+    widget.style.mode_text.offset[1] = layout.text_offset_x
+    widget.content.mode_icon = show_icon and display.icon or ''
+    widget.content.mode_text = show_name and display.name or ''
     widget.style.mode_icon.color = display.color
     widget.style.mode_text.text_color = display.color
     self:set_visible(true, ui_renderer)
 end
 
 function HudElementSimpleSequencer:draw(dt, t, ui_renderer, render_settings, input_service)
-    if mod:get('hud_enabled') and _is_in_mission() then
+    if _display_mode() ~= HUD_DISPLAY_DISABLED and _is_in_mission() then
         HudElementSimpleSequencer.super.draw(self, dt, t, ui_renderer, render_settings, input_service)
     end
 end

@@ -13,8 +13,20 @@ local localizations = {
     global_ranged = {
         en = 'All Ranged Weapons',
     },
-    hud_enabled = {
-        en = 'Show Mode HUD',
+    hud_display_mode = {
+        en = 'HUD Display',
+    },
+    hud_display_disabled = {
+        en = 'Disabled',
+    },
+    hud_display_icon = {
+        en = 'Icon',
+    },
+    hud_display_name = {
+        en = 'Name',
+    },
+    hud_display_icon_and_name = {
+        en = 'Icon + Name',
     },
     reset_on_interrupt = {
         en = 'Reset On Manual Interrupt',

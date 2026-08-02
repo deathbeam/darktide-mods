@@ -1,6 +1,6 @@
 # Agent Guidelines — Darktide Mods
 
-Lua 5.1 · Darktide Mod Framework · StyLua · MIT. No automated tests — everything is verified in-game.
+Lua 5.1 · Darktide Mod Framework · StyLua · Busted · MIT. Repository-level tests cover pure module behavior; game integration and rendering still require in-game verification.
 
 ## Commands
 
@@ -8,12 +8,18 @@ Lua 5.1 · Darktide Mod Framework · StyLua · MIT. No automated tests — every
 make sync-shared   # copy scripts/shared/*.lua into each mod's shared/ folder (run before testing/committing)
 make format        # stylua .
 make check         # stylua --check .
+make test            # run repository-level Busted tests with Lua 5.1
 make clean         # remove copied shared files from mod folders
 make publish       # sync-shared -> upload to NexusMods -> clean (see scripts/ci/publish_mods.js)
 ```
 
 Don't edit shared files inside a mod's `shared/` folder — those are generated copies (gitignored). Edit `scripts/shared/` then `make sync-shared`. CI (`.github/workflows/style-check.yml`, `release.yml`) runs the same sync + check before zipping; releases trigger via Actions > Release Mods > Run workflow.
 
+## Testing
+
+Tests live in the repository-level `tests/` directory and are never shipped inside mods. Use the shared Darktide mock in `tests/shared/darktide_mock.lua` so tests exercise the real module files without requiring the game.
+
+When adding or fixing behavior, add or update a focused Busted regression test when practical. Run `make test`, `make check`, and `git diff --check` before committing. Tests cannot replace in-game checks for hooks, managers, rendering, materials, or other engine behavior.
 ## Formatting (.stylua.toml)
 
 120 cols · 4 spaces · single quotes · LF · always call with parens.

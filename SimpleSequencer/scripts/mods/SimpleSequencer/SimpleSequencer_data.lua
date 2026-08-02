@@ -396,9 +396,15 @@ return {
                 tab = mod:localize('general_settings'),
                 sub_widgets = {
                     {
-                        setting_id = 'hud_enabled',
-                        type = 'checkbox',
-                        default_value = true,
+                        setting_id = 'hud_display_mode',
+                        type = 'dropdown',
+                        default_value = 'icon_and_name',
+                        options = {
+                            { text = 'hud_display_disabled', value = 'disabled' },
+                            { text = 'hud_display_icon', value = 'icon' },
+                            { text = 'hud_display_name', value = 'name' },
+                            { text = 'hud_display_icon_and_name', value = 'icon_and_name' },
+                        },
                     },
                     {
                         setting_id = 'reset_on_interrupt',
