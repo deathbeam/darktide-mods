@@ -1,6 +1,5 @@
 local Profiles = {}
 
-local PROFILE_DATA_VERSION = 1
 local WeaponTemplates
 
 local MELEE_STEPS = {
@@ -101,9 +100,7 @@ local function _ensure_profile(data, mode, kind, weapon_key)
 end
 
 function Profiles.new_data()
-    local data = {
-        _version = PROFILE_DATA_VERSION,
-    }
+    local data = {}
 
     for i = 1, 4 do
         local mode = 'mode_' .. i
@@ -126,11 +123,6 @@ function Profiles.ensure(data)
         local melee_defaults = _new_melee_profile()
         local ranged_defaults = _new_ranged_profile()
 
-        if ranged.automatic_fire and ranged.automatic_fire_hip == nil then
-            ranged.automatic_fire_hip = ranged.automatic_fire
-            ranged.automatic_fire_ads = ranged.automatic_fire
-        end
-
         for key, value in pairs(melee_defaults) do
             if melee[key] == nil then
                 melee[key] = value
@@ -152,31 +144,12 @@ function Profiles.ensure(data)
         end
 
         for _, profile in pairs(data[mode].RANGED) do
-            if profile.automatic_fire and profile.automatic_fire_hip == nil then
-                profile.automatic_fire_hip = profile.automatic_fire
-                profile.automatic_fire_ads = profile.automatic_fire
-            end
-
             for key, value in pairs(ranged_defaults) do
                 if profile[key] == nil then
                     profile[key] = value
                 end
             end
         end
-    end
-
-    if data._version == nil then
-        for i = 1, 4 do
-            local mode = 'mode_' .. i
-
-            for _, profile in pairs(data[mode].MELEE) do
-                if profile.sequence_cycle_point == 'no_repeat' then
-                    profile.sequence_cycle_point = 'sequence_step_1'
-                end
-            end
-        end
-
-        data._version = PROFILE_DATA_VERSION
     end
 
     return data
@@ -250,12 +223,15 @@ function Profiles.build(profile, kind, weapon_name, ranged_mode)
     local queue = {}
     local cycle_index = 0
     local repeating = false
+    local cycle_point = profile.sequence_cycle_point or 'sequence_step_1'
+    local no_repeat = cycle_point == 'no_repeat'
 
     if kind == 'MELEE' then
-        local cycle_step = tonumber(string.match(profile.sequence_cycle_point or '', '%d+'))
+        repeating = not no_repeat
+        local cycle_step = tonumber(string.match(cycle_point, '%d+')) or 1
 
         for i = 1, #MELEE_STEPS do
-            if cycle_step == i then
+            if not no_repeat and cycle_step == i then
                 cycle_index = #queue + 1
             end
 
@@ -269,8 +245,7 @@ function Profiles.build(profile, kind, weapon_name, ranged_mode)
         local fire_mode
 
         if kind == 'RANGED' then
-            fire_mode = ranged_mode == 'ads' and (profile.automatic_fire_ads or profile.automatic_fire)
-                or (profile.automatic_fire_hip or profile.automatic_fire)
+            fire_mode = ranged_mode == 'ads' and profile.automatic_fire_ads or profile.automatic_fire_hip
         end
 
         if not fire_mode or fire_mode == 'none' then

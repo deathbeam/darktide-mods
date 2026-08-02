@@ -57,7 +57,7 @@ local localizations = {
         en = 'Next Mode',
     },
     select_mode_toggle = {
-        en = 'Toggle Last / Current Mode',
+        en = 'Switch to Previous Mode',
     },
     hud_position_x = {
         en = 'HUD Horizontal Offset',
@@ -126,7 +126,7 @@ local localizations = {
         en = 'Wield',
     },
     no_repeat = {
-        en = 'Halt on Completion',
+        en = 'No Repeat (Switch to Previous Mode)',
     },
     standard = {
         en = 'Standard',

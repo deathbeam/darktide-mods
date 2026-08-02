@@ -218,6 +218,7 @@ function SequenceEngine:init(mod, mode_manager)
     self.last_fire_time = 0
     self.fire_token = nil
     self.sweep_state = nil
+    self.no_repeat_restored = false
 end
 
 function SequenceEngine:invalidate()
@@ -250,6 +251,7 @@ function SequenceEngine:reset()
     self.last_fire_time = 0
     self.fire_token = nil
     self.sweep_state = nil
+    self.no_repeat_restored = false
 end
 
 function SequenceEngine:set_sweep_state(state)
@@ -283,7 +285,7 @@ function SequenceEngine:_refresh_context()
             Profiles.build(profile, context.kind, context.name, self.ranged_mode)
         self.profile = profile
         self.automatic_fire = context.kind == 'RANGED'
-                and (self.ranged_mode == 'ads' and (profile.automatic_fire_ads or profile.automatic_fire) or (profile.automatic_fire_hip or profile.automatic_fire))
+                and (self.ranged_mode == 'ads' and profile.automatic_fire_ads or profile.automatic_fire_hip)
             or nil
     else
         self.profile = nil
@@ -401,6 +403,17 @@ function SequenceEngine:_maybe_advance(current_action, start_t, chain_ready)
         self.last_action_token = token
         self:_advance()
     end
+end
+
+function SequenceEngine:_restore_after_no_repeat()
+    if not self.completed or self.repeating or self.no_repeat_restored then
+        return false
+    end
+
+    self.no_repeat_restored = true
+    self.mode_manager:toggle()
+
+    return true
 end
 
 function SequenceEngine:_profile_allows_input()
@@ -567,6 +580,9 @@ function SequenceEngine:handle_input(action_name, raw_value)
 
     local current_action, start_t, _, chain_ready = self:_current_action()
     self:_maybe_advance(current_action, start_t, chain_ready)
+    if self:_restore_after_no_repeat() then
+        return raw_value
+    end
 
     local command = self:_command()
 
@@ -609,6 +625,7 @@ function SequenceEngine:update()
 
     local current_action, start_t, _, chain_ready = self:_current_action()
     self:_maybe_advance(current_action, start_t, chain_ready)
+    self:_restore_after_no_repeat()
 end
 
 return SequenceEngine
