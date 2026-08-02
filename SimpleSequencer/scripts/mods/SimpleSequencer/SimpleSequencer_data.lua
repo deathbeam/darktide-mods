@@ -8,6 +8,96 @@ local SPECIAL_DISPLAY_NAMES = {
     psyker_chain_lightning = 'loc_ability_psyker_chain_lightning',
 }
 
+local ICON_OPTIONS = {
+    {
+        text = 'Skull: Uprising',
+        value = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_uprising',
+        icon = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_uprising',
+    },
+    {
+        text = 'Skull: Malice',
+        value = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
+        icon = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
+    },
+    {
+        text = 'Skull: Heresy',
+        value = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_heresy',
+        icon = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_heresy',
+    },
+    {
+        text = 'Skull: Damnation',
+        value = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_damnation',
+        icon = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_damnation',
+    },
+    {
+        text = 'Skull: Auric',
+        value = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_auric',
+        icon = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_auric',
+    },
+    {
+        text = 'Servo Skull',
+        value = 'content/ui/materials/backgrounds/scanner/scanner_decoration_skull',
+        icon = 'content/ui/materials/backgrounds/scanner/scanner_decoration_skull',
+    },
+    {
+        text = 'Preset 01',
+        value = 'content/ui/materials/icons/presets/preset_01',
+        icon = 'content/ui/materials/icons/presets/preset_01',
+    },
+    {
+        text = 'Preset 05',
+        value = 'content/ui/materials/icons/presets/preset_05',
+        icon = 'content/ui/materials/icons/presets/preset_05',
+    },
+    {
+        text = 'Preset 10',
+        value = 'content/ui/materials/icons/presets/preset_10',
+        icon = 'content/ui/materials/icons/presets/preset_10',
+    },
+    {
+        text = 'Preset 13',
+        value = 'content/ui/materials/icons/presets/preset_13',
+        icon = 'content/ui/materials/icons/presets/preset_13',
+    },
+    {
+        text = 'Preset 17',
+        value = 'content/ui/materials/icons/presets/preset_17',
+        icon = 'content/ui/materials/icons/presets/preset_17',
+    },
+    {
+        text = 'Preset 20',
+        value = 'content/ui/materials/icons/presets/preset_20',
+        icon = 'content/ui/materials/icons/presets/preset_20',
+    },
+    {
+        text = 'Ability',
+        value = 'content/ui/materials/icons/abilities/default',
+        icon = 'content/ui/materials/icons/abilities/default',
+    },
+    {
+        text = 'Interaction',
+        value = 'content/ui/materials/hud/interactions/icons/default',
+        icon = 'content/ui/materials/hud/interactions/icons/default',
+    },
+    {
+        text = 'Loot',
+        value = 'content/ui/materials/icons/generic/loot',
+        icon = 'content/ui/materials/icons/generic/loot',
+    },
+    {
+        text = 'Attention',
+        value = 'content/ui/materials/hud/interactions/icons/attention',
+        icon = 'content/ui/materials/hud/interactions/icons/attention',
+    },
+    {
+        text = 'Enemy',
+        value = 'content/ui/materials/hud/interactions/icons/enemy',
+        icon = 'content/ui/materials/hud/interactions/icons/enemy',
+    },
+}
+
+ICON_OPTIONS.localize = false
+
 local function _try_localize(key)
     if type(Localize) ~= 'function' then
         return nil
@@ -110,7 +200,12 @@ local function _clone_options(options)
     local result = {}
 
     for i = 1, #options do
-        result[i] = { text = options[i].text, value = options[i].value }
+        result[i] = {
+            text = options[i].text,
+            value = options[i].value,
+            icon = options[i].icon,
+            icon_colour = options[i].icon_colour,
+        }
     end
 
     result.localize = options.localize
@@ -128,6 +223,45 @@ local function _keybind(setting_id, function_name)
         function_name = function_name,
     }
 end
+
+local mode_display_widgets = {
+    {
+        setting_id = 'mode_display_name',
+        type = 'text_input',
+        default_value = {},
+        -- DMF currently validates text inputs through its keybind path.
+        keybind_trigger = 'pressed',
+        keybind_type = 'function_call',
+        function_name = '_simple_sequencer_text_input',
+    },
+    {
+        setting_id = 'mode_display_icon',
+        type = 'dropdown',
+        default_value = ICON_OPTIONS[1].value,
+        options = _clone_options(ICON_OPTIONS),
+    },
+    {
+        setting_id = 'mode_display_color_r',
+        type = 'numeric',
+        default_value = 255,
+        range = { 0, 255 },
+        decimals_number = 0,
+    },
+    {
+        setting_id = 'mode_display_color_g',
+        type = 'numeric',
+        default_value = 190,
+        range = { 0, 255 },
+        decimals_number = 0,
+    },
+    {
+        setting_id = 'mode_display_color_b',
+        type = 'numeric',
+        default_value = 80,
+        range = { 0, 255 },
+        decimals_number = 0,
+    },
+}
 
 local MELEE_OPTIONS = {
     { text = 'none', value = 'none' },
@@ -259,6 +393,7 @@ return {
             {
                 setting_id = 'general_settings',
                 type = 'group',
+                tab = mod:localize('general_settings'),
                 sub_widgets = {
                     {
                         setting_id = 'hud_enabled',
@@ -273,11 +408,26 @@ return {
                     _keybind('select_mode_previous', 'select_mode_previous'),
                     _keybind('select_mode_next', 'select_mode_next'),
                     _keybind('select_mode_toggle', 'select_mode_toggle'),
+                    {
+                        setting_id = 'hud_position_x',
+                        type = 'numeric',
+                        default_value = 0,
+                        range = { -900, 900 },
+                        decimals_number = 0,
+                    },
+                    {
+                        setting_id = 'hud_position_y',
+                        type = 'numeric',
+                        default_value = 70,
+                        range = { -450, 600 },
+                        decimals_number = 0,
+                    },
                 },
             },
             {
                 setting_id = 'mode_keybinds',
                 type = 'group',
+                tab = mod:localize('mode_keybinds'),
                 sub_widgets = {
                     {
                         setting_id = 'editing_mode',
@@ -294,16 +444,23 @@ return {
                     _keybind('mode_2_select', 'select_mode_two'),
                     _keybind('mode_3_select', 'select_mode_three'),
                     _keybind('mode_4_select', 'select_mode_four'),
+                    {
+                        setting_id = 'mode_display_settings',
+                        type = 'group',
+                        sub_widgets = mode_display_widgets,
+                    },
                 },
             },
             {
                 setting_id = 'melee_settings',
                 type = 'group',
+                tab = mod:localize('melee_settings'),
                 sub_widgets = melee_widgets,
             },
             {
                 setting_id = 'ranged_settings',
                 type = 'group',
+                tab = mod:localize('ranged_settings'),
                 sub_widgets = ranged_widgets,
             },
         },

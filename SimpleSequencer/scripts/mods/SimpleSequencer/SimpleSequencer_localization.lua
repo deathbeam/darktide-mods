@@ -65,6 +65,42 @@ local localizations = {
     select_mode_toggle = {
         en = 'Toggle Last / Current Mode',
     },
+    hud_position_x = {
+        en = 'HUD Horizontal Offset',
+    },
+    hud_position_y = {
+        en = 'HUD Vertical Offset',
+    },
+    mode_display_settings = {
+        en = 'Mode Display',
+    },
+    general_settings = {
+        en = 'General',
+    },
+    mode_keybinds = {
+        en = 'Modes',
+    },
+    melee_settings = {
+        en = 'Melee',
+    },
+    ranged_settings = {
+        en = 'Ranged',
+    },
+    mode_display_name = {
+        en = 'Mode Name',
+    },
+    mode_display_icon = {
+        en = 'Mode Icon',
+    },
+    mode_display_color_r = {
+        en = 'Mode Color Red',
+    },
+    mode_display_color_g = {
+        en = 'Mode Color Green',
+    },
+    mode_display_color_b = {
+        en = 'Mode Color Blue',
+    },
     none = {
         en = 'None',
     },

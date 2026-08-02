@@ -7,6 +7,55 @@ local MODES = { 'mode_1', 'mode_2', 'mode_3', 'mode_4' }
 local PROFILE_DATA_KEY = 'profile_data'
 local SELECTED_WEAPONS_KEY = 'selected_weapons'
 
+local DISPLAY_DEFAULTS = {
+    mode_1 = {
+        name = 'Mode 1',
+        icon = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_uprising',
+        color = { 255, 190, 80 },
+    },
+    mode_2 = {
+        name = 'Mode 2',
+        icon = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
+        color = { 100, 190, 255 },
+    },
+    mode_3 = {
+        name = 'Mode 3',
+        icon = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_heresy',
+        color = { 255, 110, 110 },
+    },
+    mode_4 = {
+        name = 'Mode 4',
+        icon = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_damnation',
+        color = { 190, 140, 255 },
+    },
+}
+
+local DISPLAY_KEYS = { 'name', 'icon', 'color_r', 'color_g', 'color_b' }
+local DISPLAY_KEY_SET = {
+    name = true,
+    icon = true,
+    color_r = true,
+    color_g = true,
+    color_b = true,
+}
+local DISPLAY_SETTING_PREFIX = 'mode_display_'
+
+local function _display_setting_key(mode, key)
+    return mode .. '_' .. key
+end
+
+local function _display_value(value, default_value)
+    if type(value) == 'table' then
+        value = value[1]
+    end
+
+    if value == nil or value == '' then
+        return default_value
+    end
+
+    return value
+end
+
 local function _mode_index(mode)
     return tonumber(string.match(mode or '', '%d+')) or 1
 end
@@ -30,6 +79,22 @@ function ModeManager:init(mod_instance)
     self.pending_mode = nil
     self.editing_mode = mod_instance:get('editing_mode') or 'mode_1'
     self.revision = 0
+
+    for _, mode in ipairs(MODES) do
+        local defaults = DISPLAY_DEFAULTS[mode]
+        local color = defaults.color
+        local name = _display_value(mod_instance:get(_display_setting_key(mode, 'name')), defaults.name)
+        local icon = _display_value(mod_instance:get(_display_setting_key(mode, 'icon')), defaults.icon)
+        local red = tonumber(mod_instance:get(_display_setting_key(mode, 'color_r'))) or color[1]
+        local green = tonumber(mod_instance:get(_display_setting_key(mode, 'color_g'))) or color[2]
+        local blue = tonumber(mod_instance:get(_display_setting_key(mode, 'color_b'))) or color[3]
+
+        mod_instance:set(_display_setting_key(mode, 'name'), name, false)
+        mod_instance:set(_display_setting_key(mode, 'icon'), icon, false)
+        mod_instance:set(_display_setting_key(mode, 'color_r'), red, false)
+        mod_instance:set(_display_setting_key(mode, 'color_g'), green, false)
+        mod_instance:set(_display_setting_key(mode, 'color_b'), blue, false)
+    end
     self.data = Profiles.ensure(mod_instance:get(PROFILE_DATA_KEY))
     self.selected_weapons = mod_instance:get(SELECTED_WEAPONS_KEY) or {}
 
@@ -152,12 +217,58 @@ function ModeManager:_sync_kind(kind)
     end
 end
 
+function ModeManager:_sync_display()
+    local defaults = DISPLAY_DEFAULTS[self.editing_mode] or DISPLAY_DEFAULTS.mode_1
+
+    for _, key in ipairs(DISPLAY_KEYS) do
+        local value = self.mod:get(_display_setting_key(self.editing_mode, key))
+
+        if value == nil then
+            if key == 'name' then
+                value = defaults.name
+            elseif key == 'icon' then
+                value = defaults.icon
+            else
+                local color_index = key == 'color_r' and 1 or key == 'color_g' and 2 or 3
+                value = defaults.color[color_index]
+            end
+        end
+
+        self.mod:set(DISPLAY_SETTING_PREFIX .. key, value, false)
+    end
+end
+
 function ModeManager:sync_settings()
     self:_sync_kind('MELEE')
     self:_sync_kind('RANGED')
+    self:_sync_display()
+end
+
+function ModeManager:_on_display_setting_changed(setting_name)
+    if string.sub(setting_name, 1, #DISPLAY_SETTING_PREFIX) ~= DISPLAY_SETTING_PREFIX then
+        return false
+    end
+
+    local key = string.sub(setting_name, #DISPLAY_SETTING_PREFIX + 1)
+
+    if not DISPLAY_KEY_SET[key] then
+        return false
+    end
+
+    local value = _display_value(self.mod:get(setting_name), nil)
+
+    if value ~= nil then
+        self.mod:set(_display_setting_key(self.editing_mode, key), value, false)
+    end
+
+    return true
 end
 
 function ModeManager:on_setting_changed(setting_name)
+    if self:_on_display_setting_changed(setting_name) then
+        return true
+    end
+
     if setting_name == 'editing_mode' then
         local editing_mode = self.mod:get(setting_name)
         self.editing_mode = self.data[editing_mode] and editing_mode or 'mode_1'
