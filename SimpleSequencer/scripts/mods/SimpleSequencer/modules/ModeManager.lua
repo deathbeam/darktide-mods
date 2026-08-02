@@ -1,5 +1,6 @@
 local mod = get_mod('SimpleSequencer')
 local Profiles = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceProfiles')
+local WeaponContext = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/WeaponContext')
 
 local ModeManager = class('SimpleSequencerModeManager')
 
@@ -183,6 +184,21 @@ function ModeManager:profile(kind, weapon_name)
     return Profiles.get(self.data, self.active_mode, kind, weapon_name)
 end
 
+function ModeManager:_use_current_weapon(kind)
+    local weapon_name = WeaponContext.equipped(kind)
+
+    if not weapon_name then
+        return false
+    end
+
+    self.selected_weapons[self.editing_mode][kind] = weapon_name
+    self:_edit_profile(kind)
+    self:_save()
+    self:_sync_kind(kind)
+
+    return true
+end
+
 function ModeManager:_edit_profile(kind)
     local mode_data = self.data[self.editing_mode]
     local profiles = mode_data[kind]
@@ -281,6 +297,13 @@ function ModeManager:on_setting_changed(setting_name)
 
     if not kind then
         return false
+    end
+
+    if key == 'use_current_weapon' then
+        self:_use_current_weapon(kind)
+        self.mod:set(setting_name, false, false)
+
+        return true
     end
 
     if key == 'weapon_selection' then

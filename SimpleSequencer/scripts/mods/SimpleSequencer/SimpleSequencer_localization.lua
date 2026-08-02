@@ -38,6 +38,12 @@ local localizations = {
     ranged_weapon_selection = {
         en = 'Weapon Override',
     },
+    melee_use_current_weapon = {
+        en = 'Use Current Melee Weapon',
+    },
+    ranged_use_current_weapon = {
+        en = 'Use Current Ranged Weapon',
+    },
     melee_sequence_cycle_point = {
         en = 'Cycle Point',
     },

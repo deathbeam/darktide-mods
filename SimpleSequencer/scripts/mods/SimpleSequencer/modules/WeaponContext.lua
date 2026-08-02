@@ -94,6 +94,17 @@ function WeaponContext.read()
     }
 end
 
+function WeaponContext.equipped(kind)
+    local context = WeaponContext.read()
+    local extension = context.extension
+    local weapons = extension and extension._weapons
+    local slot = kind == 'MELEE' and 'slot_primary' or kind == 'RANGED' and 'slot_secondary'
+    local weapon = slot and weapons and weapons[slot]
+    local template = weapon and weapon.weapon_template
+
+    return template and template.name or nil
+end
+
 function WeaponContext.action(context)
     context = context or WeaponContext.read()
 

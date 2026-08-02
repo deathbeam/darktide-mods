@@ -296,6 +296,11 @@ local melee_widgets = {
         options = _weapon_options('MELEE'),
     },
     {
+        setting_id = MELEE_PREFIX .. 'use_current_weapon',
+        type = 'checkbox',
+        default_value = false,
+    },
+    {
         setting_id = MELEE_PREFIX .. 'sequence_cycle_point',
         type = 'dropdown',
         default_value = 'sequence_step_1',
@@ -334,6 +339,11 @@ local ranged_widgets = {
         type = 'dropdown',
         default_value = 'global_ranged',
         options = _weapon_options('RANGED'),
+    },
+    {
+        setting_id = RANGED_PREFIX .. 'use_current_weapon',
+        type = 'checkbox',
+        default_value = false,
     },
     {
         setting_id = RANGED_PREFIX .. 'automatic_fire_hip',

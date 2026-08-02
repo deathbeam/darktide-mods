@@ -4,6 +4,12 @@ local UIWorkspaceSettings = require('scripts/settings/ui/ui_workspace_settings')
 local UIWidget = require('scripts/managers/ui/ui_widget')
 local UIHudSettings = require('scripts/settings/ui/ui_hud_settings')
 
+local HUB_GAME_MODES = {
+    hub = true,
+    prologue_hub = true,
+    hub_singleplay = true,
+}
+
 local function _display_setting(mode, field)
     local value = mod:get(mode .. '_' .. field)
 
@@ -34,6 +40,13 @@ local function _mode_display(mode)
         icon = _display_setting(mode, 'icon') or '',
         color = color,
     }
+end
+
+local function _is_in_mission()
+    local game_mode_manager = Managers.state and Managers.state.game_mode
+    local game_mode_name = game_mode_manager and game_mode_manager:game_mode_name()
+
+    return game_mode_name and not HUB_GAME_MODES[game_mode_name] or false
 end
 
 local DEFINITIONS = {
@@ -105,7 +118,14 @@ function HudElementSimpleSequencer:update(dt, t, ui_renderer, render_settings, i
     local widget = self._widgets_by_name.mode_indicator
     local manager = mod.mode_manager
 
-    if not widget or not manager or not mod.ready or not mod.ready() or not mod:get('hud_enabled') then
+    if
+        not widget
+        or not manager
+        or not mod.ready
+        or not mod.ready()
+        or not _is_in_mission()
+        or not mod:get('hud_enabled')
+    then
         self:set_visible(false, ui_renderer)
 
         return
@@ -126,7 +146,7 @@ function HudElementSimpleSequencer:update(dt, t, ui_renderer, render_settings, i
 end
 
 function HudElementSimpleSequencer:draw(dt, t, ui_renderer, render_settings, input_service)
-    if mod:get('hud_enabled') then
+    if mod:get('hud_enabled') and _is_in_mission() then
         HudElementSimpleSequencer.super.draw(self, dt, t, ui_renderer, render_settings, input_service)
     end
 end
