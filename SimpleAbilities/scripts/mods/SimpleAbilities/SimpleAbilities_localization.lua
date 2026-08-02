@@ -1,6 +1,6 @@
 return {
     mod_name = {
-        en = 'SimpleAbilities',
+        en = 'Simple Abilities',
     },
     mod_description = {
         en = 'Automatically use abilities and consumables based on conditions or keybinds',

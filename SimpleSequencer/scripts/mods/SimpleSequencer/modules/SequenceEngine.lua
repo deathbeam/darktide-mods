@@ -66,13 +66,17 @@ local EXTRA_COMMANDS = {
     special_invert = true,
 }
 
-local ACTION_INTERRUPTS = {
+local INPUT_INTERRUPTS = {
     action_two_hold = true,
     weapon_extra_pressed = true,
     weapon_extra_hold = true,
     weapon_reload_hold = true,
     quick_wield = true,
     sprint = true,
+}
+
+local PRESERVE_PRIMARY_HOLD_ACTIONS = {
+    vent_overheat = true,
 }
 
 local function _time()
@@ -321,7 +325,7 @@ function SequenceEngine:_current_action()
         chain_ready = WeaponContext.can_chain_shoot(action_settings, start_t, self.context.name)
     end
 
-    return current_action, start_t, action_name, chain_ready
+    return current_action, start_t, action_name, chain_ready, action_settings
 end
 
 function SequenceEngine:_charge_ready(start_t)
@@ -441,7 +445,7 @@ function SequenceEngine:_required(command, action_name)
 end
 
 function SequenceEngine:_should_reset_for_interrupt(action_name, value, command)
-    if not value or not self.mod:get('reset_on_interrupt') or not ACTION_INTERRUPTS[action_name] then
+    if not value or not self.mod:get('reset_on_interrupt') or not INPUT_INTERRUPTS[action_name] then
         return false
     end
 
@@ -550,7 +554,7 @@ function SequenceEngine:handle_input(action_name, raw_value)
     if
         action_name ~= 'action_one_pressed'
         and action_name ~= 'action_one_hold'
-        and not ACTION_INTERRUPTS[action_name]
+        and not INPUT_INTERRUPTS[action_name]
     then
         return raw_value
     end
@@ -568,25 +572,29 @@ function SequenceEngine:handle_input(action_name, raw_value)
         end
     end
 
+    local current_action, start_t, _, chain_ready, action_settings = self:_current_action()
+    local preserve_primary_hold = action_settings and PRESERVE_PRIMARY_HOLD_ACTIONS[action_settings.kind]
+
+    -- Automatic venting aborts the pending shot action, so held autofire must rearm afterward.
+    if preserve_primary_hold then
+        self.fire_token = nil
+    end
     local previous_primary_down = self.primary_down
     local released_primary = false
 
     if action_name == 'action_one_hold' then
-        self.primary_down = not not raw_value
+        local hold_interrupted_by_action = preserve_primary_hold and not raw_value
+        self.primary_down = hold_interrupted_by_action and previous_primary_down or not not raw_value
         released_primary = previous_primary_down and not self.primary_down
-
-        if released_primary then
-            self:reset()
-        end
     elseif action_name == 'action_one_pressed' and raw_value then
         self.primary_down = true
     end
 
     if released_primary then
+        self:reset()
         return raw_value
     end
 
-    local current_action, start_t, _, chain_ready = self:_current_action()
     self:_maybe_advance(current_action, start_t, chain_ready)
     if self:_restore_after_no_repeat() then
         return raw_value
