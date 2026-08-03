@@ -34,6 +34,8 @@ describe('SimpleSequencer SequenceEngine', function()
         engine.commands = { 'shoot' }
         engine.completed = true
         engine.primary_down = true
+        engine.secondary_down = true
+        engine.primary_hold_pulse_token = 'push_follow_up:1'
         engine.primary_rearm_pending = true
         engine.last_action_token = 'shoot:1'
         engine.previous_command = 'charge'
@@ -48,6 +50,8 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.are.equal(1, engine.index)
         assert.is_false(engine.completed)
         assert.is_false(engine.primary_down)
+        assert.is_false(engine.secondary_down)
+        assert.is_nil(engine.primary_hold_pulse_token)
         assert.is_false(engine.primary_rearm_pending)
         assert.is_nil(engine.last_action_token)
         assert.is_nil(engine.previous_command)
@@ -147,6 +151,75 @@ describe('SimpleSequencer SequenceEngine', function()
 
         assert.is_true(result)
         assert.is_false(engine.primary_rearm_pending)
+    end)
+
+    it('waits for the weapon chain boundary before pulsing after a push follow-up', function()
+        local engine = mock:load_sequence_engine(new_manager(nil))
+        mock:set_weapon('slot_primary', 'combatsword_p3_m1', {
+            displayed_attacks = { primary = { type = 'melee' } },
+        })
+        mock:set_wielded_slot('slot_primary')
+        engine.context = mock:load_weapon_context().read()
+        engine.context_key = 'mode_1:MELEE:combatsword_p3_m1:hip'
+        engine.commands = { 'start_attack', 'light_attack', 'idle' }
+        engine.index = 1
+        engine.cycle_index = 1
+        engine.repeating = true
+        engine.profile = {}
+        engine.primary_down = true
+        engine.secondary_down = true
+        mock:set_action('action_right_light_pushfollow', {
+            kind = 'sweep',
+            allowed_chain_actions = {
+                start_attack = { chain_time = 0.4 },
+            },
+        }, 0)
+        mock.now = 0
+        local pre_release_result = engine:handle_input('action_one_hold', true)
+        engine:handle_input('action_two_hold', false)
+        mock.now = 0.2
+        local early_result = engine:handle_input('action_one_hold', true)
+        mock.now = 0.399
+        local before_boundary_result = engine:handle_input('action_one_hold', true)
+        mock.now = 0.401
+        local boundary_result = engine:handle_input('action_one_hold', true)
+        local after_boundary_result = engine:handle_input('action_one_hold', true)
+        mock:set_action('action_melee_start_left', {
+            kind = 'windup',
+            start_input = 'start_attack',
+            allowed_chain_actions = {
+                light_attack = { chain_time = 0 },
+                heavy_attack = { chain_time = 0.5 },
+            },
+        }, 0.401)
+        local windup_result = engine:handle_input('action_one_hold', true)
+
+        assert.is_true(pre_release_result)
+        assert.is_false(early_result)
+        assert.is_false(before_boundary_result)
+        assert.is_true(boundary_result)
+        assert.is_false(after_boundary_result)
+        assert.is_false(windup_result)
+        assert.are.equal('light_attack', engine:_command())
+    end)
+
+    it('keeps a push follow-up held while secondary input is down', function()
+        local engine = mock:load_sequence_engine(new_manager(nil))
+        engine.context = mock:load_weapon_context().read()
+        engine.context_key = 'mode_1:MELEE:test_melee:hip'
+        engine.commands = { 'start_attack', 'light_attack', 'idle' }
+        engine.index = 1
+        engine.cycle_index = 1
+        engine.repeating = true
+        engine.profile = {}
+        engine.primary_down = true
+        engine.secondary_down = false
+        mock:set_action('action_push', { kind = 'push' }, 1)
+
+        engine:handle_input('action_two_hold', true)
+        local result = engine:handle_input('action_one_hold', true)
+
+        assert.is_true(result)
     end)
 
     it('pulses held ranged fire at the chain boundary', function()

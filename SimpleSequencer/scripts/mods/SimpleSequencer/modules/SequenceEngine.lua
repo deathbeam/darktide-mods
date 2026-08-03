@@ -18,6 +18,8 @@ local PRIMARY_HOLD_COMMANDS = {
     push_follow_up = true,
 }
 
+local PRIMARY_HOLD_PULSE = 'pulse'
+
 local CURRENT_ACTION_HOLD_OVERRIDES = {
     start_attack = {
         light_attack = false,
@@ -32,12 +34,14 @@ local CURRENT_ACTION_HOLD_OVERRIDES = {
         light_attack = false,
     },
     push = {
+        start_attack = PRIMARY_HOLD_PULSE,
         light_attack = false,
         heavy_attack = false,
         push = true,
         push_follow_up = true,
     },
     push_follow_up = {
+        start_attack = PRIMARY_HOLD_PULSE,
         block = true,
         push = true,
         push_follow_up = true,
@@ -108,6 +112,8 @@ function SequenceEngine:init(mod, mode_manager)
     self.context = nil
     self.context_key = nil
     self.primary_down = false
+    self.secondary_down = false
+    self.primary_hold_pulse_token = nil
     self.primary_rearm_pending = false
     self.ranged_mode = 'hip'
     self.last_action_token = nil
@@ -141,6 +147,8 @@ end
 
 function SequenceEngine:reset()
     self.primary_down = false
+    self.secondary_down = false
+    self.primary_hold_pulse_token = nil
     self.primary_rearm_pending = false
     self.index = 1
     self.completed = false
@@ -371,12 +379,46 @@ function SequenceEngine:_fire_pulse(current_action, raw_value, chain_ready)
     return true
 end
 
-function SequenceEngine:_override(action_name, raw_value, current_action, command, chain_ready, action_settings)
+function SequenceEngine:_primary_hold_pulse(raw_value, current_action, start_t, action_settings)
+    if self.secondary_down then
+        return raw_value
+    end
+
+    local chain_ready =
+        WeaponContext.can_chain(action_settings, start_t, 'start_attack', self.context and self.context.name)
+    if not chain_ready then
+        return false
+    end
+
+    local action_token = _action_token(current_action, start_t)
+    if self.primary_hold_pulse_token == action_token then
+        return false
+    end
+
+    if raw_value then
+        self.primary_hold_pulse_token = action_token
+        return true
+    end
+
+    return false
+end
+
+function SequenceEngine:_override(
+    action_name,
+    raw_value,
+    current_action,
+    command,
+    chain_ready,
+    action_settings,
+    start_t
+)
     if action_name == 'action_one_hold' then
         local current_action_overrides = CURRENT_ACTION_HOLD_OVERRIDES[current_action]
         local current_action_override = current_action_overrides and current_action_overrides[command]
 
-        if current_action_override ~= nil then
+        if current_action_override == PRIMARY_HOLD_PULSE then
+            return self:_primary_hold_pulse(raw_value, current_action, start_t, action_settings)
+        elseif current_action_override ~= nil then
             return current_action_override
         elseif command == 'idle' then
             return false
@@ -482,6 +524,10 @@ function SequenceEngine:handle_input(action_name, raw_value)
         end
     end
 
+    if action_name == 'action_two_hold' then
+        self.secondary_down = not not raw_value
+    end
+
     local current_action, start_t, chain_ready, action_settings = self:_current_action()
     local preserve_primary_hold = action_settings and PRESERVE_PRIMARY_HOLD_ACTIONS[action_settings.kind]
 
@@ -554,11 +600,13 @@ function SequenceEngine:handle_input(action_name, raw_value)
 
     if self:_should_reset_for_interrupt(action_name, raw_value, command) then
         self:reset()
-
+        if action_name == 'action_two_hold' then
+            self.secondary_down = not not raw_value
+        end
         return raw_value
     end
 
-    return self:_override(action_name, raw_value, current_action, command, chain_ready, action_settings)
+    return self:_override(action_name, raw_value, current_action, command, chain_ready, action_settings, start_t)
 end
 
 function SequenceEngine:update()
