@@ -39,7 +39,7 @@ return {
     },
 
     mod_name = {
-        en = 'Enemy Stats',
+        en = ' Enemy {#color(255,191,0)}Stats{#reset()}',
         ['zh-cn'] = '敌人数据统计',
     },
     mod_description = {

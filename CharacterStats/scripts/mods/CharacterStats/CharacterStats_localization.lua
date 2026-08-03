@@ -49,7 +49,7 @@ return {
     },
 
     mod_name = {
-        en = 'Character Stats',
+        en = ' Character {#color(255,191,0)}Stats{#reset()}',
         ['zh-cn'] = '角色属性',
     },
     mod_description = {

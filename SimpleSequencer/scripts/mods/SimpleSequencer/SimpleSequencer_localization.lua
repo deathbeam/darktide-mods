@@ -2,7 +2,7 @@ local SEQUENCE_STEP_COUNT = 6
 local SEQUENCE_STEP_PREFIX = 'sequence_step_'
 local localizations = {
     mod_name = {
-        en = 'Simple Sequencer',
+        en = ' {#color(80,200,255)}Simple{#reset()} Sequencer',
     },
     mod_description = {
         en = 'Select a sequence mode with keys, then hold primary to execute it.',

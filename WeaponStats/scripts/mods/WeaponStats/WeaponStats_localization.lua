@@ -45,7 +45,7 @@ return {
     },
 
     mod_name = {
-        en = 'Weapon Stats',
+        en = ' Weapon {#color(255,191,0)}Stats{#reset()}',
     },
     mod_description = {
         en = 'Shows detailed weapon damage profiles, attack speed, crit, cleave, armor damage and more in the inventory.',

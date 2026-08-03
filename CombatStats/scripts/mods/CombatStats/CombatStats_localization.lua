@@ -48,7 +48,7 @@ return {
     },
 
     mod_name = {
-        en = 'Combat Stats',
+        en = ' Combat {#color(255,191,0)}Stats{#reset()}',
         ['zh-cn'] = '战斗统计',
         ['zh-tw'] = '戰鬥統計',
     },
