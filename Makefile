@@ -1,4 +1,4 @@
-.PHONY: sync-shared format check test test-simple-sequencer publish clean
+.PHONY: sync-shared format check test test-simple-sequencer test-simple-charging publish clean
 
 MODS := CharacterStats WeaponStats EnemyStats CombatStats
 SHARED_DIR := scripts/shared
@@ -22,10 +22,13 @@ check:
 	stylua --check .
 
 # Run repository-level Lua tests with the same Lua version used by the game.
-test: test-simple-sequencer
+test: test-simple-sequencer test-simple-charging
 
 test-simple-sequencer:
 	busted --lua=lua5.1 tests/SimpleSequencer
+
+test-simple-charging:
+	busted --lua=lua5.1 tests/SimpleCharging
 
 # Publish mods to Nexus Mods (see scripts/ci/publish_mods.py for options).
 # Syncs shared files first, then uploads, then cleans up.

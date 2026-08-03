@@ -1,6 +1,7 @@
 local mod = get_mod('SimpleSequencer')
 local Profiles = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceProfiles')
 local WeaponContext = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/WeaponContext')
+local ProfileSchema = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ProfileSchema')
 
 local ModeManager = class('SimpleSequencerModeManager')
 
@@ -219,7 +220,7 @@ function ModeManager:_edit_profile(kind, create_override)
     local global_key = kind == 'MELEE' and 'global_melee' or 'global_ranged'
 
     if create_override and weapon_key ~= global_key and not profiles[weapon_key] then
-        profiles[weapon_key] = Profiles.clone(profiles[global_key])
+        profiles[weapon_key] = ProfileSchema.clone(profiles[global_key])
     end
 
     return profiles[weapon_key] or profiles[global_key]
@@ -240,7 +241,7 @@ function ModeManager:_sync_kind(kind)
 
     self.mod:set(prefix .. 'weapon_selection', self.selected_weapons[self.editing_mode][kind], false)
 
-    for _, key in ipairs(Profiles.keys(kind)) do
+    for _, key in ipairs(ProfileSchema.keys(kind)) do
         self.mod:set(prefix .. key, profile[key], false)
     end
 end

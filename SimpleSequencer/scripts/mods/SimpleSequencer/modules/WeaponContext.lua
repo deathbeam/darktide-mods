@@ -24,38 +24,24 @@ local CHAIN_TIME_OVERRIDES = {
     },
 }
 
-local function _is_aiming_action(action_name)
-    return action_name
-        and (
-                string.find(action_name, 'zoom', 1, true)
-                or string.find(action_name, 'brace', 1, true)
-                or string.find(action_name, 'aim', 1, true)
-            )
-            ~= nil
-end
-
-local function _player_unit()
-    local player_manager = Managers and Managers.player
-    local player = player_manager and player_manager:local_player_safe(1)
-
-    return player and player.player_unit
-end
-
-local function _wielded_weapon(extension, inventory)
-    if not extension or not inventory or not extension._wielded_weapon then
-        return nil
-    end
-
-    local ok, weapon = pcall(extension._wielded_weapon, extension, inventory, extension._weapons)
-
-    return ok and weapon or nil
-end
+local SPECIAL_ACTION_INPUTS = {
+    'special_action',
+    'special_action_hold',
+    'special_action_light',
+    'special_action_heavy',
+}
 
 function WeaponContext.read()
-    local unit = _player_unit()
+    local player_manager = Managers and Managers.player
+    local player = player_manager and player_manager:local_player_safe(1)
+    local unit = player and player.player_unit
     local extension = unit and ScriptUnit.has_extension(unit, 'weapon_system')
     local inventory = extension and extension._inventory_component
-    local weapon = _wielded_weapon(extension, inventory)
+    local weapon
+    if extension and inventory and extension._wielded_weapon then
+        local ok, wielded_weapon = pcall(extension._wielded_weapon, extension, inventory, extension._weapons)
+        weapon = ok and wielded_weapon or nil
+    end
     local template = weapon and weapon.weapon_template
     local name = template and template.name
     local slot = inventory and inventory.wielded_slot
@@ -67,7 +53,13 @@ function WeaponContext.read()
         local action_name, _, action_settings = WeaponContext.action({ extension = extension })
         local primary_attack = template and template.displayed_attacks and template.displayed_attacks.primary
         local primary_is_melee = primary_attack and primary_attack.type == 'melee'
-        local is_aiming = _is_aiming_action(action_name) or action_settings and action_settings.start_input == 'brace'
+        local is_aiming = action_settings and action_settings.start_input == 'brace'
+
+        if not is_aiming and action_name then
+            is_aiming = string.find(action_name, 'zoom', 1, true) ~= nil
+                or string.find(action_name, 'brace', 1, true) ~= nil
+                or string.find(action_name, 'aim', 1, true) ~= nil
+        end
 
         kind = primary_is_melee and not is_aiming and 'MELEE' or 'RANGED'
     elseif template and template.keywords then
@@ -91,6 +83,19 @@ function WeaponContext.read()
         name = name or 'none',
         kind = kind or 'none',
     }
+end
+
+function WeaponContext.has_special(context)
+    context = context or WeaponContext.read()
+    local action_inputs = context.template and context.template.action_inputs
+
+    for _, input_name in ipairs(SPECIAL_ACTION_INPUTS) do
+        if action_inputs and action_inputs[input_name] ~= nil then
+            return true
+        end
+    end
+
+    return false
 end
 
 function WeaponContext.equipped(kind)
@@ -149,7 +154,7 @@ function WeaponContext.action(context)
     return action_name, start_t, settings
 end
 
-local function _chain_ready(settings, start_t, chain_name, weapon_name)
+function WeaponContext.can_chain(settings, start_t, chain_name, weapon_name)
     local allowed_chain_actions = settings and settings.allowed_chain_actions
     local chain_action = allowed_chain_actions and allowed_chain_actions[chain_name]
 
@@ -179,10 +184,6 @@ local function _chain_ready(settings, start_t, chain_name, weapon_name)
     local current_time = Managers.time:time('gameplay')
 
     return current_time and current_time - start_t > chain_time
-end
-
-function WeaponContext.can_chain(settings, start_t, chain_name, weapon_name)
-    return _chain_ready(settings, start_t, chain_name, weapon_name)
 end
 
 function WeaponContext.charge_state(context)

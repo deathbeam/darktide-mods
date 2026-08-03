@@ -1,28 +1,6 @@
+local mod = get_mod('SimpleSequencer')
+local ProfileSchema = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ProfileSchema')
 local Profiles = {}
-
-local WeaponTemplates
-
-local SEQUENCE_STEP_COUNT = 6
-local SEQUENCE_STEP_PREFIX = 'sequence_step_'
-local PROFILE_KINDS = { 'MELEE', 'RANGED' }
-local PROFILE_DEFAULTS = {
-    MELEE = {
-        sequence_cycle_point = 'sequence_step_1',
-        sequence_step_1 = 'none',
-        sequence_step_2 = 'none',
-        sequence_step_3 = 'none',
-        sequence_step_4 = 'none',
-        sequence_step_5 = 'none',
-        sequence_step_6 = 'none',
-    },
-    RANGED = {
-        automatic_fire_hip = 'none',
-        automatic_fire_ads = 'none',
-        auto_charge_threshold = 100,
-        rate_of_fire_hip = 0,
-        rate_of_fire_ads = 0,
-    },
-}
 
 -- Profile commands expand into the action states observed by the weapon system.
 local COMMAND_STEPS = {
@@ -42,39 +20,8 @@ local COMMAND_STEPS = {
     special_standard = { 'special_action', 'shoot', 'idle' },
 }
 
-local function _has_ranged_special_attack(weapon_name)
-    if not WeaponTemplates then
-        WeaponTemplates = require('scripts/settings/equipment/weapon_templates/weapon_templates')
-    end
-    local template = weapon_name and WeaponTemplates[weapon_name]
-    local action_inputs = template and template.action_inputs
-
-    return action_inputs
-        and (
-                action_inputs.special_action
-                or action_inputs.special_action_hold
-                or action_inputs.special_action_light
-                or action_inputs.special_action_heavy
-            )
-            ~= nil
-end
-
-local function _clone(value)
-    if type(value) ~= 'table' then
-        return value
-    end
-
-    local result = {}
-
-    for key, child in pairs(value) do
-        result[key] = _clone(child)
-    end
-
-    return result
-end
-
 local function _new_profile(kind)
-    return _clone(PROFILE_DEFAULTS[kind])
+    return ProfileSchema.clone(ProfileSchema.defaults[kind])
 end
 
 local function _merge_defaults(profile, defaults)
@@ -117,14 +64,14 @@ function Profiles.ensure(data)
         local mode_data = data[mode] or {}
         data[mode] = mode_data
 
-        for _, kind in ipairs(PROFILE_KINDS) do
+        for _, kind in ipairs(ProfileSchema.kinds) do
             local profiles = mode_data[kind] or {}
             mode_data[kind] = profiles
 
             local global_key = kind == 'MELEE' and 'global_melee' or 'global_ranged'
             _ensure_profile(data, mode, kind, global_key)
 
-            local defaults = PROFILE_DEFAULTS[kind]
+            local defaults = ProfileSchema.defaults[kind]
             for _, profile in pairs(profiles) do
                 _merge_defaults(profile, defaults)
             end
@@ -132,22 +79,6 @@ function Profiles.ensure(data)
     end
 
     return data
-end
-
-function Profiles.clone(value)
-    return _clone(value)
-end
-
-function Profiles.keys(kind)
-    local defaults = PROFILE_DEFAULTS[kind]
-    local keys = {}
-
-    for key in pairs(defaults or {}) do
-        keys[#keys + 1] = key
-    end
-
-    table.sort(keys)
-    return keys
 end
 
 function Profiles.get(data, mode, kind, weapon_name)
@@ -178,7 +109,7 @@ local function _append_expansion(queue, action)
     end
 end
 
-function Profiles.build(profile, kind, weapon_name, ranged_mode)
+function Profiles.build(profile, kind, ranged_mode, has_special)
     if not profile then
         return {}, 0, false
     end
@@ -186,19 +117,19 @@ function Profiles.build(profile, kind, weapon_name, ranged_mode)
     local queue = {}
     local cycle_index = 0
     local repeating = false
-    local cycle_point = profile.sequence_cycle_point or 'sequence_step_1'
+    local cycle_point = profile.sequence_cycle_point or ProfileSchema.defaults.MELEE.sequence_cycle_point
     local no_repeat = cycle_point == 'no_repeat'
 
     if kind == 'MELEE' then
         repeating = not no_repeat
         local cycle_step = tonumber(string.match(cycle_point, '%d+')) or 1
 
-        for i = 1, SEQUENCE_STEP_COUNT do
+        for i = 1, ProfileSchema.sequence_step_count do
             if not no_repeat and cycle_step == i then
                 cycle_index = #queue + 1
             end
 
-            local action = profile[SEQUENCE_STEP_PREFIX .. i]
+            local action = profile[ProfileSchema.sequence_step_prefix .. i]
 
             if action and action ~= 'none' then
                 _append_expansion(queue, action)
@@ -215,9 +146,9 @@ function Profiles.build(profile, kind, weapon_name, ranged_mode)
             return queue, cycle_index, repeating
         end
 
-        if fire_mode == 'special' and not _has_ranged_special_attack(weapon_name) then
+        if fire_mode == 'special' and not has_special then
             fire_mode = 'special_standard'
-        elseif fire_mode == 'special_charged' and not _has_ranged_special_attack(weapon_name) then
+        elseif fire_mode == 'special_charged' and not has_special then
             fire_mode = 'special_standard'
         end
 

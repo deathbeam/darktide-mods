@@ -173,7 +173,7 @@ function SequenceEngine:_refresh_context()
 
     if profile then
         self.commands, self.cycle_index, self.repeating =
-            Profiles.build(profile, context.kind, context.name, self.ranged_mode)
+            Profiles.build(profile, context.kind, self.ranged_mode, WeaponContext.has_special(context))
         self.profile = profile
         self.automatic_fire = context.kind == 'RANGED'
                 and (self.ranged_mode == 'ads' and profile.automatic_fire_ads or profile.automatic_fire_hip)

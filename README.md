@@ -30,3 +30,6 @@ Show enemy stats
 ## [WeaponStats](mods/WeaponStats)
 
 Show weapon stats
+
+## [SimpleCharging](mods/SimpleCharging)
+Show weapon charge and hidden weapon-trait progress around the crosshair.

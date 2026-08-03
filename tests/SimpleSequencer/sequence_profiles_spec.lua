@@ -1,4 +1,7 @@
+local DarktideMock = require('tests.shared.darktide_mock')
 local root = debug.getinfo(1, 'S').source:sub(2):match('^(.*)/tests/SimpleSequencer/') or '.'
+local mock = DarktideMock.new()
+local ProfileSchema = dofile(root .. '/SimpleSequencer/scripts/mods/SimpleSequencer/modules/ProfileSchema.lua')
 local Profiles = dofile(root .. '/SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceProfiles.lua')
 
 describe('SimpleSequencer SequenceProfiles', function()
@@ -67,8 +70,8 @@ describe('SimpleSequencer SequenceProfiles', function()
             return false
         end
 
-        local melee_keys = Profiles.keys('MELEE')
-        local ranged_keys = Profiles.keys('RANGED')
+        local melee_keys = ProfileSchema.keys('MELEE')
+        local ranged_keys = ProfileSchema.keys('RANGED')
 
         assert.are.equal(7, #melee_keys)
         assert.is_true(contains(melee_keys, 'sequence_cycle_point'))

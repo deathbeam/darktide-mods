@@ -2,9 +2,7 @@ local mod = get_mod('SimpleSequencer')
 
 local UiSettings = require('scripts/settings/ui/ui_settings')
 local WeaponTemplates = require('scripts/settings/equipment/weapon_templates/weapon_templates')
-
-local SEQUENCE_STEP_COUNT = 6
-local SEQUENCE_STEP_PREFIX = 'sequence_step_'
+local ProfileSchema = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ProfileSchema')
 
 local SPECIAL_DISPLAY_NAMES = {
     psyker_throwing_knives = 'loc_ability_psyker_blitz_throwing_knives',
@@ -297,10 +295,10 @@ local RANGED_FIRE_OPTIONS = {
 
 local CYCLE_OPTIONS = { { text = 'no_repeat', value = 'no_repeat' } }
 
-for i = 1, SEQUENCE_STEP_COUNT do
+for i = 1, ProfileSchema.sequence_step_count do
     CYCLE_OPTIONS[#CYCLE_OPTIONS + 1] = {
-        text = SEQUENCE_STEP_PREFIX .. i,
-        value = SEQUENCE_STEP_PREFIX .. i,
+        text = ProfileSchema.sequence_step_prefix .. i,
+        value = ProfileSchema.sequence_step_prefix .. i,
     }
 end
 
@@ -322,18 +320,18 @@ local melee_widgets = {
     {
         setting_id = MELEE_PREFIX .. 'sequence_cycle_point',
         type = 'dropdown',
-        default_value = SEQUENCE_STEP_PREFIX .. '1',
+        default_value = ProfileSchema.defaults.MELEE.sequence_cycle_point,
         options = CYCLE_OPTIONS,
     },
 }
 
-for i = 1, SEQUENCE_STEP_COUNT do
+for i = 1, ProfileSchema.sequence_step_count do
     melee_widgets[#melee_widgets + 1] = {
-        setting_id = MELEE_PREFIX .. SEQUENCE_STEP_PREFIX .. i,
+        setting_id = MELEE_PREFIX .. ProfileSchema.sequence_step_prefix .. i,
         type = 'dropdown',
-        default_value = 'none',
+        default_value = ProfileSchema.defaults.MELEE[ProfileSchema.sequence_step_prefix .. i],
         options = _clone_options(MELEE_OPTIONS),
-        title = SEQUENCE_STEP_PREFIX .. i,
+        title = ProfileSchema.sequence_step_prefix .. i,
     }
 end
 
@@ -352,33 +350,33 @@ local ranged_widgets = {
     {
         setting_id = RANGED_PREFIX .. 'automatic_fire_hip',
         type = 'dropdown',
-        default_value = 'none',
+        default_value = ProfileSchema.defaults.RANGED.automatic_fire_hip,
         options = _clone_options(RANGED_FIRE_OPTIONS),
     },
     {
         setting_id = RANGED_PREFIX .. 'automatic_fire_ads',
         type = 'dropdown',
-        default_value = 'none',
+        default_value = ProfileSchema.defaults.RANGED.automatic_fire_ads,
         options = _clone_options(RANGED_FIRE_OPTIONS),
     },
     {
         setting_id = RANGED_PREFIX .. 'auto_charge_threshold',
         type = 'numeric',
-        default_value = 100,
+        default_value = ProfileSchema.defaults.RANGED.auto_charge_threshold,
         range = { 0, 100 },
         decimals_number = 0,
     },
     {
         setting_id = RANGED_PREFIX .. 'rate_of_fire_hip',
         type = 'numeric',
-        default_value = 0,
+        default_value = ProfileSchema.defaults.RANGED.rate_of_fire_hip,
         range = { 0, 800 },
         decimals_number = 0,
     },
     {
         setting_id = RANGED_PREFIX .. 'rate_of_fire_ads',
         type = 'numeric',
-        default_value = 0,
+        default_value = ProfileSchema.defaults.RANGED.rate_of_fire_ads,
         range = { 0, 800 },
         decimals_number = 0,
     },
