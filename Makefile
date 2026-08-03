@@ -22,13 +22,8 @@ check:
 	stylua --check .
 
 # Run repository-level Lua tests with the same Lua version used by the game.
-test: test-simple-sequencer test-simple-charging
-
-test-simple-sequencer:
-	busted --lua=lua5.1 tests/SimpleSequencer
-
-test-simple-charging:
-	busted --lua=lua5.1 tests/SimpleCharging
+test:
+	busted --lua=lua5.1 tests
 
 # Publish mods to Nexus Mods (see scripts/ci/publish_mods.py for options).
 # Syncs shared files first, then uploads, then cleans up.
