@@ -498,7 +498,7 @@ function CombatStatsView:_present_detail(entry)
         end
     end
 
-    self._detail_grid:present_grid_layout(layout, blueprints)
+    self:_present_detail_grid(layout, blueprints)
 end
 
 function CombatStatsView:_add_substats(layout, total, substats)

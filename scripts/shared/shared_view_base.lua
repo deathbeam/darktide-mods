@@ -11,6 +11,7 @@ local function make_view(mod, config)
     local definitions_path = config.definitions_path
     local list_blueprints_path = config.list_blueprints_path
     local single_detail = config.single_detail
+    local preserve_detail_scroll = config.preserve_detail_scroll
     -- When set, skip the left list + search and show only the detail panel.
 
     local mod_name = mod:get_name()
@@ -235,6 +236,44 @@ local function make_view(mod, config)
 
     -- Virtual: subclasses render the selected entry into the detail grid.
     function View:_present_detail(entry) end
+
+    -- Rebuilding the detail layout resets the grid's scroll position.
+    function View:_present_detail_grid(
+        layout,
+        blueprints,
+        left_click_callback,
+        right_click_callback,
+        display_name,
+        optional_grow_direction,
+        optional_left_double_click_callback
+    )
+        if not self._detail_grid then
+            return
+        end
+        -- A normalized percentage shifts when the rebuilt layout has a different height.
+        local old_scrolled_length = preserve_detail_scroll and self._detail_grid:length_scrolled()
+        local on_present_callback
+        if old_scrolled_length ~= nil then
+            on_present_callback = function()
+                local grid = self._detail_grid:grid()
+                local new_scroll_length = grid and grid:scroll_length() or 0
+                local scroll_progress = new_scroll_length > 0
+                        and math.clamp(old_scrolled_length / new_scroll_length, 0, 1)
+                    or 0
+                self._detail_grid:set_scrollbar_progress(scroll_progress, true)
+            end
+        end
+        self._detail_grid:present_grid_layout(
+            layout,
+            blueprints,
+            left_click_callback,
+            right_click_callback,
+            display_name,
+            optional_grow_direction,
+            on_present_callback,
+            optional_left_double_click_callback
+        )
+    end
 
     function View:cb_on_detail_entry_left_pressed(widget, element)
         return

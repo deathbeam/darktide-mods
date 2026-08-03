@@ -252,7 +252,7 @@ function EnemyStatsView:_present_detail(entry)
 
     local left_click_callback = callback(self, 'cb_on_detail_entry_left_pressed')
     self._detail_layout = layout
-    self._detail_grid:present_grid_layout(layout, blueprints, left_click_callback)
+    self:_present_detail_grid(layout, blueprints, left_click_callback)
 end
 
 return EnemyStatsView

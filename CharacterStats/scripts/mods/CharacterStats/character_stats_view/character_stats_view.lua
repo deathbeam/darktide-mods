@@ -17,6 +17,7 @@ local CharacterStatsView = make_view(mod, {
     icon_packages = ICON_PACKAGES,
     definitions_path = 'CharacterStats/scripts/mods/CharacterStats/character_stats_view/character_stats_view_definitions',
     list_blueprints_path = 'CharacterStats/scripts/mods/CharacterStats/character_stats_view/character_stats_view_blueprints',
+    preserve_detail_scroll = true,
 })
 
 function CharacterStatsView:_on_init(settings, context)
@@ -86,7 +87,7 @@ function CharacterStatsView:_present_detail()
 
     local left_click_callback = callback(self, 'cb_on_detail_entry_left_pressed')
     self._detail_layout = layout
-    self._detail_grid:present_grid_layout(layout, blueprints, left_click_callback)
+    self:_present_detail_grid(layout, blueprints, left_click_callback)
 end
 
 -- Retry the detail build until the player unit is loaded.
