@@ -9,7 +9,7 @@ return {
             {
                 setting_id = 'bar_distance',
                 type = 'numeric',
-                default_value = 32,
+                default_value = 64,
                 range = { 8, 160 },
                 decimals_number = 0,
             },

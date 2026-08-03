@@ -5,6 +5,21 @@ local ChargeSources = {}
 local MAX_SOURCES = 12
 local ACTION_CHARGE = 'action_charge'
 local AIM_TIME_PATTERN = 'aim_time'
+local CHARGE_PROGRESS_PATTERNS = {
+    'charge',
+    'windup',
+    'aim_time',
+    'aiming',
+    'staggering_enemies',
+}
+local NON_CHARGE_PROGRESS_PATTERNS = {
+    'continuous_fire',
+    'heat',
+    'overheat',
+    'stamina',
+    'ammo',
+    'clip',
+}
 
 local function _clamp(value, minimum, maximum)
     if value < minimum then
@@ -98,7 +113,13 @@ local function _has_charge_trait_name(name)
         return false
     end
 
-    for _, pattern in ipairs(CHARGE_TRAIT_PATTERNS) do
+    for _, pattern in ipairs(NON_CHARGE_PROGRESS_PATTERNS) do
+        if string.find(name, pattern, 1, true) then
+            return false
+        end
+    end
+
+    for _, pattern in ipairs(CHARGE_PROGRESS_PATTERNS) do
         if string.find(name, pattern, 1, true) then
             return true
         end
@@ -168,6 +189,11 @@ local function _step_maximum(buff, template, buff_entries)
         end
     end
 
+    local maximum = _call(buff, 'max_stacks')
+    if type(maximum) == 'number' then
+        return maximum
+    end
+
     if template.max_stacks then
         return template.max_stacks
     end
@@ -179,16 +205,30 @@ local function _step_maximum(buff, template, buff_entries)
 end
 
 local function _visual_stack_count(buff)
+    local count
     if buff and buff.visual_stack_count then
-        local ok, count = pcall(buff.visual_stack_count, buff)
+        local ok, visual_count = pcall(buff.visual_stack_count, buff)
 
-        if ok and type(count) == 'number' then
-            return count
+        if ok and type(visual_count) == 'number' then
+            count = visual_count
+
+            if count > 0 then
+                return count
+            end
         end
     end
 
-    local template_context = buff and buff._template_context
+    local template_data = buff and buff._template_data
+    local steps = template_data and template_data.steps
+    if type(steps) == 'number' then
+        return steps
+    end
 
+    if count ~= nil then
+        return count
+    end
+
+    local template_context = buff and buff._template_context
     return template_context and template_context.stack_count or 0
 end
 
@@ -210,6 +250,54 @@ local function _weapon_kind(context)
     end
 
     return nil
+end
+
+local function _action_handling_template(context)
+    local weapon = context.wielded_weapon
+    local weapon_template = context.weapon_template
+    local actions = weapon_template and weapon_template.actions
+    local tweak_templates = weapon and weapon.weapon_tweak_templates
+    local handling_templates = tweak_templates and tweak_templates.weapon_handling
+
+    if not actions or not handling_templates then
+        return nil
+    end
+
+    local function resolve(action_settings)
+        local template_name = action_settings and action_settings.weapon_handling_template
+
+        return template_name and handling_templates[template_name]
+    end
+
+    local current_action_name = context.weapon_action and context.weapon_action.current_action_name
+    local current_template = resolve(actions[current_action_name])
+    if current_template and current_template.critical_strike then
+        return current_template
+    end
+
+    local prefer_zoom = current_action_name
+        and (
+            string.find(current_action_name, 'zoom', 1, true) ~= nil
+            or string.find(current_action_name, 'aim', 1, true) ~= nil
+        )
+    local fallback_template
+
+    for action_name, action_settings in pairs(actions) do
+        if string.find(action_name, 'shoot', 1, true) then
+            local candidate = resolve(action_settings)
+            local is_zoom = string.find(action_name, 'zoom', 1, true) ~= nil
+
+            if candidate and candidate.critical_strike then
+                if prefer_zoom == is_zoom then
+                    return candidate
+                end
+
+                fallback_template = fallback_template or candidate
+            end
+        end
+    end
+
+    return fallback_template
 end
 
 local function _weapon_critical_chance(context)
@@ -234,11 +322,13 @@ local function _weapon_critical_chance(context)
         chance = chance + (stat_buffs.ranged_critical_strike_chance or 0)
     end
 
-    local handling_template = context.weapon_extension and _call(context.weapon_extension, 'weapon_handling_template')
+    local handling_template = _action_handling_template(context)
+        or context.weapon_extension and _call(context.weapon_extension, 'weapon_handling_template')
     local critical_strike = handling_template and handling_template.critical_strike
+    local chance_modifier = critical_strike and critical_strike.chance_modifier
 
-    if critical_strike and critical_strike.chance_modifier then
-        chance = chance + critical_strike.chance_modifier
+    if type(chance_modifier) == 'number' then
+        chance = chance + chance_modifier
     end
 
     return _clamp(chance, 0, 1)
@@ -279,6 +369,16 @@ end
 local function _collect_buff_sources(sources, context, settings)
     local buff_entries = _buff_entries(_buff_list(context.buff_extension))
     local seen = {}
+    local child_template_names = {}
+
+    for _, buff in ipairs(buff_entries) do
+        local template = buff and buff._template
+        local child_template_name = template and template.child_buff_template
+
+        if child_template_name then
+            child_template_names[child_template_name] = true
+        end
+    end
 
     for _, buff in ipairs(buff_entries) do
         local template = buff and buff._template
@@ -288,19 +388,24 @@ local function _collect_buff_sources(sources, context, settings)
         if
             name
             and string.sub(name, 1, 13) == 'weapon_trait_'
+            and _has_charge_trait_name(name)
             and _is_current_item_buff(buff, context)
             and not seen[name]
         then
             local is_stepped = class_name == 'stepped_stat_buff'
             local is_parent = string.find(class_name or '', 'weapon_trait_', 1, true) == 1
+            local has_step_function = template.min_max_step_func or template.bonus_step_func
+            local has_stack_limit = template.max_stacks or type(_call(buff, 'max_stacks')) == 'number'
+            local is_child = child_template_names[name]
             local maximum = _step_maximum(buff, template, buff_entries)
+            local is_progress_buff = is_stepped or is_parent or has_step_function or has_stack_limit and not is_child
 
-            if (is_stepped or is_parent) and maximum and maximum > 0 then
+            if is_progress_buff and maximum and maximum > 0 then
                 local value = _visual_stack_count(buff)
                 local is_aim_time_crit = string.find(name, 'crit', 1, true)
                     and string.find(name, AIM_TIME_PATTERN, 1, true)
 
-                if is_aim_time_crit then
+                if is_aim_time_crit and value > 0 then
                     local critical_chance = _weapon_critical_chance(context)
 
                     if critical_chance then

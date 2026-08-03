@@ -7,11 +7,13 @@ local UIWidget = require('scripts/managers/ui/ui_widget')
 local BAR_WIDTH = 24
 local BAR_HEIGHT = 56
 local MASK_HEIGHT = BAR_HEIGHT - 4
-local DEFAULT_BAR_DISTANCE = 32
+local DEFAULT_BAR_DISTANCE = 64
 local DEFAULT_BAR_SPACING = 28
 local TEXTURE_FRAME = 'content/ui/materials/hud/crosshairs/charge_up'
 local TEXTURE_MASK = 'content/ui/materials/hud/crosshairs/charge_up_mask'
 local MAX_BARS = 12
+local NATIVE_CHARGE_LEFT = 'charge_left'
+local NATIVE_CHARGE_RIGHT = 'charge_right'
 
 local SOURCE_COLORS = {
     weapon = 'color_tint_main_1',
@@ -50,6 +52,17 @@ local function _source_tint(kind)
         color[3],
         color[4],
     }
+end
+
+local function _native_charge_distance(style)
+    local left = style[NATIVE_CHARGE_LEFT]
+    local right = style[NATIVE_CHARGE_RIGHT]
+
+    if not left or not right or not left.offset or not right.offset then
+        return nil
+    end
+
+    return math.max(math.abs(left.offset[1] or 0), math.abs(right.offset[1] or 0))
 end
 
 local function _bar_passes(index, ids)
@@ -222,6 +235,11 @@ local function _update_bars(element)
     local sources = ChargeSources.collect()
     local distance = tonumber(mod:get('bar_distance')) or DEFAULT_BAR_DISTANCE
     local spacing = tonumber(mod:get('bar_spacing')) or DEFAULT_BAR_SPACING
+
+    local native_distance = _native_charge_distance(style)
+    if native_distance then
+        distance = math.max(distance, native_distance + spacing)
+    end
 
     for index = 1, MAX_BARS do
         local source = sources[index]
