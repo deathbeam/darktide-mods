@@ -785,6 +785,48 @@ function WeaponStatsUtils.extra_damage_entries(action, main_profile, template_in
     return #entries > 0 and entries or nil
 end
 
+-- Match the game's weapon bar: continuous spread plus half the average per-shot spread.
+local function _weapon_spread_for_state(settings)
+    if type(settings) ~= 'table' then
+        return nil
+    end
+    local continuous = settings.continuous_spread or {}
+    local pitch = continuous.min_pitch
+    local yaw = continuous.min_yaw
+    if type(pitch) ~= 'number' or type(yaw) ~= 'number' then
+        return nil
+    end
+    local shooting = settings.immediate_spread and settings.immediate_spread.shooting
+    local shooting_pitch, shooting_yaw = 0, 0
+    local count = 0
+    if type(shooting) == 'table' and type(shooting.pitch) == 'number' then
+        shooting_pitch, shooting_yaw, count = shooting.pitch, shooting.yaw or 0, 1
+    elseif type(shooting) == 'table' then
+        for i = 1, #shooting do
+            local shot = shooting[i]
+            if type(shot) == 'table' and type(shot.pitch) == 'number' then
+                shooting_pitch = shooting_pitch + shot.pitch
+                shooting_yaw = shooting_yaw + (shot.yaw or 0)
+                count = count + 1
+            end
+        end
+    end
+    if count > 0 then
+        shooting_pitch = shooting_pitch / count
+        shooting_yaw = shooting_yaw / count
+    end
+    pitch = pitch + shooting_pitch / 2
+    yaw = yaw + shooting_yaw / 2
+    return math.sqrt(pitch * pitch + yaw * yaw) * 10
+end
+
+function WeaponStatsUtils.weapon_spread(spread_template)
+    if type(spread_template) ~= 'table' then
+        return nil, nil
+    end
+    return _weapon_spread_for_state(spread_template.still), _weapon_spread_for_state(spread_template.moving)
+end
+
 function WeaponStatsUtils.explosion_suppression(action, template_index)
     if type(action) ~= 'table' then
         return nil, nil

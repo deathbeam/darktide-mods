@@ -110,6 +110,9 @@ return {
     stat_pellets = {
         en = 'Pellets',
     },
+    stat_pellet_spread = {
+        en = 'Pellet Spread',
+    },
     stat_backstab = {
         en = 'Backstab',
     },

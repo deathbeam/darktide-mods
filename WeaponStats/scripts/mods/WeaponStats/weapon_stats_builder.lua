@@ -117,6 +117,20 @@ local function handling_template_for_action(weapon_template, weapon_tweak_templa
     return handling[identifier]
 end
 
+local function spread_template_for_action(weapon_template, weapon_tweak_templates, action_name)
+    local spread = weapon_tweak_templates and weapon_tweak_templates.spread
+    if not spread or not weapon_template or not action_name then
+        return nil
+    end
+    local ok, _, identifier =
+        pcall(WeaponTweakTemplates.get_template_identifiers, weapon_template, 'spread', action_name)
+    if ok and identifier then
+        return spread[identifier]
+    end
+    local template_name = weapon_template.spread_template
+    return template_name and (spread[template_name] or spread['base_' .. template_name]) or nil
+end
+
 -- Profile extraction -----------------------------------------------------
 
 local function resolve_template_ref(ref, template_table)
@@ -539,6 +553,25 @@ local function render_adm_table(records, profile, target_settings, action_lerp, 
     add_table(records, columns, rows)
 end
 
+local function render_weapon_spread(records, weapon_template, weapon_tweak_templates, action_name, is_ranged)
+    if not is_ranged then
+        return
+    end
+    local spread_template = spread_template_for_action(weapon_template, weapon_tweak_templates, action_name)
+    local still_spread, moving_spread = Utils.weapon_spread(spread_template)
+    local value
+    if still_spread and moving_spread then
+        value = string.format('%.2f / %.2f', still_spread, moving_spread)
+    elseif still_spread then
+        value = string.format('%.2f', still_spread)
+    elseif moving_spread then
+        value = string.format('%.2f', moving_spread)
+    end
+    if value then
+        add_stat(records, mod:localize('stat_spread'), value, COLORS.META)
+    end
+end
+
 local function render_profile(records, ctx)
     local profile = ctx.profile
     local action_lerp = ctx.action_lerp
@@ -610,7 +643,7 @@ local function render_profile(records, ctx)
         if ranged_extra.spread_pitch and ranged_extra.spread_yaw then
             add_stat(
                 records,
-                mod:localize('stat_spread'),
+                mod:localize('stat_pellet_spread'),
                 string.format('%.1f / %.1f', ranged_extra.spread_pitch, ranged_extra.spread_yaw),
                 COLORS.META
             )
@@ -797,6 +830,7 @@ local function render_attack(
     end
 
     render_timing(records, action, weapon_template, weapon_tweak_templates, action_name)
+    render_weapon_spread(records, weapon_template, weapon_tweak_templates, action_name, is_ranged)
 
     for _, prof_info in ipairs(attack_data.profiles) do
         local action_lerp = Utils.lerp_for_action(damage_profile_lerp_values, action_name, prof_info.profile)
