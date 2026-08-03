@@ -66,6 +66,7 @@ for index = 1, MAX_BARS do
 end
 
 local current_element
+local hooked_element_class
 
 local function _hud_color(setting_name)
     local color = UIHudSettings[setting_name] or UIHudSettings.color_tint_main_1
@@ -243,21 +244,12 @@ local function _discard_widget(element)
     element._crosshair_type = nil
 end
 
-local hooks_installed = false
-
-local function _install_hooks()
-    if hooks_installed then
+mod:hook_require('scripts/ui/hud/elements/crosshair/hud_element_crosshair', function(element_class)
+    if not element_class or hooked_element_class == element_class then
         return
     end
 
-    pcall(require, 'scripts/ui/hud/elements/crosshair/hud_element_crosshair')
-
-    local element_class = CLASS and CLASS.HudElementCrosshair
-
-    if not element_class then
-        return
-    end
-
+    hooked_element_class = element_class
     mod:hook_safe(element_class, 'init', function(self)
         _attach_bars(self)
     end)
@@ -278,12 +270,7 @@ local function _install_hooks()
 
         _render_bars(self)
     end)
-
-    hooks_installed = true
-end
-
-mod.on_enabled = _install_hooks
-mod.on_game_state_changed = _install_hooks
+end)
 
 mod.on_disabled = function()
     _hide_bars(current_element)
