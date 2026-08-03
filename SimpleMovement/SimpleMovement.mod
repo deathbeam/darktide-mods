@@ -4,6 +4,7 @@ return {
 
 		new_mod("SimpleMovement", {
 			mod_script       = "SimpleMovement/scripts/mods/SimpleMovement/SimpleMovement",
+			mod_data         = "SimpleMovement/scripts/mods/SimpleMovement/SimpleMovement_data",
 			mod_localization = "SimpleMovement/scripts/mods/SimpleMovement/SimpleMovement_localization",
 		})
 	end,
