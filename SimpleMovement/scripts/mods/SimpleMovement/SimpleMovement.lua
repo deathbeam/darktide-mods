@@ -216,8 +216,39 @@ local function _should_abort_sprint(action_settings)
     return abort_sprint_by_kind[action_settings.kind] and not action_settings.override_allow_during_sprint or false
 end
 
-local _can_hold_dodge_slide
-local _can_keep_dodging
+local function _can_hold_dodge_slide()
+    local character_state = movement_components.character_state
+    local dodge_state = movement_components.dodge_character_state
+
+    if not dodge_hold or not character_state or not dodge_state then
+        return false
+    end
+
+    local start_time = math.max(character_state.entered_t, dodge_hold_start_time)
+    local distance_left = dodge_state.distance_left
+    local gameplay_time = Managers.time:time('gameplay')
+
+    return gameplay_time - start_time >= 0.2 or distance_left <= 0.24
+end
+
+local function _can_keep_dodging()
+    local dodge_state = movement_components.dodge_character_state
+
+    if not dodge_state or not player_weapon_extension or not player_buff_extension then
+        return true
+    end
+
+    local dodge_template = player_weapon_extension:dodge_template()
+    local diminishing_return_start = dodge_template and dodge_template.diminishing_return_start or 2
+    local extra_dodges = math.round(player_buff_extension:stat_buffs().extra_consecutive_dodges or 0)
+    local consecutive_dodges = dodge_state.consecutive_dodges
+
+    if Managers.time:time('gameplay') > dodge_state.consecutive_dodges_cooldown then
+        consecutive_dodges = 0
+    end
+
+    return consecutive_dodges < diminishing_return_start + extra_dodges
+end
 
 local function _input_service_hook(func, self, action_name)
     local result = func(self, action_name)
@@ -357,40 +388,6 @@ local function _on_state_change()
     end
 end
 
-_can_hold_dodge_slide = function()
-    local character_state = movement_components.character_state
-    local dodge_state = movement_components.dodge_character_state
-
-    if not dodge_hold or not character_state or not dodge_state then
-        return false
-    end
-
-    local start_time = math.max(character_state.entered_t, dodge_hold_start_time)
-    local distance_left = dodge_state.distance_left
-    local gameplay_time = Managers.time:time('gameplay')
-
-    return gameplay_time - start_time >= 0.2 or distance_left <= 0.24
-end
-
-_can_keep_dodging = function()
-    local dodge_state = movement_components.dodge_character_state
-
-    if not dodge_state or not player_weapon_extension or not player_buff_extension then
-        return true
-    end
-
-    local dodge_template = player_weapon_extension:dodge_template()
-    local diminishing_return_start = dodge_template and dodge_template.diminishing_return_start or 2
-    local extra_dodges = math.round(player_buff_extension:stat_buffs().extra_consecutive_dodges or 0)
-    local consecutive_dodges = dodge_state.consecutive_dodges
-
-    if Managers.time:time('gameplay') > dodge_state.consecutive_dodges_cooldown then
-        consecutive_dodges = 0
-    end
-
-    return consecutive_dodges < diminishing_return_start + extra_dodges
-end
-
 -- State transitions reset input intent so a held key cannot leak between states.
 mod:hook_safe(CLASS.CharacterStateMachine, '_change_state', function(self, unit, dt, t, next_state)
     local unit_data_extension = self._unit_data_extension
@@ -518,12 +515,19 @@ mod:hook_safe(CLASS.PlayerUnitWeaponExtension, 'delete', function(self)
     end
 end)
 
-mod:hook_safe(CLASS.PlayerUnitActionInputExtension, 'init', function(self)
-    player_action_input_extension = self
+mod:hook_safe(CLASS.PlayerUnitActionInputExtension, 'init', function(self, _, unit)
+    local player_manager = Managers and Managers.player
+    local player = player_manager and player_manager:local_player_safe(1)
+
+    if player and player.player_unit == unit then
+        player_action_input_extension = self
+    end
 end)
 
 mod:hook_safe(CLASS.PlayerUnitActionInputExtension, 'delete', function(self)
-    player_action_input_extension = nil
+    if self == player_action_input_extension then
+        player_action_input_extension = nil
+    end
 end)
 
 mod:hook_safe(CLASS.PlayerUnitDataExtension, 'init', function(self)

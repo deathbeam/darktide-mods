@@ -1,5 +1,3 @@
-local mod = get_mod('SimpleCharging')
-
 local ChargeSources = {}
 
 local MAX_SOURCES = 12
@@ -375,19 +373,14 @@ local function _has_native_charge_crosshair(context)
     return NATIVE_CHARGE_CROSSHAIR_TYPES[crosshair_type] == true
 end
 
-local function _collect_weapon_sources(sources, context, settings)
+local function _collect_weapon_sources(sources, context)
     local charge_component = context.charge_component
     local charge_level = charge_component and charge_component.charge_level or 0
     local max_charge = charge_component and charge_component.max_charge or 0
     local action_name = context.weapon_action and context.weapon_action.current_action_name
     local charging = action_name == ACTION_CHARGE or action_name and string.find(action_name, 'charge', 1, true)
 
-    if
-        settings.show_weapon_charge
-        and not _has_native_charge_crosshair(context)
-        and max_charge > 0
-        and (charging or charge_level > 0)
-    then
+    if not _has_native_charge_crosshair(context) and max_charge > 0 and (charging or charge_level > 0) then
         _add_source(sources, {
             id = 'weapon_charge',
             order = 1,
@@ -399,7 +392,7 @@ local function _collect_weapon_sources(sources, context, settings)
     end
 end
 
-local function _collect_buff_sources(sources, context, settings)
+local function _collect_buff_sources(sources, context)
     local buff_entries = _buff_entries(_buff_list(context.buff_extension))
     local seen = {}
     local child_template_names = {}
@@ -461,21 +454,12 @@ local function _collect_buff_sources(sources, context, settings)
     end
 end
 
-function ChargeSources.context()
-    return _player_context()
-end
-
-function ChargeSources.collect(context, settings)
+function ChargeSources.collect(context)
     context = context or _player_context()
-    settings = settings or {}
-
-    local resolved_settings = {
-        show_weapon_charge = settings.show_weapon_charge ~= false and (mod:get('show_weapon_charge') ~= false),
-    }
     local sources = {}
 
-    _collect_weapon_sources(sources, context, resolved_settings)
-    _collect_buff_sources(sources, context, resolved_settings)
+    _collect_weapon_sources(sources, context)
+    _collect_buff_sources(sources, context)
 
     table.sort(sources, function(left, right)
         if left.order ~= right.order then

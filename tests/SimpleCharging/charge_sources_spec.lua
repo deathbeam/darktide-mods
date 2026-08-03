@@ -5,13 +5,7 @@ local root = debug.getinfo(1, 'S').source:sub(2):match('^(.*)/tests/SimpleChargi
 local function _load_sources(mock)
     mock:install()
 
-    return dofile(root .. '/SimpleCharging/scripts/mods/SimpleCharging/modules/ChargeSources.lua')
-end
-
-local function _settings()
-    return {
-        show_weapon_charge = false,
-    }
+    return dofile(root .. '/SimpleCharging/scripts/mods/SimpleCharging/SimpleCharging_sources.lua')
 end
 
 describe('SimpleCharging ChargeSources', function()
@@ -41,7 +35,7 @@ describe('SimpleCharging ChargeSources', function()
             wielded_slot = 'slot_secondary',
         }
 
-        local sources = ChargeSources.collect(context, _settings())
+        local sources = ChargeSources.collect(context)
 
         assert.are.equal(1, #sources)
         assert.are.equal(3, sources[1].value)
@@ -71,7 +65,7 @@ describe('SimpleCharging ChargeSources', function()
             wielded_slot = 'slot_secondary',
         }
 
-        local sources = ChargeSources.collect(context, _settings())
+        local sources = ChargeSources.collect(context)
 
         assert.are.equal(1, #sources)
         assert.are.equal(3, sources[1].value)
@@ -111,7 +105,7 @@ describe('SimpleCharging ChargeSources', function()
             wielded_slot = 'slot_secondary',
         }
 
-        local sources = ChargeSources.collect(context, _settings())
+        local sources = ChargeSources.collect(context)
 
         assert.are.equal(1, #sources)
         assert.are.equal(2, sources[1].value)
@@ -161,7 +155,7 @@ describe('SimpleCharging ChargeSources', function()
             kind = 'ranged',
         }
 
-        local sources = ChargeSources.collect(context, _settings())
+        local sources = ChargeSources.collect(context)
 
         assert.are.equal(1, #sources)
         assert.is_true(math.abs(sources[1].value - 0.35) < 0.0001)
@@ -220,7 +214,7 @@ describe('SimpleCharging ChargeSources', function()
             kind = 'ranged',
         }
 
-        local sources = ChargeSources.collect(context, _settings())
+        local sources = ChargeSources.collect(context)
 
         assert.are.equal(1, #sources)
         assert.is_true(math.abs(sources[1].value - 0.18) < 0.0001)
@@ -251,9 +245,7 @@ describe('SimpleCharging ChargeSources', function()
             },
             wielded_slot = 'slot_secondary',
         }
-        local settings = _settings()
-
-        local sources = ChargeSources.collect(context, settings)
+        local sources = ChargeSources.collect(context)
 
         assert.are.equal(0, #sources)
     end)
@@ -273,10 +265,7 @@ describe('SimpleCharging ChargeSources', function()
                 _buffs = {},
             },
         }
-        local settings = _settings()
-        settings.show_weapon_charge = true
-
-        local sources = ChargeSources.collect(context, settings)
+        local sources = ChargeSources.collect(context)
 
         assert.are.equal(1, #sources)
         assert.are.equal('weapon_charge', sources[1].id)
@@ -300,10 +289,7 @@ describe('SimpleCharging ChargeSources', function()
             buff_extension = { _buffs = {} },
         }
 
-        local settings = _settings()
-        settings.show_weapon_charge = true
-
-        local sources = ChargeSources.collect(context, settings)
+        local sources = ChargeSources.collect(context)
 
         assert.are.equal(0, #sources)
     end)
@@ -340,7 +326,7 @@ describe('SimpleCharging ChargeSources', function()
             kind = 'ranged',
         }
 
-        local sources = ChargeSources.collect(context, _settings())
+        local sources = ChargeSources.collect(context)
 
         assert.are.equal(0, #sources)
     end)
@@ -364,7 +350,7 @@ describe('SimpleCharging ChargeSources', function()
             wielded_slot = 'slot_secondary',
         }
 
-        local sources = ChargeSources.collect(context, _settings())
+        local sources = ChargeSources.collect(context)
 
         assert.are.equal(1, #sources)
         assert.are.equal(3, sources[1].value)
@@ -390,7 +376,7 @@ describe('SimpleCharging ChargeSources', function()
             wielded_slot = 'slot_secondary',
         }
 
-        local sources = ChargeSources.collect(context, _settings())
+        local sources = ChargeSources.collect(context)
 
         assert.are.equal(0, #sources)
     end)

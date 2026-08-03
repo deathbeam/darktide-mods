@@ -17,17 +17,18 @@ local target_slot
 local stage_start_time = 0
 local last_check_time = 0
 local mod_enabled = false
-local quick_deploy_enabled = false
-local auto_blitz_enabled = false
 
 local function _get_player_unit()
-    local player = Managers.player and Managers.player:local_player_safe(1)
+    local player_manager = Managers and Managers.player
+    local player = player_manager and player_manager:local_player_safe(1)
 
     return player and player.player_unit
 end
 
 local function _get_gameplay_time()
-    return Managers.time and Managers.time:has_timer('gameplay') and Managers.time:time('gameplay') or 0
+    local time_manager = Managers and Managers.time
+
+    return time_manager and time_manager:has_timer('gameplay') and time_manager:time('gameplay') or 0
 end
 
 local function _reset_state()
@@ -38,11 +39,14 @@ end
 
 local function _grenade_template()
     local player_unit = _get_player_unit()
-    local weapon_extension = player_unit
-        and ScriptUnit
-        and ScriptUnit.has_extension
-        and ScriptUnit.has_extension(player_unit, 'weapon_system')
-    local weapons = weapon_extension and weapon_extension._weapons
+    local has_extension = ScriptUnit and ScriptUnit.has_extension
+
+    if not player_unit or not has_extension then
+        return nil
+    end
+
+    local ok, weapon_extension = pcall(has_extension, player_unit, 'weapon_system')
+    local weapons = ok and weapon_extension and weapon_extension._weapons
     local weapon = weapons and weapons[SLOT_GRENADE]
 
     return weapon and weapon.weapon_template
@@ -80,8 +84,8 @@ local function _is_auto_throw_eligible(weapon_template)
     return false
 end
 
-local function _update(dt)
-    local game_mode_manager = Managers.state and Managers.state.game_mode
+mod.update = function()
+    local game_mode_manager = Managers and Managers.state and Managers.state.game_mode
     local game_mode_name = game_mode_manager and game_mode_manager:game_mode_name()
 
     if not game_mode_name or game_mode_name == 'hub' then
@@ -126,8 +130,7 @@ mod:hook(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(func, self
         local weapon_template = _grenade_template()
 
         if
-            auto_blitz_enabled
-            and slot_name == SLOT_GRENADE
+            slot_name == SLOT_GRENADE
             and not _is_quick_throw_grenade(weapon_template)
             and _is_auto_throw_eligible(weapon_template)
         then
@@ -136,8 +139,7 @@ mod:hook(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(func, self
         end
 
         if
-            quick_deploy_enabled
-            and (slot_name == SLOT_POCKETABLE or slot_name == SLOT_POCKETABLE_SMALL)
+            (slot_name == SLOT_POCKETABLE or slot_name == SLOT_POCKETABLE_SMALL)
             and current_stage == ACTION_STAGES.NONE
         then
             switch_to_waiting = true
@@ -184,24 +186,9 @@ mod.on_disabled = function()
     _reset_state()
 end
 
-mod.on_setting_changed = function(id)
-    if id == 'auto_blitz_enabled' then
-        auto_blitz_enabled = mod:get('auto_blitz_enabled')
-    elseif id == 'quick_deploy_enabled' then
-        quick_deploy_enabled = mod:get('quick_deploy_enabled')
-    end
-end
-
-mod.on_all_mods_loaded = function()
-    auto_blitz_enabled = mod:get('auto_blitz_enabled')
-    quick_deploy_enabled = mod:get('quick_deploy_enabled')
-end
-
 mod.on_game_state_changed = function(status, state_name)
     if state_name == 'StateLoading' or state_name == 'StateGameplay' then
         last_check_time = 0
         _reset_state()
     end
 end
-
-mod.update = _update
