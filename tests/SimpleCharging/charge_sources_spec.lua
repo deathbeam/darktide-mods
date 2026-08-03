@@ -49,6 +49,36 @@ describe('SimpleCharging ChargeSources', function()
         assert.are.equal(0.6, sources[1].fraction)
     end)
 
+    it('uses step count as maximum for charge-time proc buffs', function()
+        local mock = DarktideMock.new()
+        local ChargeSources = _load_sources(mock)
+        local buff = {
+            _template = {
+                name = 'weapon_trait_bespoke_autogun_p3_power_bonus_based_on_charge_time_ranged',
+                class_name = 'proc_buff',
+                max_stacks = 1,
+                num_steps_for_max_stat = 10,
+            },
+            _template_override_data = { num_steps_for_max_stat = 5 },
+            _template_data = { steps = 3 },
+            _template_context = { item_slot_name = 'slot_secondary' },
+            visual_stack_count = function()
+                return 3
+            end,
+        }
+        local context = {
+            buff_extension = { _buffs = { buff } },
+            wielded_slot = 'slot_secondary',
+        }
+
+        local sources = ChargeSources.collect(context, _settings())
+
+        assert.are.equal(1, #sources)
+        assert.are.equal(3, sources[1].value)
+        assert.are.equal(5, sources[1].maximum)
+        assert.are.equal(0.6, sources[1].fraction)
+    end)
+
     it('uses the child maximum for charge-time parent buffs', function()
         local mock = DarktideMock.new()
         local ChargeSources = _load_sources(mock)
@@ -251,6 +281,31 @@ describe('SimpleCharging ChargeSources', function()
         assert.are.equal(1, #sources)
         assert.are.equal('weapon_charge', sources[1].id)
         assert.are.equal(0.5, sources[1].fraction)
+    end)
+
+    it('hides weapon charge when the weapon has a native charge crosshair', function()
+        local mock = DarktideMock.new()
+        local ChargeSources = _load_sources(mock)
+        local context = {
+            charge_component = {
+                charge_level = 0.5,
+                max_charge = 1,
+            },
+            weapon_action = { current_action_name = 'action_charge' },
+            weapon_template = {
+                actions = {
+                    action_charge = { crosshair = { crosshair_type = 'charge_up_ads' } },
+                },
+            },
+            buff_extension = { _buffs = {} },
+        }
+
+        local settings = _settings()
+        settings.show_weapon_charge = true
+
+        local sources = ChargeSources.collect(context, settings)
+
+        assert.are.equal(0, #sources)
     end)
 
     it('hides the base crit chance when aim-time progress is inactive', function()

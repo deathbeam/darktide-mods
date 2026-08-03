@@ -4,6 +4,10 @@ local ChargeSources = {}
 
 local MAX_SOURCES = 12
 local ACTION_CHARGE = 'action_charge'
+local NATIVE_CHARGE_CROSSHAIR_TYPES = {
+    charge_up = true,
+    charge_up_ads = true,
+}
 local AIM_TIME_PATTERN = 'aim_time'
 local CHARGE_PROGRESS_PATTERNS = {
     'charge',
@@ -181,12 +185,23 @@ local function _find_buff_template(buff_entries, name)
 end
 
 local function _step_maximum(buff, template, buff_entries)
+    local override_data = buff and buff._template_override_data
+    local override_maximum = override_data and override_data.num_steps_for_max_stat
+
+    if type(override_maximum) == 'number' then
+        return override_maximum
+    end
+
     if template.min_max_step_func then
         local ok, minimum, maximum = pcall(template.min_max_step_func, buff._template_data, buff._template_context)
 
         if ok and type(maximum) == 'number' then
             return maximum
         end
+    end
+
+    if type(template.num_steps_for_max_stat) == 'number' then
+        return template.num_steps_for_max_stat
     end
 
     local maximum = _call(buff, 'max_stacks')
@@ -347,6 +362,19 @@ local function _add_source(sources, source)
     end
 end
 
+local function _has_native_charge_crosshair(context)
+    local weapon_template = context.weapon_template
+    local actions = weapon_template and weapon_template.actions
+    local weapon_action = context.weapon_action
+    local action_name = weapon_action and weapon_action.current_action_name
+    local action_settings = actions and actions[action_name]
+    local crosshair = action_settings and action_settings.crosshair
+    crosshair = crosshair or weapon_template and weapon_template.crosshair
+    local crosshair_type = crosshair and crosshair.crosshair_type
+
+    return NATIVE_CHARGE_CROSSHAIR_TYPES[crosshair_type] == true
+end
+
 local function _collect_weapon_sources(sources, context, settings)
     local charge_component = context.charge_component
     local charge_level = charge_component and charge_component.charge_level or 0
@@ -354,7 +382,12 @@ local function _collect_weapon_sources(sources, context, settings)
     local action_name = context.weapon_action and context.weapon_action.current_action_name
     local charging = action_name == ACTION_CHARGE or action_name and string.find(action_name, 'charge', 1, true)
 
-    if settings.show_weapon_charge and max_charge > 0 and (charging or charge_level > 0) then
+    if
+        settings.show_weapon_charge
+        and not _has_native_charge_crosshair(context)
+        and max_charge > 0
+        and (charging or charge_level > 0)
+    then
         _add_source(sources, {
             id = 'weapon_charge',
             order = 1,
