@@ -1,4 +1,4 @@
-local mod = get_mod('SimpleAbilities')
+local mod = get_mod('SimpleUse')
 
 local ACTION_STAGES = {
     NONE = 0,
