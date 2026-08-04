@@ -318,14 +318,18 @@ local function _input_service_hook(func, self, action_name)
             sprint_press = current_state_name ~= 'sprinting'
             is_action_blocking_sprint = false
         end
-    elseif action_name == 'sprinting' and sprint_by_default then
+    elseif action_name == 'sprinting' then
+        if attempt_sprint_dodge then
+            return false
+        end
+
+        if not sprint_by_default then
+            return result
+        end
+
         attempt_sprint = not result
         if not attempt_sprint then
             sprint_press = false
-        end
-
-        if attempt_sprint_dodge then
-            return false
         end
 
         return attempt_sprint and not is_action_blocking_sprint and (sprint_press or _can_sprint_with_next_action())
