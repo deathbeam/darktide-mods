@@ -23,6 +23,11 @@ local hold_to_crouch = true
 local diagonal_forward_dodge = true
 local stationary_dodge = false
 local always_dodge = false
+local sprint_by_default = true
+local repeat_dodge = true
+local dodge_slide = true
+local sprint_dodge = true
+local auto_vault = true
 local original_hold_to_sprint
 
 local mod_enabled = false
@@ -54,9 +59,7 @@ local function _is_local_unit(unit_data_extension)
     return unit_data_extension and unit_data_extension.is_local_unit and unit_data_extension:is_local_unit() or false
 end
 
-local function _reset_state()
-    previous_state_name = 'walking'
-    current_state_name = 'walking'
+local function _clear_input_intent()
     is_action_blocking_sprint = false
     sliding_speed = 0
     sprint_press = false
@@ -70,6 +73,12 @@ local function _reset_state()
     attempt_sprint_slide = false
     attempt_sprint = false
     attempt_sprint_dodge = false
+end
+
+local function _reset_state()
+    previous_state_name = 'walking'
+    current_state_name = 'walking'
+    _clear_input_intent()
 end
 
 local function _init_movement_components(unit_data_extension)
@@ -86,6 +95,14 @@ end
 
 local function _clear_movement_components()
     movement_components = {}
+end
+
+local function _init_mod_settings()
+    sprint_by_default = mod:get('sprint_by_default') ~= false
+    repeat_dodge = mod:get('repeat_dodge') ~= false
+    dodge_slide = mod:get('dodge_slide') ~= false
+    sprint_dodge = mod:get('sprint_dodge') ~= false
+    auto_vault = mod:get('auto_vault') ~= false
 end
 
 local function _init_game_settings()
@@ -115,7 +132,7 @@ local function _refresh_movement_components()
 end
 
 local function _enable_hold_to_sprint()
-    if not mod_enabled then
+    if not mod_enabled or not sprint_by_default then
         return
     end
 
@@ -145,6 +162,14 @@ local function _restore_hold_to_sprint()
     end
 
     original_hold_to_sprint = nil
+end
+
+local function _update_sprint_mode()
+    if sprint_by_default then
+        _enable_hold_to_sprint()
+    else
+        _restore_hold_to_sprint()
+    end
 end
 
 local function _can_dodge_slide()
@@ -288,12 +313,12 @@ local function _input_service_hook(func, self, action_name)
         return result
     end
 
-    if action_name == 'sprint' then
+    if action_name == 'sprint' and sprint_by_default then
         if result then
             sprint_press = current_state_name ~= 'sprinting'
             is_action_blocking_sprint = false
         end
-    elseif action_name == 'sprinting' then
+    elseif action_name == 'sprinting' and sprint_by_default then
         attempt_sprint = not result
         if not attempt_sprint then
             sprint_press = false
@@ -319,10 +344,14 @@ local function _input_service_hook(func, self, action_name)
             return false
         end
     elseif action_name == 'jump_held' then
-        if current_state_name == 'jumping' or current_state_name == 'falling' then
+        if auto_vault and (current_state_name == 'jumping' or current_state_name == 'falling') then
             return true
         end
     elseif action_name == 'dodge' then
+        if not repeat_dodge and not dodge_slide and not sprint_dodge then
+            return result
+        end
+
         dodge_hold = func(self, 'dodge_hold')
         if dodge_hold then
             dodge_hold_start_time = dodge_hold_start_time or Managers.time:time('gameplay')
@@ -330,16 +359,17 @@ local function _input_service_hook(func, self, action_name)
             dodge_hold_start_time = nil
         end
 
-        if current_state_name == 'dodging' then
+        if current_state_name == 'dodging' and dodge_slide then
             attempt_dodge_slide = attempt_dodge_slide or result
         elseif _is_sprint_jumping() and current_state_name == 'sprinting' then
-            if _is_dodge_direction() then
+            local is_dodge_direction = _is_dodge_direction()
+            if sprint_dodge and is_dodge_direction then
                 attempt_sprint_dodge = attempt_sprint_dodge or result or dodge_hold
-            else
+            elseif dodge_slide and not is_dodge_direction then
                 attempt_sprint_slide = attempt_sprint_slide or result or dodge_hold
             end
         elseif current_state_name == 'walking' then
-            if attempt_sprint_dodge then
+            if sprint_dodge and attempt_sprint_dodge then
                 if _is_dodge_direction() then
                     return true
                 end
@@ -347,18 +377,23 @@ local function _input_service_hook(func, self, action_name)
                 attempt_sprint_dodge = false
             end
 
-            if dodge_hold and _can_keep_dodging() then
+            if repeat_dodge and dodge_hold and _can_keep_dodging() then
                 return true
             end
         end
     elseif action_name == 'crouching' then
-        if current_state_name == 'sliding' and dodge_hold and (hold_to_crouch or sliding_speed > 0.5) then
+        if
+            dodge_slide
+            and current_state_name == 'sliding'
+            and dodge_hold
+            and (hold_to_crouch or sliding_speed > 0.5)
+        then
             if previous_state_name == 'dodging' or previous_state_name == 'sprinting' then
                 return true
             end
         end
 
-        if hold_to_crouch then
+        if dodge_slide and hold_to_crouch then
             if
                 current_state_name == 'dodging'
                 and (attempt_dodge_slide or _can_hold_dodge_slide())
@@ -377,7 +412,8 @@ local function _input_service_hook(func, self, action_name)
             local is_crouching = movement_state.is_crouching
 
             if
-                current_state_name == 'dodging'
+                dodge_slide
+                and current_state_name == 'dodging'
                 and (attempt_dodge_slide or _can_hold_dodge_slide())
                 and not is_crouching
                 and _can_dodge_slide()
@@ -385,7 +421,7 @@ local function _input_service_hook(func, self, action_name)
                 return true
             end
 
-            if _is_sprint_jumping() and attempt_sprint_slide and not is_crouching then
+            if dodge_slide and _is_sprint_jumping() and attempt_sprint_slide and not is_crouching then
                 return true
             end
         end
@@ -460,7 +496,7 @@ mod:hook_safe(
     'start_action',
     function(self, id, action_objects, action_name, action_params, action_settings)
         local unit_data_extension = self._unit_data_extension
-        if not mod_enabled or not _is_local_unit(unit_data_extension) then
+        if not mod_enabled or not sprint_by_default or not _is_local_unit(unit_data_extension) then
             return
         end
 
@@ -491,7 +527,7 @@ mod:hook_safe(
 
 mod:hook_safe(CLASS.ActionHandler, 'server_correction_occurred', function(self, id)
     local unit_data_extension = self._unit_data_extension
-    if not mod_enabled or not _is_local_unit(unit_data_extension) then
+    if not mod_enabled or not sprint_by_default or not _is_local_unit(unit_data_extension) then
         return
     end
 
@@ -504,7 +540,7 @@ end)
 
 mod:hook_safe(CLASS.ActionHandler, '_finish_action', function(self, handler_data)
     local unit_data_extension = self._unit_data_extension
-    if mod_enabled and _is_local_unit(unit_data_extension) then
+    if mod_enabled and sprint_by_default and _is_local_unit(unit_data_extension) then
         is_action_blocking_sprint = false
     end
 end)
@@ -512,7 +548,7 @@ end)
 mod:hook_safe(CLASS.EventManager, 'trigger', function(self, event_name)
     if mod_enabled and event_name == 'event_on_input_settings_changed' then
         _init_game_settings()
-        _enable_hold_to_sprint()
+        _update_sprint_mode()
     end
 end)
 
@@ -540,9 +576,10 @@ mod:hook(CLASS.InputService, '_get', _input_service_hook)
 
 mod.on_enabled = function()
     mod_enabled = true
+    _init_mod_settings()
     _refresh_movement_components()
     _init_game_settings()
-    _enable_hold_to_sprint()
+    _update_sprint_mode()
 end
 
 mod.on_disabled = function()
@@ -552,10 +589,19 @@ mod.on_disabled = function()
     _reset_state()
 end
 
+mod.on_setting_changed = function(setting_id)
+    _init_mod_settings()
+    _clear_input_intent()
+    if setting_id == 'sprint_by_default' then
+        _update_sprint_mode()
+    end
+end
+
 mod.on_all_mods_loaded = function()
+    _init_mod_settings()
     _refresh_movement_components()
     _init_game_settings()
-    _enable_hold_to_sprint()
+    _update_sprint_mode()
 end
 
 mod.on_game_state_changed = function(status, state_name)
@@ -564,9 +610,10 @@ mod.on_game_state_changed = function(status, state_name)
     end
 
     if status == 'enter' then
+        _init_mod_settings()
         _refresh_movement_components()
         _init_game_settings()
-        _enable_hold_to_sprint()
+        _update_sprint_mode()
     elseif status == 'exit' then
         _clear_movement_components()
         _reset_state()
