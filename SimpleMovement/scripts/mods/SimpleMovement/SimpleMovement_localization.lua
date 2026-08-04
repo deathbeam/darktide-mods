@@ -3,7 +3,7 @@ return {
         en = ' {#color(80,200,255)}Simple{#reset()} Movement',
     },
     mod_description = {
-        en = 'Sprint by default, hold sprint to walk. Hold dodge to chain dodges and slide, with auto-vaulting.',
+        en = 'Sprint by default, hold sprint to walk. Hold dodge to chain dodges and dodge-slide, supports sprint-dodge and auto-vault.',
     },
 
     sprint_by_default = {

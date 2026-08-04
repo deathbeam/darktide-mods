@@ -15,7 +15,7 @@ Show weapon, talent and blessing charge state as charge bar around cursor for me
 
 ### [SimpleMovement](mods/SimpleMovement)
 
-Sprint by default, hold sprint to walk. Hold dodge to chain dodges and slide, with auto-vaulting.
+Sprint by default, hold sprint to walk. Hold dodge to chain dodges and dodge-slide, supports sprint-dodge and auto-vault.
 
 ### [SimpleSequencer](mods/SimpleSequencer)
 
