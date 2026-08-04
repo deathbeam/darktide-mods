@@ -7,20 +7,32 @@ local NATIVE_CHARGE_CROSSHAIR_TYPES = {
     charge_up_ads = true,
 }
 local AIM_TIME_PATTERN = 'aim_time'
-local CHARGE_PROGRESS_PATTERNS = {
-    'charge',
-    'windup',
-    'aim_time',
-    'aiming',
-    'staggering_enemies',
-}
-local NON_CHARGE_PROGRESS_PATTERNS = {
-    'continuous_fire',
-    'heat',
-    'overheat',
-    'stamina',
-    'ammo',
-    'clip',
+local PROGRESS_SOURCE_RULES = {
+    {
+        kind = 'blessing',
+        prefix = 'weapon_trait_',
+        patterns = {
+            'charge',
+            'windup',
+            'aim_time',
+            'aiming',
+            'staggering_enemies',
+        },
+        excluded_patterns = {
+            'continuous_fire',
+            'heat',
+            'overheat',
+            'stamina',
+            'ammo',
+            'clip',
+        },
+    },
+    {
+        kind = 'talent',
+        prefix = 'ogryn_',
+        patterns = { 'windup' },
+        excluded_patterns = { '_parent', 'reduces_damage_taken', 'is_uninterruptible' },
+    },
 }
 
 local function _clamp(value, minimum, maximum)
@@ -110,24 +122,36 @@ local function _player_context()
     }
 end
 
-local function _has_charge_trait_name(name)
-    if not name then
+local function _contains_pattern(name, patterns)
+    if not patterns then
         return false
     end
 
-    for _, pattern in ipairs(NON_CHARGE_PROGRESS_PATTERNS) do
-        if string.find(name, pattern, 1, true) then
-            return false
-        end
-    end
-
-    for _, pattern in ipairs(CHARGE_PROGRESS_PATTERNS) do
+    for _, pattern in ipairs(patterns) do
         if string.find(name, pattern, 1, true) then
             return true
         end
     end
 
     return false
+end
+
+local function _source_rule(name)
+    if not name then
+        return nil
+    end
+
+    for _, rule in ipairs(PROGRESS_SOURCE_RULES) do
+        local matches_prefix = not rule.prefix or string.sub(name, 1, #rule.prefix) == rule.prefix
+        local matches_pattern = not rule.patterns or _contains_pattern(name, rule.patterns)
+        local excluded = _contains_pattern(name, rule.excluded_patterns)
+
+        if matches_prefix and matches_pattern and not excluded then
+            return rule
+        end
+    end
+
+    return nil
 end
 
 local function _is_current_item_buff(buff, context)
@@ -203,8 +227,11 @@ local function _step_maximum(buff, template, buff_entries)
     end
 
     local maximum = _call(buff, 'max_stacks')
+
     if type(maximum) == 'number' then
-        return maximum
+        local stack_offset = type(template.stack_offset) == 'number' and template.stack_offset or 0
+
+        return maximum - math.abs(stack_offset)
     end
 
     if template.max_stacks then
@@ -410,14 +437,9 @@ local function _collect_buff_sources(sources, context)
         local template = buff and buff._template
         local name = template and template.name
         local class_name = template and template.class_name
+        local source_rule = _source_rule(name)
 
-        if
-            name
-            and string.sub(name, 1, 13) == 'weapon_trait_'
-            and _has_charge_trait_name(name)
-            and _is_current_item_buff(buff, context)
-            and not seen[name]
-        then
+        if source_rule and _is_current_item_buff(buff, context) and not seen[name] then
             local is_stepped = class_name == 'stepped_stat_buff'
             local is_parent = string.find(class_name or '', 'weapon_trait_', 1, true) == 1
             local has_step_function = template.min_max_step_func or template.bonus_step_func
@@ -444,7 +466,7 @@ local function _collect_buff_sources(sources, context)
                     id = name,
                     order = 10,
                     label = _trait_label(name),
-                    kind = is_aim_time_crit and 'crit' or 'blessing',
+                    kind = is_aim_time_crit and 'crit' or source_rule.kind,
                     value = value,
                     maximum = maximum,
                 })

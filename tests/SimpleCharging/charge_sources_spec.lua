@@ -73,6 +73,36 @@ describe('SimpleCharging ChargeSources', function()
         assert.are.equal(0.6, sources[1].fraction)
     end)
 
+    it('normalizes runtime stack maxima that include stack offsets', function()
+        local mock = DarktideMock.new()
+        local ChargeSources = _load_sources(mock)
+        local buff = {
+            _template = {
+                name = 'weapon_trait_bespoke_power_bonus_based_on_charge_time',
+                class_name = 'weapon_trait_parent_proc_buff',
+                max_stacks = 3,
+                stack_offset = -1,
+            },
+            _template_context = { item_slot_name = 'slot_secondary' },
+            max_stacks = function()
+                return 4
+            end,
+            visual_stack_count = function()
+                return 4
+            end,
+        }
+        local context = {
+            buff_extension = { _buffs = { buff } },
+            wielded_slot = 'slot_secondary',
+        }
+        local sources = ChargeSources.collect(context)
+
+        assert.are.equal(1, #sources)
+        assert.are.equal(3, sources[1].value)
+        assert.are.equal(3, sources[1].maximum)
+        assert.are.equal(1, sources[1].fraction)
+    end)
+
     it('uses the child maximum for charge-time parent buffs', function()
         local mock = DarktideMock.new()
         local ChargeSources = _load_sources(mock)
@@ -355,6 +385,92 @@ describe('SimpleCharging ChargeSources', function()
         assert.are.equal(1, #sources)
         assert.are.equal(3, sources[1].value)
         assert.are.equal(5, sources[1].maximum)
+    end)
+
+    it('shows the Ogryn windup talent as one four-step source', function()
+        local mock = DarktideMock.new()
+        local ChargeSources = _load_sources(mock)
+        local parent = {
+            _template = {
+                name = 'ogryn_windup_increases_power_parent',
+                class_name = 'proc_buff',
+                max_stacks = 1,
+            },
+            _template_context = {},
+            visual_stack_count = function()
+                return 1
+            end,
+        }
+        local child = {
+            _template = {
+                name = 'ogryn_windup_increases_power_child',
+                class_name = 'proc_buff',
+                max_stacks = 4,
+            },
+            _template_context = {},
+            visual_stack_count = function()
+                return 4
+            end,
+        }
+        local context = {
+            buff_extension = { _buffs = { parent } },
+            wielded_slot = 'slot_secondary',
+        }
+        local sources = ChargeSources.collect(context)
+        assert.are.equal(0, #sources)
+
+        context.buff_extension._buffs = { parent, child }
+        sources = ChargeSources.collect(context)
+
+        assert.are.equal(1, #sources)
+        assert.are.equal('ogryn_windup_increases_power_child', sources[1].id)
+        assert.are.equal(4, sources[1].value)
+        assert.are.equal(4, sources[1].maximum)
+        assert.are.equal(1, sources[1].fraction)
+    end)
+
+    it('ignores non-progress windup buffs', function()
+        local mock = DarktideMock.new()
+        local ChargeSources = _load_sources(mock)
+        local buffs = {
+            {
+                _template = {
+                    name = 'ogryn_windup_reduces_damage_taken',
+                    class_name = 'buff',
+                    max_stacks = 1,
+                },
+                visual_stack_count = function()
+                    return 1
+                end,
+            },
+            {
+                _template = {
+                    name = 'ogryn_windup_is_uninterruptible',
+                    class_name = 'buff',
+                    max_stacks = 1,
+                },
+                visual_stack_count = function()
+                    return 1
+                end,
+            },
+            {
+                _template = {
+                    name = 'windup_increases_power_default_parent',
+                    class_name = 'weapon_trait_parent_proc_buff',
+                    max_stacks = 3,
+                },
+                visual_stack_count = function()
+                    return 2
+                end,
+            },
+        }
+        local context = {
+            buff_extension = { _buffs = buffs },
+            wielded_slot = 'slot_secondary',
+        }
+        local sources = ChargeSources.collect(context)
+
+        assert.are.equal(0, #sources)
     end)
 
     it('ignores heat-scaled trait progress', function()
