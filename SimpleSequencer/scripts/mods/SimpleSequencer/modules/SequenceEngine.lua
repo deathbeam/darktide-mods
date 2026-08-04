@@ -207,18 +207,18 @@ function SequenceEngine:_current_action()
     if
         heavy_windup_action
         and (current_action == 'start_attack' or current_action == 'special_start_attack')
-        and WeaponContext.can_chain(action_settings, start_t, 'heavy_attack', self.context.name)
+        and WeaponContext.can_chain(action_settings, start_t, 'heavy_attack', self.context.name, self.context)
     then
         current_action = heavy_windup_action
     end
 
     if action_settings and action_settings.kind == 'sweep' and self.sweep_state == 'after_damage_window' then
-        chain_ready = true
+        chain_ready = WeaponContext.can_chain(action_settings, start_t, 'start_attack', self.context.name, self.context)
     elseif current_action == 'light_attack' or current_action == 'heavy_attack' then
-        chain_ready = WeaponContext.can_chain(action_settings, start_t, 'start_attack')
+        chain_ready = WeaponContext.can_chain(action_settings, start_t, 'start_attack', self.context.name, self.context)
     elseif current_action == 'shoot' then
         local chain_name = action_settings and action_settings.start_input or 'shoot_pressed'
-        chain_ready = WeaponContext.can_chain(action_settings, start_t, chain_name, self.context.name)
+        chain_ready = WeaponContext.can_chain(action_settings, start_t, chain_name, self.context.name, self.context)
     end
 
     return current_action, start_t, chain_ready, action_settings
@@ -384,8 +384,13 @@ function SequenceEngine:_primary_hold_pulse(raw_value, current_action, start_t, 
         return raw_value
     end
 
-    local chain_ready =
-        WeaponContext.can_chain(action_settings, start_t, 'start_attack', self.context and self.context.name)
+    local chain_ready = WeaponContext.can_chain(
+        action_settings,
+        start_t,
+        'start_attack',
+        self.context and self.context.name,
+        self.context
+    )
     if not chain_ready then
         return false
     end

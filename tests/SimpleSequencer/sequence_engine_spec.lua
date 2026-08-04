@@ -153,6 +153,31 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_false(engine.primary_rearm_pending)
     end)
 
+    it('does not end a sweep before its next chain becomes available', function()
+        local engine = mock:load_sequence_engine(new_manager(nil))
+        mock:set_wielded_slot('slot_primary')
+        engine.context = mock:load_weapon_context().read()
+        engine.context_key = 'mode_1:MELEE:test_melee:hip'
+        engine.commands = { 'light_attack', 'idle' }
+        engine.profile = {}
+        engine.sweep_state = 'after_damage_window'
+        mock:set_action('action_light', {
+            kind = 'sweep',
+            allowed_chain_actions = {
+                start_attack = { chain_time = 0.6 },
+            },
+        }, 0)
+        mock.now = 0.3
+
+        local _, _, early_chain_ready = engine:_current_action()
+
+        mock.now = 0.6
+        local _, _, chain_ready = engine:_current_action()
+
+        assert.is_false(early_chain_ready)
+        assert.is_true(chain_ready)
+    end)
+
     it('waits for the weapon chain boundary before pulsing after a push follow-up', function()
         local engine = mock:load_sequence_engine(new_manager(nil))
         mock:set_weapon('slot_primary', 'combatsword_p3_m1', {

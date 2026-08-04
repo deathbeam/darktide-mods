@@ -24,6 +24,14 @@ local CHAIN_TIME_OVERRIDES = {
     },
 }
 
+local INVERTED_TIME_SCALE_KINDS = {
+    overload_charge = true,
+    overload_charge_position_finder = true,
+    overload_charge_target_finder = true,
+    overload_charge_weapon_special = true,
+    overload_target_finder = true,
+}
+
 local SPECIAL_ACTION_INPUTS = {
     'special_action',
     'special_action_hold',
@@ -154,36 +162,107 @@ function WeaponContext.action(context)
     return action_name, start_t, settings
 end
 
-function WeaponContext.can_chain(settings, start_t, chain_name, weapon_name)
-    local allowed_chain_actions = settings and settings.allowed_chain_actions
-    local chain_action = allowed_chain_actions and allowed_chain_actions[chain_name]
+local function _chain_action_at(chain_actions, index)
+    if chain_actions[1] then
+        return chain_actions[index]
+    end
+    return index == 1 and chain_actions or nil
+end
 
-    if not chain_action and chain_name == 'heavy_attack' then
-        chain_action = allowed_chain_actions
+local function _scaled_chain_time(value, time_scale, action_kind)
+    if not value then
+        return nil
+    end
+    if time_scale < 1 and INVERTED_TIME_SCALE_KINDS[action_kind] then
+        return value * time_scale
+    end
+    return value / time_scale
+end
+
+local function _target_action_is_valid(context, chain_action, current_time, time_in_action)
+    local target_name = chain_action.action_name
+    local template = context and context.template
+    local target_settings = target_name and template and template.actions and template.actions[target_name]
+    local condition = target_settings and target_settings.action_condition_func
+    local handler = context and context.extension and context.extension._action_handler
+    local condition_params = handler and handler._action_context
+
+    if not condition or not condition_params then
+        return true
+    end
+
+    local ok, valid = pcall(condition, target_settings, condition_params, nil, current_time, time_in_action)
+    return not ok or valid ~= false
+end
+
+local function _running_action_state(context, current_time, time_in_action)
+    local handler = context and context.extension and context.extension._action_handler
+    local handler_data = handler and handler._registered_components and handler._registered_components.weapon_action
+    local running_action = handler_data and handler_data.running_action
+
+    if not running_action or not running_action.running_action_state then
+        return nil
+    end
+
+    local ok, state = pcall(running_action.running_action_state, running_action, current_time, time_in_action)
+    return ok and state or nil
+end
+
+function WeaponContext.can_chain(settings, start_t, chain_name, weapon_name, context)
+    local allowed_chain_actions = settings and settings.allowed_chain_actions
+    local chain_actions = allowed_chain_actions and allowed_chain_actions[chain_name]
+    local current_kind = settings and settings.kind
+
+    if not chain_actions and chain_name == 'heavy_attack' then
+        chain_actions = allowed_chain_actions
             and (allowed_chain_actions.special_action_heavy or allowed_chain_actions.heavy_attack_special)
     end
 
-    if not chain_action or not start_t or not Managers or not Managers.time then
+    if not chain_actions or not start_t or not Managers or not Managers.time then
         return false
     end
-
-    local chain_time = chain_action.chain_time
-
-    if not chain_time and chain_action[1] then
-        chain_time = chain_action[1].chain_time
-    end
-
-    if not chain_time then
-        return false
-    end
-
-    local weapon_overrides = CHAIN_TIME_OVERRIDES[weapon_name]
-    local action_override = weapon_overrides and weapon_overrides[chain_action.action_name]
-    chain_time = action_override and action_override[chain_time] or chain_time
 
     local current_time = Managers.time:time('gameplay')
+    local time_in_action = current_time and current_time - start_t
+    local action_component = context and context.extension and context.extension._weapon_action_component
+    local time_scale = action_component and action_component.time_scale or 1
 
-    return current_time and current_time - start_t > chain_time
+    if not current_time or not time_in_action or time_scale <= 0 then
+        return false
+    end
+
+    for index = 1, chain_actions[1] and #chain_actions or 1 do
+        local chain_action = _chain_action_at(chain_actions, index)
+        local chain_time = chain_action and chain_action.chain_time
+        local chain_until = chain_action and chain_action.chain_until
+        local weapon_overrides = CHAIN_TIME_OVERRIDES[weapon_name]
+        local action_override = weapon_overrides and chain_action and weapon_overrides[chain_action.action_name]
+
+        chain_time = action_override and action_override[chain_time] or chain_time
+
+        local scaled_chain_time = _scaled_chain_time(chain_time, time_scale, current_kind)
+        local scaled_chain_until = _scaled_chain_time(chain_until, time_scale, current_kind)
+        local chain_ready = not chain_time
+            or scaled_chain_time <= time_in_action
+            or scaled_chain_until and time_in_action <= scaled_chain_until
+
+        local running_action_state_requirement = chain_action and chain_action.running_action_state_requirement
+        local running_action_state = running_action_state_requirement
+            and _running_action_state(context, current_time, time_in_action)
+        local state_ready = not running_action_state_requirement
+            or running_action_state and running_action_state_requirement[running_action_state]
+
+        if
+            chain_action
+            and chain_ready
+            and state_ready
+            and _target_action_is_valid(context, chain_action, current_time, time_in_action)
+        then
+            return true
+        end
+    end
+
+    return false
 end
 
 function WeaponContext.charge_state(context)

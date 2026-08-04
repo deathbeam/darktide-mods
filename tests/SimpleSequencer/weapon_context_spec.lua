@@ -59,18 +59,71 @@ describe('SimpleSequencer WeaponContext', function()
         assert.are.equal(2, charge_start_time)
     end)
 
-    it('detects a ranged action at its chain boundary', function()
+    it('matches game chain timing at the boundary and inside a chain window', function()
         local settings = {
             start_input = 'shoot_pressed',
             allowed_chain_actions = {
                 shoot_pressed = {
                     chain_time = 0.2,
+                    chain_until = 0.4,
                 },
             },
         }
         mock:set_action('action_shoot', settings, 1)
-        mock.now = 1.3
+        local context = WeaponContext.read()
+        context.extension._weapon_action_component.time_scale = 2
+        mock.now = 1.1
+        assert.is_true(WeaponContext.can_chain(settings, 1, 'shoot_pressed', 'test_ranged', context))
+        mock.now = 1.05
+        assert.is_true(WeaponContext.can_chain(settings, 1, 'shoot_pressed', 'test_ranged', context))
+    end)
 
-        assert.is_true(WeaponContext.can_chain(settings, 1, 'shoot_pressed', 'test_ranged'))
+    it('honors running action state requirements from the weapon chain', function()
+        local settings = {
+            allowed_chain_actions = {
+                shoot_pressed = {
+                    chain_time = 0.2,
+                    running_action_state_requirement = { ready = true },
+                },
+            },
+        }
+        mock:set_action('action_shoot', settings, 1)
+        local context = WeaponContext.read()
+        context.extension._action_handler._registered_components.weapon_action.running_action = {
+            running_action_state = function()
+                return 'not_ready'
+            end,
+        }
+        mock.now = 1.3
+        assert.is_false(WeaponContext.can_chain(settings, 1, 'shoot_pressed', 'test_ranged', context))
+
+        context.extension._action_handler._registered_components.weapon_action.running_action.running_action_state = function()
+            return 'ready'
+        end
+        assert.is_true(WeaponContext.can_chain(settings, 1, 'shoot_pressed', 'test_ranged', context))
+    end)
+
+    it('does not report sprint-only chains after sprint or slide ends', function()
+        local settings = {
+            kind = 'windup',
+            allowed_chain_actions = {
+                light_attack = {
+                    action_name = 'action_sprint_light',
+                    chain_time = 0.15,
+                },
+            },
+        }
+        mock:set_action('action_melee_start_slide', settings, 1)
+        local context = WeaponContext.read()
+        context.template.actions.action_sprint_light = {
+            action_condition_func = function(_, condition_func_params)
+                return condition_func_params.movement_state_component.method == 'sliding'
+            end,
+        }
+        context.extension._action_handler._action_context = {
+            movement_state_component = { method = 'walking' },
+        }
+        mock.now = 2
+        assert.is_false(WeaponContext.can_chain(settings, 1, 'light_attack', 'test_ranged', context))
     end)
 end)
