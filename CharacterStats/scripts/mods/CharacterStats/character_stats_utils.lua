@@ -3,6 +3,7 @@ local mod = get_mod('CharacterStats')
 local Stamina = mod:original_require('scripts/utilities/attack/stamina')
 local WeaponTemplate = mod:original_require('scripts/utilities/weapon/weapon_template')
 local BuffSettings = mod:original_require('scripts/settings/buff/buff_settings')
+local PlayerDifficultySettings = mod:original_require('scripts/settings/difficulty/player_difficulty_settings')
 local BuffTemplates = mod:original_require('scripts/settings/buff/buff_templates')
 local WeaponTraitTemplates = mod:original_require('scripts/settings/equipment/weapon_traits/weapon_trait_templates')
 local WeaponHandlingTemplates =
@@ -26,6 +27,12 @@ local EMPTY = {}
 local stat_buff_types = BuffSettings.stat_buff_types
 local stat_buff_type_base = BuffSettings.stat_buff_type_base_values
 local LERP_MIDPOINT = 0.5
+local MAX_PLAYER_CHALLENGE = 5
+local HAVOC_CHALLENGE_BY_RANK = {
+    { max_rank = 10, challenge = 3 },
+    { max_rank = 20, challenge = 4 },
+    { max_rank = 40, challenge = 5 },
+}
 
 local _havoc
 local _related_cache
@@ -56,6 +63,20 @@ local M = {}
 
 local function _ext(unit, system)
     return unit and ScriptUnit.has_extension(unit, system) or nil
+end
+
+-- Use a stable maximum normal challenge for build stats; a configured Havoc rank selects its bracket.
+local function _assumed_challenge(havoc_rank)
+    havoc_rank = tonumber(havoc_rank) or 0
+    if havoc_rank > 0 then
+        for i = 1, #HAVOC_CHALLENGE_BY_RANK do
+            local entry = HAVOC_CHALLENGE_BY_RANK[i]
+            if havoc_rank <= entry.max_rank then
+                return entry.challenge
+            end
+        end
+    end
+    return MAX_PLAYER_CHALLENGE
 end
 
 local function _is_melee(t)
@@ -582,10 +603,25 @@ function M.vitals(unit)
     }
 end
 
+-- Wounds have a difficulty base and additive stat buffs, so resolve the assumed difficulty
+-- and bonuses together.
+function M.compute_max_wounds(folded, base_wounds, archetype, havoc_rank)
+    if type(base_wounds) ~= 'number' then
+        return nil, nil
+    end
+    local challenge = _assumed_challenge(havoc_rank)
+    local settings = PlayerDifficultySettings.archetype_wounds
+    local by_archetype = archetype and settings and settings[archetype.name]
+    local assumed_base = by_archetype and challenge and by_archetype[math.min(challenge, #by_archetype)] or base_wounds
+    local values = folded and folded.values
+    local extra_wounds = values and values.extra_max_amount_of_wounds or 0
+    return math.max(assumed_base + extra_wounds, 1), assumed_base
+end
+
 -- max_health/max_toughness/max_stamina derived from the archetype BASE plus the folded stat
--- buffs. The live extension reads return the base value in contexts where buffs aren't active
--- (e.g. the hub), so deriving from folded gives a consistent value everywhere and lines up
--- with the per-source breakdown.
+-- buffs. The live extension returns the base value where buffs aren't active (e.g. the hub),
+-- so deriving from folded gives a consistent value everywhere and lines up with the per-source
+-- breakdown.
 function M.compute_max_vitals(folded, archetype, toughness_template, stamina_template, weapon_stamina_template)
     local v = folded and folded.values
     local max_health, max_toughness, max_stamina

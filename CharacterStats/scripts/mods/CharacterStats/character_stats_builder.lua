@@ -316,12 +316,14 @@ function build_stats()
     }
     local folded = Utils.folded_stat_buffs(unit, profile, player, toggles)
 
-    -- Derive max_health/max_toughness from base + folded buffs: the live extension reads
-    -- return the base value where curio/talent buffs aren't active (e.g. the hub).
+    -- Derive max vitals from base + folded buffs: the live extension reads the base value where
+    -- curio/talent buffs aren't active (e.g. the hub).
     local folded_max_health, folded_max_toughness =
         Utils.compute_max_vitals(folded, vitals.archetype, vitals.toughness_template)
     local max_health = folded_max_health or vitals.max_health
     vitals.max_toughness = folded_max_toughness or vitals.max_toughness
+    local max_wounds, base_max_wounds =
+        Utils.compute_max_wounds(folded, vitals.max_wounds, vitals.archetype, toggles.havoc_rank)
 
     -- BIO: field type header with the chosen option as subtext, then the description text.
     local bio = Utils.character_bio(profile)
@@ -352,8 +354,10 @@ function build_stats()
         _sources(records, folded, 'max_health_modifier', 'add')
         _sources(records, folded, 'max_health_multiplier', 'add')
     end
-    if vitals.max_wounds then
-        _stat(records, mod:localize('stat_wounds'), SharedUtils.fmt_num(vitals.max_wounds), COLORS.VITAL)
+    if max_wounds then
+        _stat(records, mod:localize('stat_wounds'), SharedUtils.fmt_num(max_wounds), COLORS.VITAL)
+        _base_source(records, mod:localize('source_base'), base_max_wounds, 'flat')
+        _sources(records, folded, 'extra_max_amount_of_wounds', 'flat')
     end
     if vitals.max_toughness then
         _stat(records, mod:localize('stat_toughness'), SharedUtils.fmt_num(vitals.max_toughness), COLORS.VITAL)
