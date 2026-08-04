@@ -2,13 +2,12 @@ local mod = get_mod('SimpleSequencer')
 local Profiles = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceProfiles')
 local WeaponContext = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/WeaponContext')
 local ActionClassifier = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ActionClassifier')
+local SequenceEngine = class('SimpleSequencerSequenceEngine')
 
 local HEAVY_WINDUP_COMMANDS = {
     heavy_attack = 'heavy_attack',
     special_heavy_execute = 'special_heavy_execute',
 }
-
-local SequenceEngine = class('SimpleSequencerSequenceEngine')
 
 local PRIMARY_HOLD_COMMANDS = {
     start_attack = true,
@@ -16,6 +15,14 @@ local PRIMARY_HOLD_COMMANDS = {
     heavy_attack = true,
     shoot = true,
     push_follow_up = true,
+}
+
+local EXTRA_COMMANDS = {
+    special_start_attack = true,
+    special_light_attack = true,
+    special_heavy_execute = true,
+    special_action = true,
+    special_invert = true,
 }
 
 local PRIMARY_HOLD_PULSE = 'pulse'
@@ -60,14 +67,6 @@ local CURRENT_ACTION_HOLD_OVERRIDES = {
     charge = {
         shoot = false,
     },
-}
-
-local EXTRA_COMMANDS = {
-    special_start_attack = true,
-    special_light_attack = true,
-    special_heavy_execute = true,
-    special_action = true,
-    special_invert = true,
 }
 
 local INPUT_INTERRUPTS = {
