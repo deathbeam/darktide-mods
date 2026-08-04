@@ -5,14 +5,19 @@ local ActionAvailability = require('scripts/extension_systems/weapon/utilities/a
 local ActionHandlerSettings = require('scripts/settings/action/action_handler_settings')
 local Sprint = require('scripts/extension_systems/character_state_machine/character_states/utilities/sprint')
 
+local DODGE_SLIDE_DISTANCE_THRESHOLD = 0.3
+
+local ALLOWED_INPUTS_IN_SPRINT = {
+    combat_ability = true,
+    wield = true,
+}
+
 local CLASS = CLASS
 local Managers = Managers
 local Vector3 = Vector3
+local ScriptUnit = ScriptUnit
 
 local movement_components = {}
-local player_buff_extension
-local player_weapon_extension
-local player_action_input_extension
 
 local hold_to_crouch = true
 local diagonal_forward_dodge = true
@@ -39,13 +44,14 @@ local attempt_sprint_slide = false
 local attempt_sprint = false
 local attempt_sprint_dodge = false
 
-local ALLOWED_INPUTS_IN_SPRINT = {
-    combat_ability = true,
-    wield = true,
-}
+local function _local_player_unit()
+    local player_manager = Managers and Managers.player
+    local player = player_manager and player_manager:local_player_safe(1)
+    return player and player.player_unit
+end
 
-local function _is_local_player(player)
-    return player and player.viewport_name == 'player1'
+local function _is_local_unit(unit_data_extension)
+    return unit_data_extension and unit_data_extension.is_local_unit and unit_data_extension:is_local_unit() or false
 end
 
 local function _reset_state()
@@ -78,6 +84,10 @@ local function _init_movement_components(unit_data_extension)
     movement_components.character_state = unit_data_extension:read_component('character_state')
 end
 
+local function _clear_movement_components()
+    movement_components = {}
+end
+
 local function _init_game_settings()
     local save_manager = Managers.save
     local account_data = save_manager and save_manager:account_data()
@@ -91,6 +101,17 @@ local function _init_game_settings()
     diagonal_forward_dodge = input_settings.diagonal_forward_dodge
     stationary_dodge = input_settings.stationary_dodge
     always_dodge = input_settings.always_dodge
+end
+
+local function _refresh_movement_components()
+    local unit = _local_player_unit()
+    local unit_data_extension = unit and ScriptUnit.has_extension(unit, 'unit_data_system')
+    if not _is_local_unit(unit_data_extension) then
+        _clear_movement_components()
+        return
+    end
+
+    _init_movement_components(unit_data_extension)
 end
 
 local function _enable_hold_to_sprint()
@@ -119,7 +140,7 @@ local function _restore_hold_to_sprint()
     local account_data = save_manager and save_manager:account_data()
     local input_settings = account_data and account_data.input_settings
 
-    if input_settings then
+    if input_settings and input_settings.hold_to_sprint == true then
         input_settings.hold_to_sprint = original_hold_to_sprint
     end
 
@@ -153,18 +174,14 @@ local function _is_dodge_direction()
     local move = Vector3(move_right - move_left, move_forward - move_backward, 0)
 
     if move.x == 0 and move.y == 0 then
-        return always_dodge
+        return stationary_dodge or always_dodge
     end
 
     local normalized_move = Vector3.normalize(move)
     local x = normalized_move.x
     local y = normalized_move.y
 
-    return y < 0
-        or y == 0 and x ~= 0
-        or diagonal_forward_dodge and y > 0 and math.abs(x) > 0.707
-        or stationary_dodge and y == 0 and x == 0
-        or always_dodge
+    return y < 0 or y == 0 and x ~= 0 or diagonal_forward_dodge and y > 0 and math.abs(x) > 0.707 or always_dodge
 end
 
 local function _can_jump()
@@ -176,26 +193,37 @@ local function _can_jump()
 end
 
 local function _can_sprint_with_next_action()
-    if not player_buff_extension or not player_weapon_extension or not player_action_input_extension then
+    local player_unit = _local_player_unit()
+    local buff_extension = player_unit and ScriptUnit.has_extension(player_unit, 'buff_system')
+    local weapon_extension = player_unit and ScriptUnit.has_extension(player_unit, 'weapon_system')
+    local action_input_extension = player_unit and ScriptUnit.has_extension(player_unit, 'action_input_system')
+    if not buff_extension or not weapon_extension or not action_input_extension then
         return true
     end
 
-    local weapon_action_input = player_action_input_extension:peek_next_input('weapon_action')
+    local weapon_action_input = action_input_extension:peek_next_input('weapon_action')
     if not weapon_action_input then
         return true
     end
 
-    local action_settings = player_weapon_extension:action_settings_from_action_input(weapon_action_input)
+    local action_settings = weapon_extension:action_settings_from_action_input(weapon_action_input)
     if not action_settings then
         return true
     end
 
     local allowed_during_sprint, buff_allows_action =
-        ActionAvailability.available_in_sprint(action_settings, player_buff_extension)
+        ActionAvailability.available_in_sprint(action_settings, buff_extension)
     local requires_press_to_interrupt = Sprint.requires_press_to_interrupt(action_settings)
     local no_interruption_for_sprint = Sprint.no_interruption_for_sprint(action_settings)
+    local weapon_template = weapon_extension:weapon_template()
+    local allowed_inputs = weapon_template and weapon_template.allowed_inputs_in_sprint or ALLOWED_INPUTS_IN_SPRINT
+    local allowed_input = allowed_inputs[weapon_action_input]
 
-    return buff_allows_action or allowed_during_sprint or requires_press_to_interrupt or no_interruption_for_sprint
+    return buff_allows_action
+        or allowed_during_sprint
+        or allowed_input
+        or requires_press_to_interrupt
+        or no_interruption_for_sprint
 end
 
 local abort_sprint_by_kind = {}
@@ -228,19 +256,22 @@ local function _can_hold_dodge_slide()
     local distance_left = dodge_state.distance_left
     local gameplay_time = Managers.time:time('gameplay')
 
-    return gameplay_time - start_time >= 0.2 or distance_left <= 0.24
+    return gameplay_time - start_time >= 0.2 or distance_left <= DODGE_SLIDE_DISTANCE_THRESHOLD
 end
 
 local function _can_keep_dodging()
     local dodge_state = movement_components.dodge_character_state
+    local player_unit = _local_player_unit()
+    local weapon_extension = player_unit and ScriptUnit.has_extension(player_unit, 'weapon_system')
+    local buff_extension = player_unit and ScriptUnit.has_extension(player_unit, 'buff_system')
 
-    if not dodge_state or not player_weapon_extension or not player_buff_extension then
+    if not dodge_state or not weapon_extension or not buff_extension then
         return true
     end
 
-    local dodge_template = player_weapon_extension:dodge_template()
+    local dodge_template = weapon_extension:dodge_template()
     local diminishing_return_start = dodge_template and dodge_template.diminishing_return_start or 2
-    local extra_dodges = math.round(player_buff_extension:stat_buffs().extra_consecutive_dodges or 0)
+    local extra_dodges = math.round(buff_extension:stat_buffs().extra_consecutive_dodges or 0)
     local consecutive_dodges = dodge_state.consecutive_dodges
 
     if Managers.time:time('gameplay') > dodge_state.consecutive_dodges_cooldown then
@@ -391,7 +422,7 @@ end
 -- State transitions reset input intent so a held key cannot leak between states.
 mod:hook_safe(CLASS.CharacterStateMachine, '_change_state', function(self, unit, dt, t, next_state)
     local unit_data_extension = self._unit_data_extension
-    if not mod_enabled or not _is_local_player(unit_data_extension and unit_data_extension._player) then
+    if not mod_enabled or not _is_local_unit(unit_data_extension) then
         return
     end
 
@@ -402,7 +433,7 @@ end)
 
 mod:hook_safe(CLASS.CharacterStateMachine, 'server_correction_occurred', function(self, unit)
     local unit_data_extension = self._unit_data_extension
-    if not mod_enabled or not _is_local_player(unit_data_extension and unit_data_extension._player) then
+    if not mod_enabled or not _is_local_unit(unit_data_extension) then
         return
     end
 
@@ -418,7 +449,7 @@ mod:hook_safe(
     CLASS.PlayerCharacterStateSliding,
     '_check_transition',
     function(self, unit, dt, t, next_state_params, input_source, commit_period_over, max_mass_hit, current_speed)
-        if mod_enabled and _is_local_player(self._player) then
+        if mod_enabled and _is_local_unit(self._unit_data_extension) then
             sliding_speed = current_speed
         end
     end
@@ -429,7 +460,7 @@ mod:hook_safe(
     'start_action',
     function(self, id, action_objects, action_name, action_params, action_settings)
         local unit_data_extension = self._unit_data_extension
-        if not mod_enabled or not _is_local_player(unit_data_extension and unit_data_extension._player) then
+        if not mod_enabled or not _is_local_unit(unit_data_extension) then
             return
         end
 
@@ -446,7 +477,8 @@ mod:hook_safe(
 
         local registered_component = self._registered_components and self._registered_components[id]
         local running_action = registered_component and registered_component.running_action
-        local weapon_template = running_action and running_action._weapon_template
+        local current_weapon_template = self._weapon_extension and self._weapon_extension:weapon_template()
+        local weapon_template = current_weapon_template or running_action and running_action._weapon_template
         local allowed_inputs = weapon_template and weapon_template.allowed_inputs_in_sprint or ALLOWED_INPUTS_IN_SPRINT
         local start_input = action_settings and action_settings.start_input
         local is_allowed_input = allowed_inputs[start_input]
@@ -459,7 +491,7 @@ mod:hook_safe(
 
 mod:hook_safe(CLASS.ActionHandler, 'server_correction_occurred', function(self, id)
     local unit_data_extension = self._unit_data_extension
-    if not mod_enabled or not _is_local_player(unit_data_extension and unit_data_extension._player) then
+    if not mod_enabled or not _is_local_unit(unit_data_extension) then
         return
     end
 
@@ -472,7 +504,7 @@ end)
 
 mod:hook_safe(CLASS.ActionHandler, '_finish_action', function(self, handler_data)
     local unit_data_extension = self._unit_data_extension
-    if mod_enabled and _is_local_player(unit_data_extension and unit_data_extension._player) then
+    if mod_enabled and _is_local_unit(unit_data_extension) then
         is_action_blocking_sprint = false
     end
 end)
@@ -491,62 +523,24 @@ mod:hook_require('scripts/settings/input/default_ingame_input_settings', functio
     }
 end)
 
-mod:hook_safe(CLASS.PlayerUnitBuffExtension, 'init', function(self)
-    if _is_local_player(self._player) then
-        player_buff_extension = self
-    end
-end)
-
-mod:hook_safe(CLASS.PlayerUnitBuffExtension, 'delete', function(self)
-    if _is_local_player(self._player) then
-        player_buff_extension = nil
-    end
-end)
-
-mod:hook_safe(CLASS.PlayerUnitWeaponExtension, 'init', function(self)
-    if _is_local_player(self._player) then
-        player_weapon_extension = self
-    end
-end)
-
-mod:hook_safe(CLASS.PlayerUnitWeaponExtension, 'delete', function(self)
-    if _is_local_player(self._player) then
-        player_weapon_extension = nil
-    end
-end)
-
-mod:hook_safe(CLASS.PlayerUnitActionInputExtension, 'init', function(self, _, unit)
-    local player_manager = Managers and Managers.player
-    local player = player_manager and player_manager:local_player_safe(1)
-
-    if player and player.player_unit == unit then
-        player_action_input_extension = self
-    end
-end)
-
-mod:hook_safe(CLASS.PlayerUnitActionInputExtension, 'delete', function(self)
-    if self == player_action_input_extension then
-        player_action_input_extension = nil
-    end
-end)
-
 mod:hook_safe(CLASS.PlayerUnitDataExtension, 'init', function(self)
-    if _is_local_player(self._player) then
+    if _is_local_unit(self) then
         _init_movement_components(self)
     end
 end)
 
 mod:hook_safe(CLASS.PlayerUnitDataExtension, 'destroy', function(self)
-    if _is_local_player(self._player) then
-        movement_components = {}
+    if _is_local_unit(self) then
+        _clear_movement_components()
+        _reset_state()
     end
 end)
 
 mod:hook(CLASS.InputService, '_get', _input_service_hook)
-mod:hook(CLASS.InputService, '_get_simulate', _input_service_hook)
 
 mod.on_enabled = function()
     mod_enabled = true
+    _refresh_movement_components()
     _init_game_settings()
     _enable_hold_to_sprint()
 end
@@ -554,10 +548,12 @@ end
 mod.on_disabled = function()
     mod_enabled = false
     _restore_hold_to_sprint()
+    _clear_movement_components()
     _reset_state()
 end
 
 mod.on_all_mods_loaded = function()
+    _refresh_movement_components()
     _init_game_settings()
     _enable_hold_to_sprint()
 end
@@ -568,9 +564,11 @@ mod.on_game_state_changed = function(status, state_name)
     end
 
     if status == 'enter' then
+        _refresh_movement_components()
         _init_game_settings()
         _enable_hold_to_sprint()
     elseif status == 'exit' then
+        _clear_movement_components()
         _reset_state()
     end
 end
