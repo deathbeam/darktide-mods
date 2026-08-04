@@ -13,7 +13,7 @@ Automatically uses blitzes, crates and stimms when equipped to reduce button pre
 
 Show weapon, talent and blessing charge state as charge bar around cursor for melee and ranged weapons (Plasma/Pinpointing/Surgical/Thrust etc).
 
-### [SimpleMovement](mods/SimpleMovement)
+### [SimpleMovement](https://www.nexusmods.com/warhammer40kdarktide/mods/1146)
 
 Sprint by default, hold sprint to walk. Hold dodge to chain dodges and dodge-slide, supports sprint-dodge and auto-vault.
 
