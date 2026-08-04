@@ -12,6 +12,10 @@ local SLOT_POCKETABLE = 'slot_pocketable'
 local SLOT_POCKETABLE_SMALL = 'slot_pocketable_small'
 local SLOT_GRENADE = 'slot_grenade_ability'
 
+local SETTING_AUTO_USE_CRATE = 'auto_use_crate'
+local SETTING_AUTO_USE_STIMM = 'auto_use_stimm'
+local SETTING_AUTO_USE_BLITZ = 'auto_use_blitz'
+
 local current_stage = ACTION_STAGES.NONE
 local target_slot
 local stage_start_time = 0
@@ -84,6 +88,18 @@ local function _is_auto_throw_eligible(weapon_template)
     return false
 end
 
+local function _auto_use_enabled(setting_id)
+    return mod:get(setting_id) ~= false
+end
+
+local function _auto_use_pocketable_enabled(slot_name)
+    if slot_name == SLOT_POCKETABLE then
+        return _auto_use_enabled(SETTING_AUTO_USE_CRATE)
+    end
+
+    return _auto_use_enabled(SETTING_AUTO_USE_STIMM)
+end
+
 mod.update = function()
     local game_mode_manager = Managers and Managers.state and Managers.state.game_mode
     local game_mode_name = game_mode_manager and game_mode_manager:game_mode_name()
@@ -130,7 +146,8 @@ mod:hook(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(func, self
         local weapon_template = _grenade_template()
 
         if
-            slot_name == SLOT_GRENADE
+            _auto_use_enabled(SETTING_AUTO_USE_BLITZ)
+            and slot_name == SLOT_GRENADE
             and not _is_quick_throw_grenade(weapon_template)
             and _is_auto_throw_eligible(weapon_template)
         then
@@ -139,7 +156,8 @@ mod:hook(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(func, self
         end
 
         if
-            (slot_name == SLOT_POCKETABLE or slot_name == SLOT_POCKETABLE_SMALL)
+            _auto_use_pocketable_enabled(slot_name)
+            and (slot_name == SLOT_POCKETABLE or slot_name == SLOT_POCKETABLE_SMALL)
             and current_stage == ACTION_STAGES.NONE
         then
             switch_to_waiting = true

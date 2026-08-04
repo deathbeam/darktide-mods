@@ -5,7 +5,7 @@ local localizations = {
         en = ' {#color(80,200,255)}Simple{#reset()} Sequencer',
     },
     mod_description = {
-        en = 'Select a sequence mode with keys, then hold primary to execute it.',
+        en = 'Attack sequencer, similar to Skitarius but works on active modes and switching between modes, always requires holding primary or secondary attack for executing sequences.',
     },
     global_melee = {
         en = 'All Melee Weapons',

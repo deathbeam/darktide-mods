@@ -3,6 +3,6 @@ return {
         en = ' {#color(80,200,255)}Simple{#reset()} Charging',
     },
     mod_description = {
-        en = 'Shows weapon charge and hidden weapon-trait progress around the crosshair.',
+        en = 'Show weapon, talent and blessing charge state as charge bar around cursor for melee and ranged weapons (Plasma/Pinpointing/Surgical/Thrust etc).',
     },
 }

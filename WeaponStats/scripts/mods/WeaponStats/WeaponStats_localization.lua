@@ -48,7 +48,7 @@ return {
         en = ' Weapon {#color(255,191,0)}Stats{#reset()}',
     },
     mod_description = {
-        en = 'Shows detailed weapon damage profiles, attack speed, crit, cleave, armor damage and more in the inventory.',
+        en = 'In-game weapon stats inspector showing damage breakdowns, multipliers, cleave, and armor modifiers for any weapon.',
     },
 
     -- Config

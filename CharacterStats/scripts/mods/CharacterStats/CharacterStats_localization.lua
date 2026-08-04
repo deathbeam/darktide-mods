@@ -53,7 +53,7 @@ return {
         ['zh-cn'] = '角色属性',
     },
     mod_description = {
-        en = 'Shows derived character stats computed from talents, perks, blessings, curios, and active buffs.',
+        en = 'In-game character stats browser showing derived health, wounds, toughness, coherency regeneration, damage dealt/taken, mobility, crit, rending etc.',
         ['zh-cn'] = '显示由天赋、特性、祝福、饰品与激活增益计算的衍生属性。',
     },
 

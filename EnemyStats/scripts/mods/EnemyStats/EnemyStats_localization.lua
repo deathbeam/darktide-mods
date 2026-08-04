@@ -43,7 +43,7 @@ return {
         ['zh-cn'] = '敌人数据统计',
     },
     mod_description = {
-        en = 'Shows enemy health, hit mass, armor and weakspots across all difficulties and havoc ranks.',
+        en = 'In-game enemy stats browser showing health, hit zones, armor, weakspots, size class, and difficulty scaling for every enemy breed.',
         ['zh-cn'] = '显示所有难度和浩劫等级下敌人的生命值、命中质量、护甲类型与弱点信息。',
     },
 
