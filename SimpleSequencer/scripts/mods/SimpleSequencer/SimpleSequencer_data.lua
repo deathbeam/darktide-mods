@@ -423,6 +423,14 @@ return {
                 tab = mod:localize('general_settings'),
                 sub_widgets = {
                     {
+                        setting_id = 'reset_on_interrupt',
+                        type = 'checkbox',
+                        default_value = true,
+                    },
+                    _keybind('select_mode_previous', 'select_mode_previous'),
+                    _keybind('select_mode_next', 'select_mode_next'),
+                    _keybind('select_mode_toggle', 'select_mode_toggle'),
+                    {
                         setting_id = 'hud_display_mode',
                         type = 'dropdown',
                         default_value = 'icon_and_name',
@@ -433,14 +441,6 @@ return {
                             { text = 'hud_display_icon_and_name', value = 'icon_and_name' },
                         },
                     },
-                    {
-                        setting_id = 'reset_on_interrupt',
-                        type = 'checkbox',
-                        default_value = true,
-                    },
-                    _keybind('select_mode_previous', 'select_mode_previous'),
-                    _keybind('select_mode_next', 'select_mode_next'),
-                    _keybind('select_mode_toggle', 'select_mode_toggle'),
                     {
                         setting_id = 'hud_position_x',
                         type = 'numeric',
