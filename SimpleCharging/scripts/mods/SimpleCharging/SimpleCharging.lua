@@ -122,7 +122,7 @@ local function _attach_bars(element)
     local definitions = element._crosshair_widget_definitions
 
     if not definitions then
-        return false
+        return
     end
 
     for _, definition in pairs(definitions) do
@@ -137,10 +137,16 @@ local function _attach_bars(element)
         end
     end
 
-    element._simple_charging_injected = true
     current_element = element
+end
 
-    return true
+local function _needs_bar_injection(element)
+    local crosshair_type = element and element._crosshair_type
+    local definitions = element and element._crosshair_widget_definitions
+    local definition = definitions and crosshair_type and definitions[crosshair_type]
+    local styles = definition and definition.style
+
+    return definition and not (styles and styles[INJECTED_MARKER])
 end
 
 local function _set_bar_visible(style, ids, visible)
@@ -261,10 +267,9 @@ mod:hook_require('scripts/ui/hud/elements/crosshair/hud_element_crosshair', func
     end)
 
     mod:hook_safe(element_class, 'update', function(self)
-        if not self._simple_charging_injected then
+        if _needs_bar_injection(self) then
             _attach_bars(self)
             _discard_widget(self)
-
             return
         end
 
