@@ -1,5 +1,7 @@
 local WeaponContext = {}
 
+-- The calibration data below is adapted from Skitarius (GPL-3.0-only).
+-- See SimpleSequencer/NOTICE and SimpleSequencer/LICENSE.
 local CHAIN_TIME_OVERRIDES = {
     ogryn_powermaul_slabshield_p1_m1 = {
         action_right_heavy = { [0.35] = 0.5, [0.4] = 0.45 },

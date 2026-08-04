@@ -19,11 +19,11 @@ describe('SimpleSequencer SequenceProfiles', function()
         }
 
         Profiles.ensure(data)
-        local commands, cycle_index, repeating = Profiles.build(data.mode_1.MELEE.global_melee, 'MELEE')
+        local plan = Profiles.compile(data.mode_1.MELEE.global_melee, 'MELEE')
 
-        assert.same({ 'start_attack', 'light_attack', 'idle' }, commands)
-        assert.are.equal(1, cycle_index)
-        assert.is_true(repeating)
+        assert.same({ 'start_attack', 'light_attack', 'idle' }, plan.commands)
+        assert.are.equal(1, plan.cycle_index)
+        assert.is_true(plan.repeating)
     end)
 
     it('leaves a no-repeat melee profile without a cycle point', function()
@@ -32,11 +32,11 @@ describe('SimpleSequencer SequenceProfiles', function()
             sequence_step_1 = 'light_attack',
         }
 
-        local commands, cycle_index, repeating = Profiles.build(profile, 'MELEE')
+        local plan = Profiles.compile(profile, 'MELEE')
 
-        assert.same({ 'start_attack', 'light_attack', 'idle' }, commands)
-        assert.are.equal(0, cycle_index)
-        assert.is_false(repeating)
+        assert.same({ 'start_attack', 'light_attack', 'idle' }, plan.commands)
+        assert.are.equal(0, plan.cycle_index)
+        assert.is_false(plan.repeating)
     end)
 
     it('fills missing profile settings without replacing existing values', function()

@@ -31,7 +31,7 @@ describe('SimpleSequencer SequenceEngine', function()
         local engine = mock:load_sequence_engine(new_manager(nil))
 
         engine.index = 4
-        engine.commands = { 'shoot' }
+        engine.plan.commands = { 'shoot' }
         engine.completed = true
         engine.primary_down = true
         engine.secondary_down = true
@@ -137,7 +137,7 @@ describe('SimpleSequencer SequenceEngine', function()
         local context = mock:load_weapon_context().read()
         engine.context = context
         engine.context_key = 'mode_1:RANGED:test_ranged:hip'
-        engine.commands = { 'quick_wield', 'shoot' }
+        engine.plan.commands = { 'quick_wield', 'shoot' }
         engine.index = 1
         engine.profile = profile
         engine.primary_down = true
@@ -158,7 +158,7 @@ describe('SimpleSequencer SequenceEngine', function()
         mock:set_wielded_slot('slot_primary')
         engine.context = mock:load_weapon_context().read()
         engine.context_key = 'mode_1:MELEE:test_melee:hip'
-        engine.commands = { 'light_attack', 'idle' }
+        engine.plan.commands = { 'light_attack', 'idle' }
         engine.profile = {}
         engine.sweep_state = 'after_damage_window'
         mock:set_action('action_light', {
@@ -186,10 +186,10 @@ describe('SimpleSequencer SequenceEngine', function()
         mock:set_wielded_slot('slot_primary')
         engine.context = mock:load_weapon_context().read()
         engine.context_key = 'mode_1:MELEE:combatsword_p3_m1:hip'
-        engine.commands = { 'start_attack', 'light_attack', 'idle' }
+        engine.plan.commands = { 'start_attack', 'light_attack', 'idle' }
         engine.index = 1
-        engine.cycle_index = 1
-        engine.repeating = true
+        engine.plan.cycle_index = 1
+        engine.plan.repeating = true
         engine.profile = {}
         engine.primary_down = true
         engine.secondary_down = true
@@ -232,10 +232,10 @@ describe('SimpleSequencer SequenceEngine', function()
         local engine = mock:load_sequence_engine(new_manager(nil))
         engine.context = mock:load_weapon_context().read()
         engine.context_key = 'mode_1:MELEE:test_melee:hip'
-        engine.commands = { 'start_attack', 'light_attack', 'idle' }
+        engine.plan.commands = { 'start_attack', 'light_attack', 'idle' }
         engine.index = 1
-        engine.cycle_index = 1
-        engine.repeating = true
+        engine.plan.cycle_index = 1
+        engine.plan.repeating = true
         engine.profile = {}
         engine.primary_down = true
         engine.secondary_down = false
@@ -259,10 +259,10 @@ describe('SimpleSequencer SequenceEngine', function()
         local engine = mock:load_sequence_engine(new_manager(nil))
         engine.context = mock:load_weapon_context().read()
         engine.context_key = 'mode_1:RANGED:test_ranged:hip'
-        engine.commands = { 'shoot', 'idle' }
+        engine.plan.commands = { 'shoot', 'idle' }
         engine.index = 1
-        engine.cycle_index = 1
-        engine.repeating = true
+        engine.plan.cycle_index = 1
+        engine.plan.repeating = true
         engine.profile = { rate_of_fire_hip = 0 }
 
         local current_action, start_t, chain_ready = engine:_current_action()
@@ -282,10 +282,10 @@ describe('SimpleSequencer SequenceEngine', function()
         local engine = mock:load_sequence_engine(new_manager(profile))
         engine.context = mock:load_weapon_context().read()
         engine.context_key = 'mode_1:RANGED:test_ranged:hip'
-        engine.commands = { 'shoot', 'idle' }
+        engine.plan.commands = { 'shoot', 'idle' }
         engine.index = 1
-        engine.cycle_index = 1
-        engine.repeating = true
+        engine.plan.cycle_index = 1
+        engine.plan.repeating = true
         engine.profile = profile
 
         mock:set_action('action_charge_direct', { kind = 'overload_charge' }, 0)
@@ -310,9 +310,9 @@ describe('SimpleSequencer SequenceEngine', function()
         local manager = new_manager(nil)
         local engine = mock:load_sequence_engine(manager)
 
-        engine.commands = { 'light_attack' }
+        engine.plan.commands = { 'light_attack' }
         engine.index = 1
-        engine.repeating = false
+        engine.plan.repeating = false
         engine:_advance()
 
         assert.is_true(engine.completed)

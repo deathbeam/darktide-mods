@@ -101,13 +101,19 @@ local function _action_token(action, start_t)
     return action .. ':' .. tostring(start_t or 0)
 end
 
+local function _empty_plan()
+    return {
+        commands = {},
+        cycle_index = 0,
+        repeating = false,
+    }
+end
+
 function SequenceEngine:init(mod, mode_manager)
     self.mod = mod
     self.mode_manager = mode_manager
     self.index = 1
-    self.commands = {}
-    self.cycle_index = 0
-    self.repeating = false
+    self.plan = _empty_plan()
     self.completed = false
     self.context = nil
     self.context_key = nil
@@ -142,7 +148,7 @@ function SequenceEngine:is_safe_to_switch_mode()
 end
 
 function SequenceEngine:_command()
-    return self.index and self.commands[self.index]
+    return self.index and self.plan.commands[self.index]
 end
 
 function SequenceEngine:reset()
@@ -175,13 +181,12 @@ function SequenceEngine:_refresh_context()
 
     self.context_key = key
     self.context = context
-    self.commands, self.cycle_index, self.repeating = {}, 0, false
+    self.plan = _empty_plan()
 
     local profile = context.kind ~= 'none' and self.mode_manager:profile(context.kind, context.name)
 
     if profile then
-        self.commands, self.cycle_index, self.repeating =
-            Profiles.build(profile, context.kind, self.ranged_mode, WeaponContext.has_special(context))
+        self.plan = Profiles.compile(profile, context.kind, self.ranged_mode, WeaponContext.has_special(context))
         self.profile = profile
         self.automatic_fire = context.kind == 'RANGED'
                 and (self.ranged_mode == 'ads' and profile.automatic_fire_ads or profile.automatic_fire_hip)
@@ -244,9 +249,9 @@ function SequenceEngine:_advance()
         self.previous_command = completed_command
     end
 
-    if self.index >= #self.commands then
-        if self.cycle_index > 0 or self.repeating then
-            self.index = self.cycle_index > 0 and self.cycle_index or 1
+    if self.index >= #self.plan.commands then
+        if self.plan.cycle_index > 0 or self.plan.repeating then
+            self.index = self.plan.cycle_index > 0 and self.plan.cycle_index or 1
             self.completed = false
         else
             self.index = nil
@@ -306,7 +311,7 @@ function SequenceEngine:_maybe_advance(current_action, start_t, chain_ready, act
 end
 
 function SequenceEngine:_restore_after_no_repeat()
-    if not self.completed or self.repeating or self.no_repeat_restored then
+    if not self.completed or self.plan.repeating or self.no_repeat_restored then
         return false
     end
 

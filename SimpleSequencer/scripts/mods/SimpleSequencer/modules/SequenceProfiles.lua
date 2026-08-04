@@ -2,8 +2,8 @@ local mod = get_mod('SimpleSequencer')
 local ProfileSchema = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ProfileSchema')
 local Profiles = {}
 
--- Profile commands expand into the action states observed by the weapon system.
-local COMMAND_STEPS = {
+-- The phase mappings are adapted from Skitarius (GPL-3.0-only). See SimpleSequencer/NOTICE and SimpleSequencer/LICENSE.
+local ACTION_PLANS = {
     light_attack = { 'start_attack', 'light_attack', 'idle' },
     heavy_attack = { 'start_attack', 'heavy_attack', 'idle' },
     special_action = { 'special_action', 'idle' },
@@ -99,19 +99,29 @@ function Profiles.get(data, mode, kind, weapon_name)
     return kind_data[global_key], global_key
 end
 
-local function _append_expansion(queue, action)
-    local expansion = COMMAND_STEPS[action]
+local function _append_plan(queue, action)
+    local phases = ACTION_PLANS[action]
 
-    if expansion then
-        for i = 1, #expansion do
-            queue[#queue + 1] = expansion[i]
-        end
+    if not phases then
+        return
+    end
+
+    for i = 1, #phases do
+        queue[#queue + 1] = phases[i]
     end
 end
 
-function Profiles.build(profile, kind, ranged_mode, has_special)
+local function _new_plan(commands, cycle_index, repeating)
+    return {
+        commands = commands,
+        cycle_index = cycle_index,
+        repeating = repeating,
+    }
+end
+
+function Profiles.compile(profile, kind, ranged_mode, has_special)
     if not profile then
-        return {}, 0, false
+        return _new_plan({}, 0, false)
     end
 
     local queue = {}
@@ -132,7 +142,7 @@ function Profiles.build(profile, kind, ranged_mode, has_special)
             local action = profile[ProfileSchema.sequence_step_prefix .. i]
 
             if action and action ~= 'none' then
-                _append_expansion(queue, action)
+                _append_plan(queue, action)
             end
         end
     else
@@ -143,21 +153,20 @@ function Profiles.build(profile, kind, ranged_mode, has_special)
         end
 
         if not fire_mode or fire_mode == 'none' then
-            return queue, cycle_index, repeating
+            return _new_plan(queue, cycle_index, repeating)
         end
-
         if fire_mode == 'special' and not has_special then
             fire_mode = 'special_standard'
         elseif fire_mode == 'special_charged' and not has_special then
             fire_mode = 'special_standard'
         end
 
-        _append_expansion(queue, fire_mode)
+        _append_plan(queue, fire_mode)
         cycle_index = 1
         repeating = true
     end
 
-    return queue, cycle_index, repeating
+    return _new_plan(queue, cycle_index, repeating)
 end
 
 return Profiles

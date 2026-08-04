@@ -1,0 +1,13 @@
+SimpleSequencer
+Copyright (C) 2026 Tomas Slusny
+
+SimpleSequencer includes adapted chain-timing calibration data from Skitarius.
+Adapted elements also include the command-to-action sequence expansions and related profile settings.
+
+Skitarius
+Copyright (C) catbirds
+Licensed under the GNU General Public License, version 3.
+Source: https://github.com/CATBIRDS/Skitarius
+
+The SimpleSequencer mod is distributed under the GNU General Public License,
+version 3. See LICENSE for the complete license text.
