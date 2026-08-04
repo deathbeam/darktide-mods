@@ -15,12 +15,12 @@ Show weapon charge and hidden weapon-trait progress around the crosshair.
 
 ### [SimpleMovement](mods/SimpleMovement)
 
-Sprint by default, hold sprint to walk
+Sprint by default, hold sprint to walk. Hold dodge to dodge slide.
 
 ### [SimpleSequencer](mods/SimpleSequencer)
 
 Attack sequencer, similar to Skitarius but works on active modes and switching between modes, always requires holding primary or
-secondary attack for executing sequences.
+secondary attack for executing sequences, always requires holding primary or secondary attack for executing sequences.
 
 ## Stat Mods
 Various stat related mods, with unified interface.
