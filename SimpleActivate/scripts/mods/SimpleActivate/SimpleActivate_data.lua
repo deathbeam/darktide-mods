@@ -1,4 +1,4 @@
-local mod = get_mod('SimpleUse')
+local mod = get_mod('SimpleActivate')
 
 return {
     name = mod:localize('mod_name'),

@@ -5,7 +5,7 @@ Darktide mods made by me
 ## Simple Mods
 Just some nice quick mods that I needed/wanted and was not happy with existing mods and how they worked.
 
-### [SimpleUse](mods/SimpleUse)
+### [SimpleActivate](SimpleActivate)
 
 Automatically uses blitzes and stimms when equipped. Combination of various mods but works better together and uses same logic.
 
