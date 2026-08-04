@@ -40,10 +40,9 @@ local DISPLAY_KEY_SET = {
     color_g = true,
     color_b = true,
 }
-local DISPLAY_SETTING_PREFIX = 'mode_display_'
 
 local function _display_setting_key(mode, key)
-    return mode .. '_' .. key
+    return mode .. '_display_' .. key
 end
 
 local function _display_value(value, default_value)
@@ -246,38 +245,15 @@ function ModeManager:_sync_kind(kind)
     end
 end
 
-function ModeManager:_sync_display()
-    local values = _display_settings(self.mod, self.editing_mode)
-
-    for _, key in ipairs(DISPLAY_KEYS) do
-        self.mod:set(DISPLAY_SETTING_PREFIX .. key, values[key], false)
-    end
-end
-
 function ModeManager:sync_settings()
     self:_sync_kind('MELEE')
     self:_sync_kind('RANGED')
-    self:_sync_display()
 end
 
 function ModeManager:_on_display_setting_changed(setting_name)
-    if string.sub(setting_name, 1, #DISPLAY_SETTING_PREFIX) ~= DISPLAY_SETTING_PREFIX then
-        return false
-    end
+    local mode, key = string.match(setting_name or '', '^(mode_[1-4])_display_(.+)$')
 
-    local key = string.sub(setting_name, #DISPLAY_SETTING_PREFIX + 1)
-
-    if not DISPLAY_KEY_SET[key] then
-        return false
-    end
-
-    local value = _display_value(self.mod:get(setting_name), nil)
-
-    if value ~= nil then
-        self.mod:set(_display_setting_key(self.editing_mode, key), value, false)
-    end
-
-    return true
+    return mode ~= nil and DISPLAY_KEY_SET[key] == true
 end
 
 function ModeManager:on_setting_changed(setting_name)

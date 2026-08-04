@@ -9,6 +9,25 @@ local SPECIAL_DISPLAY_NAMES = {
     psyker_chain_lightning = 'loc_ability_psyker_chain_lightning',
 }
 
+local MODE_DISPLAY_DEFAULTS = {
+    mode_1 = {
+        icon = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_uprising',
+        color = { 255, 190, 80 },
+    },
+    mode_2 = {
+        icon = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
+        color = { 100, 190, 255 },
+    },
+    mode_3 = {
+        icon = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_heresy',
+        color = { 255, 110, 110 },
+    },
+    mode_4 = {
+        icon = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_damnation',
+        color = { 190, 140, 255 },
+    },
+}
+
 local ICON_OPTIONS = {
     {
         text = 'Skull: Uprising',
@@ -221,9 +240,10 @@ local function _clone_options(options)
     return result
 end
 
-local function _keybind(setting_id, function_name)
+local function _keybind(setting_id, function_name, title)
     return {
         setting_id = setting_id,
+        title = title,
         type = 'keybind',
         default_value = {},
         keybind_trigger = 'pressed',
@@ -232,44 +252,67 @@ local function _keybind(setting_id, function_name)
     }
 end
 
-local mode_display_widgets = {
-    {
-        setting_id = 'mode_display_name',
-        type = 'text_input',
-        default_value = {},
-        -- DMF currently validates text inputs through its keybind path.
-        keybind_trigger = 'pressed',
-        keybind_type = 'function_call',
-        function_name = '_simple_sequencer_text_input',
-    },
-    {
-        setting_id = 'mode_display_icon',
-        type = 'dropdown',
-        default_value = ICON_OPTIONS[1].value,
-        options = _clone_options(ICON_OPTIONS),
-    },
-    {
-        setting_id = 'mode_display_color_r',
-        type = 'numeric',
-        default_value = 255,
-        range = { 0, 255 },
-        decimals_number = 0,
-    },
-    {
-        setting_id = 'mode_display_color_g',
-        type = 'numeric',
-        default_value = 190,
-        range = { 0, 255 },
-        decimals_number = 0,
-    },
-    {
-        setting_id = 'mode_display_color_b',
-        type = 'numeric',
-        default_value = 80,
-        range = { 0, 255 },
-        decimals_number = 0,
-    },
-}
+local function _mode_display_widgets(mode)
+    local defaults = MODE_DISPLAY_DEFAULTS[mode] or MODE_DISPLAY_DEFAULTS.mode_1
+    return {
+        {
+            setting_id = mode .. '_display_name',
+            title = 'mode_display_name',
+            type = 'text_input',
+            default_value = {},
+            -- DMF currently validates text inputs through its keybind path.
+            keybind_trigger = 'pressed',
+            keybind_type = 'function_call',
+            function_name = '_simple_sequencer_text_input',
+        },
+        {
+            setting_id = mode .. '_display_icon',
+            title = 'mode_display_icon',
+            type = 'dropdown',
+            default_value = defaults.icon,
+            options = _clone_options(ICON_OPTIONS),
+        },
+        {
+            setting_id = mode .. '_display_color_r',
+            title = 'mode_display_color_r',
+            type = 'numeric',
+            default_value = defaults.color[1],
+            range = { 0, 255 },
+            decimals_number = 0,
+        },
+        {
+            setting_id = mode .. '_display_color_g',
+            title = 'mode_display_color_g',
+            type = 'numeric',
+            default_value = defaults.color[2],
+            range = { 0, 255 },
+            decimals_number = 0,
+        },
+        {
+            setting_id = mode .. '_display_color_b',
+            title = 'mode_display_color_b',
+            type = 'numeric',
+            default_value = defaults.color[3],
+            range = { 0, 255 },
+            decimals_number = 0,
+        },
+    }
+end
+
+local function _mode_settings(mode, index)
+    local widgets = { _keybind(mode .. '_select', 'select_mode_' .. index, 'select_mode') }
+
+    for _, widget in ipairs(_mode_display_widgets(mode)) do
+        widgets[#widgets + 1] = widget
+    end
+
+    return {
+        setting_id = mode .. '_settings',
+        type = 'group',
+        title = mode,
+        sub_widgets = widgets,
+    }
+end
 
 local MELEE_OPTIONS = {
     { text = 'none', value = 'none' },
@@ -366,20 +409,6 @@ local ranged_widgets = {
         range = { 0, 100 },
         decimals_number = 0,
     },
-    {
-        setting_id = RANGED_PREFIX .. 'rate_of_fire_hip',
-        type = 'numeric',
-        default_value = ProfileSchema.defaults.RANGED.rate_of_fire_hip,
-        range = { 0, 800 },
-        decimals_number = 0,
-    },
-    {
-        setting_id = RANGED_PREFIX .. 'rate_of_fire_ads',
-        type = 'numeric',
-        default_value = ProfileSchema.defaults.RANGED.rate_of_fire_ads,
-        range = { 0, 800 },
-        decimals_number = 0,
-    },
 }
 
 return {
@@ -444,15 +473,10 @@ return {
                             { text = 'mode_4', value = 'mode_4' },
                         },
                     },
-                    _keybind('mode_1_select', 'select_mode_1'),
-                    _keybind('mode_2_select', 'select_mode_2'),
-                    _keybind('mode_3_select', 'select_mode_3'),
-                    _keybind('mode_4_select', 'select_mode_4'),
-                    {
-                        setting_id = 'mode_display_settings',
-                        type = 'group',
-                        sub_widgets = mode_display_widgets,
-                    },
+                    _mode_settings('mode_1', 1),
+                    _mode_settings('mode_2', 2),
+                    _mode_settings('mode_3', 3),
+                    _mode_settings('mode_4', 4),
                 },
             },
             {

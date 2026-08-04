@@ -83,16 +83,6 @@ local PRESERVE_PRIMARY_HOLD_ACTIONS = {
     vent_overheat = true,
 }
 
-local function _time()
-    local time_manager = Managers and Managers.time
-
-    if time_manager and time_manager.time then
-        return time_manager:time('gameplay')
-    end
-
-    return os.clock()
-end
-
 local function _action_token(action, start_t)
     if action == 'idle' then
         return 'idle'
@@ -125,7 +115,6 @@ function SequenceEngine:init(mod, mode_manager)
     self.last_action_token = nil
     self.previous_command = nil
     self.idle_match_index = nil
-    self.last_fire_time = 0
     self.fire_token = nil
     self.sweep_state = nil
     self.no_repeat_restored = false
@@ -161,7 +150,6 @@ function SequenceEngine:reset()
     self.last_action_token = nil
     self.previous_command = nil
     self.idle_match_index = nil
-    self.last_fire_time = 0
     self.fire_token = nil
     self.sweep_state = nil
     self.no_repeat_restored = false
@@ -347,17 +335,8 @@ function SequenceEngine:_should_reset_for_interrupt(action_name, value, command)
     return not self:_required(command, action_name)
 end
 
-function SequenceEngine:_fire_delay()
-    local value = self.ranged_mode == 'ads' and self.profile and self.profile.rate_of_fire_ads
-        or self.profile and self.profile.rate_of_fire_hip
-    local configured = (value or 0) / 1000
-
-    return math.max(configured, 0.05)
-end
-
 function SequenceEngine:_fire_pulse(current_action, raw_value, chain_ready)
     if raw_value then
-        self.last_fire_time = _time()
         self.fire_token = self.index
 
         return true
@@ -371,14 +350,6 @@ function SequenceEngine:_fire_pulse(current_action, raw_value, chain_ready)
     if (current_action ~= 'idle' and not can_fire_after_charge) or self.fire_token == self.index then
         return false
     end
-
-    local now = _time()
-
-    if now - self.last_fire_time < self:_fire_delay() then
-        return false
-    end
-
-    self.last_fire_time = now
     self.fire_token = self.index
 
     return true

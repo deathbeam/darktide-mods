@@ -16,8 +16,6 @@ local PROFILE_SCHEMA = {
             automatic_fire_hip = 'none',
             automatic_fire_ads = 'none',
             auto_charge_threshold = 100,
-            rate_of_fire_hip = 0,
-            rate_of_fire_ads = 0,
         },
     },
 }

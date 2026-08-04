@@ -58,11 +58,8 @@ local localizations = {
     ranged_auto_charge_threshold = {
         en = 'Charge Threshold %%',
     },
-    ranged_rate_of_fire_hip = {
-        en = 'Minimum Hipfire Attack Delay (ms)',
-    },
-    ranged_rate_of_fire_ads = {
-        en = 'Minimum ADS Attack Delay (ms)',
+    select_mode = {
+        en = 'Activate Mode',
     },
     select_mode_previous = {
         en = 'Previous Mode',
@@ -78,9 +75,6 @@ local localizations = {
     },
     hud_position_y = {
         en = 'HUD Vertical Offset',
-    },
-    mode_display_settings = {
-        en = 'Mode Display',
     },
     general_settings = {
         en = 'General',

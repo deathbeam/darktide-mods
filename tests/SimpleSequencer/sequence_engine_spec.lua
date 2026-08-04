@@ -40,7 +40,6 @@ describe('SimpleSequencer SequenceEngine', function()
         engine.last_action_token = 'shoot:1'
         engine.previous_command = 'charge'
         engine.idle_match_index = 2
-        engine.last_fire_time = 10
         engine.fire_token = 4
         engine.sweep_state = 'after_damage_window'
         engine.no_repeat_restored = true
@@ -56,7 +55,6 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_nil(engine.last_action_token)
         assert.is_nil(engine.previous_command)
         assert.is_nil(engine.idle_match_index)
-        assert.are.equal(0, engine.last_fire_time)
         assert.is_nil(engine.fire_token)
         assert.is_nil(engine.sweep_state)
         assert.is_false(engine.no_repeat_restored)
@@ -263,7 +261,6 @@ describe('SimpleSequencer SequenceEngine', function()
         engine.index = 1
         engine.plan.cycle_index = 1
         engine.plan.repeating = true
-        engine.profile = { rate_of_fire_hip = 0 }
 
         local current_action, start_t, chain_ready = engine:_current_action()
         assert.are.equal('shoot', current_action)
@@ -278,7 +275,7 @@ describe('SimpleSequencer SequenceEngine', function()
     end)
 
     it('preserves a held primary through automatic vent recovery', function()
-        local profile = { rate_of_fire_hip = 0 }
+        local profile = {}
         local engine = mock:load_sequence_engine(new_manager(profile))
         engine.context = mock:load_weapon_context().read()
         engine.context_key = 'mode_1:RANGED:test_ranged:hip'

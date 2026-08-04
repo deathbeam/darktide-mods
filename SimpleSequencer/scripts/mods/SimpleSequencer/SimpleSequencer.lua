@@ -51,31 +51,6 @@ local function _reset_for_disruptive_state(_, unit)
     end
 end
 
-local function _refresh_mode_display_name_input(view)
-    if view.view_name ~= 'dmf_options_view' or not view._settings_category_widgets then
-        return
-    end
-
-    for _, rows in pairs(view._settings_category_widgets) do
-        for _, row in ipairs(rows) do
-            local widget = row.widget
-            local entry = widget and widget.content and widget.content.entry
-
-            if entry and entry.setting_id == 'mode_display_name' and not widget.content.is_writing then
-                local value = mod:get('mode_display_name')
-
-                if type(value) == 'table' then
-                    value = value[1] or ''
-                end
-
-                widget.content.input_text = value or ''
-            end
-        end
-    end
-end
-
-mod:hook_safe(CLASS.BaseView, 'update', _refresh_mode_display_name_input)
-
 function mod.ready()
     return initialized and enabled
 end
