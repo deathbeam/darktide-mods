@@ -13,6 +13,12 @@ return {
                 default_value = true,
             },
             {
+                setting_id = 'walk_while_melee_attacking',
+                type = 'checkbox',
+                tooltip = 'walk_while_melee_attacking_description',
+                default_value = false,
+            },
+            {
                 setting_id = 'repeat_dodge',
                 type = 'checkbox',
                 tooltip = 'repeat_dodge_description',

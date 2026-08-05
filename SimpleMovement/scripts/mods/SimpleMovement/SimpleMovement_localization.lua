@@ -13,6 +13,13 @@ return {
         en = 'Automatically sprint while moving; hold Sprint to walk. Disabling this leaves normal sprint controls unchanged.',
     },
 
+    walk_while_melee_attacking = {
+        en = 'Walk While Melee Attacking',
+    },
+    walk_while_melee_attacking_description = {
+        en = 'Prevents sprinting during melee attack windups and swings to conserve stamina.',
+    },
+
     repeat_dodge = {
         en = 'Repeat Dodges While Held',
     },

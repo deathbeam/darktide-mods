@@ -7,6 +7,12 @@ local Sprint = require('scripts/extension_systems/character_state_machine/charac
 
 local DODGE_SLIDE_DISTANCE_THRESHOLD = 0.3
 
+local MELEE_ATTACK_ACTION_KINDS = {
+    melee_explosive = true,
+    sweep = true,
+    windup = true,
+}
+
 local ALLOWED_INPUTS_IN_SPRINT = {
     combat_ability = true,
     wield = true,
@@ -28,6 +34,7 @@ local repeat_dodge = true
 local dodge_slide = true
 local sprint_dodge = true
 local auto_vault = true
+local walk_while_melee_attacking = false
 local original_hold_to_sprint
 
 local mod_enabled = false
@@ -103,6 +110,7 @@ local function _init_mod_settings()
     dodge_slide = mod:get('dodge_slide') ~= false
     sprint_dodge = mod:get('sprint_dodge') ~= false
     auto_vault = mod:get('auto_vault') ~= false
+    walk_while_melee_attacking = mod:get('walk_while_melee_attacking') == true
 end
 
 local function _init_game_settings()
@@ -313,13 +321,23 @@ local function _input_service_hook(func, self, action_name)
         return result
     end
 
-    if action_name == 'sprint' and sprint_by_default then
-        if result then
-            sprint_press = current_state_name ~= 'sprinting'
-            is_action_blocking_sprint = false
+    if action_name == 'sprint' then
+        if walk_while_melee_attacking and is_action_blocking_sprint then
+            return false
+        end
+
+        if sprint_by_default then
+            if result then
+                sprint_press = current_state_name ~= 'sprinting'
+                is_action_blocking_sprint = false
+            end
         end
     elseif action_name == 'sprinting' then
         if attempt_sprint_dodge then
+            return false
+        end
+
+        if walk_while_melee_attacking and is_action_blocking_sprint then
             return false
         end
 
@@ -495,12 +513,40 @@ mod:hook_safe(
     end
 )
 
+mod:hook(CLASS.PlayerCharacterStateSprinting, '_check_transition', function(func, self, ...)
+    local next_state = func(self, ...)
+    if
+        walk_while_melee_attacking
+        and is_action_blocking_sprint
+        and _is_local_unit(self._unit_data_extension)
+        and not next_state
+    then
+        return 'walking'
+    end
+
+    return next_state
+end)
+
+mod:hook_safe(CLASS.ActionSweep, '_exit_damage_window', function(self)
+    if mod_enabled and walk_while_melee_attacking and self._is_local_unit then
+        is_action_blocking_sprint = false
+    end
+end)
+
 mod:hook_safe(
     CLASS.ActionHandler,
     'start_action',
     function(self, id, action_objects, action_name, action_params, action_settings)
         local unit_data_extension = self._unit_data_extension
-        if not mod_enabled or not sprint_by_default or not _is_local_unit(unit_data_extension) then
+        if not mod_enabled or not _is_local_unit(unit_data_extension) then
+            return
+        end
+
+        if walk_while_melee_attacking and MELEE_ATTACK_ACTION_KINDS[action_settings and action_settings.kind] then
+            is_action_blocking_sprint = true
+        end
+
+        if not sprint_by_default then
             return
         end
 
@@ -531,7 +577,7 @@ mod:hook_safe(
 
 mod:hook_safe(CLASS.ActionHandler, 'server_correction_occurred', function(self, id)
     local unit_data_extension = self._unit_data_extension
-    if not mod_enabled or not sprint_by_default or not _is_local_unit(unit_data_extension) then
+    if not mod_enabled or not _is_local_unit(unit_data_extension) then
         return
     end
 
@@ -544,7 +590,7 @@ end)
 
 mod:hook_safe(CLASS.ActionHandler, '_finish_action', function(self, handler_data)
     local unit_data_extension = self._unit_data_extension
-    if mod_enabled and sprint_by_default and _is_local_unit(unit_data_extension) then
+    if mod_enabled and _is_local_unit(unit_data_extension) then
         is_action_blocking_sprint = false
     end
 end)
