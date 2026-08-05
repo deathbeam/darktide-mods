@@ -123,6 +123,29 @@ describe('SimpleSequencer ActionSemantics', function()
         assert.same({ 'special_light_attack', 'idle' }, plan.commands)
     end)
 
+    it('supports weapon-special toggles such as flashlights', function()
+        local template = _template({
+            action_toggle_flashlight = {
+                kind = 'toggle_special',
+                start_input = 'weapon_special',
+            },
+        })
+        template.action_input_hierarchy = {
+            { input = 'weapon_special', transition = 'stay' },
+        }
+        local plan = _plan(template, 'special')
+
+        assert.same({ 'special_action', 'idle' }, plan.commands)
+        assert.are.equal(
+            'special_action',
+            ActionSemantics.classify_current(
+                'action_toggle_flashlight',
+                { kind = 'toggle_special', start_input = 'weapon_special' },
+                'special_action'
+            )
+        )
+    end)
+
     it('plans charged projectile inputs from their runtime hierarchy', function()
         local template = _template({
             action_charge = {
@@ -146,6 +169,31 @@ describe('SimpleSequencer ActionSemantics', function()
         local plan = _plan(template, 'charged')
 
         assert.same({ 'charge', 'shoot', 'idle' }, plan.commands)
+    end)
+
+    it('plans force-staff charged explosions as primary shots', function()
+        local template = _template({
+            action_charge = {
+                kind = 'overload_charge_position_finder',
+                start_input = 'charge',
+            },
+            action_trigger_explosion = {
+                kind = 'trigger_explosion',
+                start_input = 'trigger_explosion',
+                use_charge = true,
+            },
+        })
+        template.action_input_hierarchy = {
+            {
+                input = 'charge',
+                transition = {
+                    { input = 'trigger_explosion', transition = 'base' },
+                },
+            },
+        }
+
+        assert.same({ 'charge', 'shoot', 'idle' }, _plan(template, 'standard').commands)
+        assert.same({ 'charge', 'shoot', 'idle' }, _plan(template, 'charged').commands)
     end)
 
     it('plans nonstandard charged roots from runtime metadata', function()
@@ -178,11 +226,17 @@ describe('SimpleSequencer ActionSemantics', function()
         assert.same({ 'shoot', 'idle' }, plan.commands)
     end)
 
-    it('falls back to a standard special when no charged variant exists', function()
+    it('falls back to a generic special when no charged variant exists', function()
         local template = _template()
         table.remove(template.action_input_hierarchy, 3)
 
         local plan = _plan(template, 'special_charged')
+
+        assert.same({ 'special_action', 'idle' }, plan.commands)
+    end)
+
+    it('keeps explicit standard specials firing after the special action', function()
+        local plan = _plan(_template(), 'special_standard')
 
         assert.same({ 'special_action', 'shoot', 'idle' }, plan.commands)
     end)
@@ -251,6 +305,13 @@ describe('SimpleSequencer ActionSemantics', function()
         }, 'special_heavy_execute')
 
         assert.are.equal('special_heavy_execute', action)
+    end)
+
+    it('classifies force-staff trigger explosions as shots', function()
+        local action =
+            ActionSemantics.classify_current('action_trigger_explosion', { kind = 'trigger_explosion' }, 'shoot')
+
+        assert.are.equal('shoot', action)
     end)
 
     it('uses the expected command to classify sweep actions', function()

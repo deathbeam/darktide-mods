@@ -200,6 +200,31 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_true(chain_ready)
     end)
 
+    it('uses the push chain boundary before the push action ends', function()
+        local engine = mock:load_sequence_engine(new_manager(nil))
+        mock:set_wielded_slot('slot_primary')
+        engine.context = mock:load_weapon_context().read()
+        engine.context_key = 'mode_1:MELEE:test_melee:hip'
+        engine.plan.commands = { 'push', 'idle', 'start_attack' }
+        engine.index = 2
+        engine.previous_command = 'push'
+        engine.profile = {}
+        mock:set_action('action_push', {
+            kind = 'push',
+            allowed_chain_actions = {
+                start_attack = { chain_time = 0.3 },
+            },
+        }, 0)
+        mock.now = 0.3
+
+        local current_action, _, chain_ready = engine:_current_action()
+        engine:_maybe_advance(current_action, 0, chain_ready)
+
+        assert.are.equal('push', current_action)
+        assert.is_true(chain_ready)
+        assert.are.equal('start_attack', engine:_command())
+    end)
+
     it('waits for the weapon chain boundary before pulsing after a push follow-up', function()
         local engine = mock:load_sequence_engine(new_manager(nil))
         mock:set_weapon('slot_primary', 'combatsword_p3_m1', {

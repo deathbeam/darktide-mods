@@ -156,6 +156,14 @@ function SequenceEngine:_current_action()
         chain_ready = WeaponContext.can_chain(action_settings, start_t, 'start_attack', self.context.name, self.context)
     elseif current_action == 'light_attack' or current_action == 'heavy_attack' then
         chain_ready = WeaponContext.can_chain(action_settings, start_t, 'start_attack', self.context.name, self.context)
+    elseif current_action == 'push' and command == 'idle' then
+        -- Push actions expose the next chain before their nominal action end.
+        local next_command = self.plan.commands[self.index + 1]
+
+        if next_command then
+            chain_ready =
+                WeaponContext.can_chain(action_settings, start_t, next_command, self.context.name, self.context)
+        end
     elseif current_action == 'shoot' then
         local chain_name = action_settings and action_settings.start_input or 'shoot_pressed'
         chain_ready = WeaponContext.can_chain(action_settings, start_t, chain_name, self.context.name, self.context)

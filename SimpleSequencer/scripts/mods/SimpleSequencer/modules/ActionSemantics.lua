@@ -16,6 +16,8 @@ local INPUT_STATE_ALIASES = {
     charge_heavy = 'charge',
     charge_power = 'charge',
     special_action = 'special_action',
+    weapon_special = 'special_action',
+    zoom_weapon_special = 'special_action',
     special_action_hold = 'special_start_attack',
     special_action_light = 'special_light_attack',
     special_action_heavy = 'special_heavy_execute',
@@ -26,17 +28,26 @@ local INPUT_STATE_ALIASES = {
     shoot_charged = 'shoot',
     shoot_charge = 'charge',
     shoot_light_pressed = 'shoot',
+    trigger_explosion = 'shoot',
 }
 
 local COMMAND_TARGETS = {
     light_attack = { 'light_attack' },
     heavy_attack = { 'heavy_attack' },
-    special_action = { 'special_action' },
+    special_action = { 'special_action', 'weapon_special', 'zoom_weapon_special' },
     block = { 'block' },
     push = { 'push' },
     push_attack = { 'push_follow_up' },
     wield = { 'wield' },
-    standard = { 'shoot_pressed', 'shoot', 'shoot_hold', 'shoot_light_pressed', 'shoot_charge', 'shoot_heavy_hold' },
+    standard = {
+        'shoot_pressed',
+        'shoot',
+        'shoot_hold',
+        'shoot_light_pressed',
+        'shoot_charge',
+        'shoot_heavy_hold',
+        'trigger_explosion',
+    },
     charged = {
         'charge_heavy',
         'charge_power',
@@ -46,10 +57,11 @@ local COMMAND_TARGETS = {
         'shoot_pressed',
         'shoot',
         'shoot_hold',
+        'trigger_explosion',
     },
     special = { 'special_action_light', 'special_action_pistol_whip', 'special_action_push' },
     special_charged = { 'special_action_heavy', 'special_action_execute' },
-    special_standard = { 'special_action' },
+    special_standard = { 'special_action', 'weapon_special', 'zoom_weapon_special' },
 }
 
 local NO_IDLE_COMMANDS = {
@@ -222,6 +234,8 @@ function ActionSemantics.classify_current(action_name, action_settings, expected
         return 'special_heavy_execute'
     elseif start_input == 'special_action' then
         return 'special_action'
+    elseif start_input == 'weapon_special' or start_input == 'zoom_weapon_special' then
+        return 'special_action'
     elseif start_input == 'start_attack' then
         return 'start_attack'
     elseif kind == 'charge_ammo' then
@@ -231,7 +245,7 @@ function ActionSemantics.classify_current(action_name, action_settings, expected
     elseif start_input == 'charge' then
         return 'charge'
     elseif kind == 'trigger_explosion' then
-        return 'special_heavy_execute'
+        return 'shoot'
     end
 
     if
@@ -478,7 +492,7 @@ local function _expand_command(template, command)
     local path = _find_path(template, candidates)
 
     if not path and (command == 'special' or command == 'special_charged') then
-        return _expand_command(template, 'special_standard')
+        return _expand_command(template, 'special_action')
     end
 
     if not path then
