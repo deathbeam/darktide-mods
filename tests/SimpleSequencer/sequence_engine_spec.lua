@@ -60,6 +60,17 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_false(engine.no_repeat_restored)
     end)
 
+    it('reports active only while a primary-driven plan is running', function()
+        local engine = mock:load_sequence_engine(new_manager(nil))
+        engine.profile = {}
+        engine.plan.commands = { 'light_attack' }
+        engine.primary_down = true
+        assert.is_true(engine:is_active())
+
+        engine.completed = true
+        assert.is_false(engine:is_active())
+    end)
+
     it('classifies charge-ammo actions using their metadata', function()
         mock:set_action('action_charge', {
             kind = 'charge_ammo',

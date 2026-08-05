@@ -65,6 +65,10 @@ function SequenceEngine:is_in_action()
     return action_name ~= 'idle'
 end
 
+function SequenceEngine:is_active()
+    return self.primary_down and not self.completed and self.profile ~= nil and self:_command() ~= nil
+end
+
 function SequenceEngine:is_safe_to_switch_mode()
     local current_action, _, chain_ready = self:_current_action()
 
