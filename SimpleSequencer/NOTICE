@@ -1,8 +1,13 @@
 SimpleSequencer
 Copyright (C) 2026 Tomas Slusny
 
-SimpleSequencer includes adapted chain-timing calibration data from Skitarius.
-Adapted elements also include the command-to-action sequence expansions and related profile settings.
+SimpleSequencer is a separate implementation with adapted portions from Skitarius.
+Adapted portions include:
+- command-to-action phase expansions and sequence-cycle behavior from
+  scripts/mods/Skitarius/modules/SkitariusEngram.lua;
+- related sequence/profile settings from scripts/mods/Skitarius/Skitarius_data.lua;
+- chain-timing calibration data from scripts/mods/Skitarius/modules/SkitariusArmoury.lua;
+These portions were modified for SimpleSequencer in 2026.
 
 Skitarius
 Copyright (C) catbirds

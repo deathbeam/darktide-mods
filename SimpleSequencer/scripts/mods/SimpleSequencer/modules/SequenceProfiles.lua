@@ -2,7 +2,8 @@ local mod = get_mod('SimpleSequencer')
 local ProfileSchema = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ProfileSchema')
 local Profiles = {}
 
--- The phase mappings are adapted from Skitarius (GPL-3.0-only). See SimpleSequencer/NOTICE and SimpleSequencer/LICENSE.
+-- The phase mappings are adapted from Skitarius (GPL-3.0-only).
+-- See SimpleSequencer/NOTICE and SimpleSequencer/LICENSE.
 local ACTION_PLANS = {
     light_attack = { 'start_attack', 'light_attack', 'idle' },
     heavy_attack = { 'start_attack', 'heavy_attack', 'idle' },

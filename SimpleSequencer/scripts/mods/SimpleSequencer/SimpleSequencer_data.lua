@@ -4,6 +4,9 @@ local UiSettings = require('scripts/settings/ui/ui_settings')
 local WeaponTemplates = require('scripts/settings/equipment/weapon_templates/weapon_templates')
 local ProfileSchema = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ProfileSchema')
 
+-- Sequence and profile option semantics are adapted from Skitarius (GPL-3.0-only).
+-- See SimpleSequencer/NOTICE and SimpleSequencer/LICENSE.
+
 local SPECIAL_DISPLAY_NAMES = {
     psyker_throwing_knives = 'loc_ability_psyker_blitz_throwing_knives',
     psyker_chain_lightning = 'loc_ability_psyker_chain_lightning',
