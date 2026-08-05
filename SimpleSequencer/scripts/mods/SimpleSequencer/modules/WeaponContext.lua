@@ -34,13 +34,6 @@ local INVERTED_TIME_SCALE_KINDS = {
     overload_target_finder = true,
 }
 
-local SPECIAL_ACTION_INPUTS = {
-    'special_action',
-    'special_action_hold',
-    'special_action_light',
-    'special_action_heavy',
-}
-
 function WeaponContext.read()
     local player_manager = Managers and Managers.player
     local player = player_manager and player_manager:local_player_safe(1)
@@ -93,19 +86,6 @@ function WeaponContext.read()
         name = name or 'none',
         kind = kind or 'none',
     }
-end
-
-function WeaponContext.has_special(context)
-    context = context or WeaponContext.read()
-    local action_inputs = context.template and context.template.action_inputs
-
-    for _, input_name in ipairs(SPECIAL_ACTION_INPUTS) do
-        if action_inputs and action_inputs[input_name] ~= nil then
-            return true
-        end
-    end
-
-    return false
 end
 
 function WeaponContext.equipped(kind)

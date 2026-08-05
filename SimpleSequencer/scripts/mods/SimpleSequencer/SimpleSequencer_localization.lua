@@ -115,12 +115,6 @@ local localizations = {
     special_action = {
         en = 'Special Action',
     },
-    special_heavy = {
-        en = 'Special Heavy',
-    },
-    special_invert = {
-        en = 'Special Invert',
-    },
     block = {
         en = 'Block',
     },

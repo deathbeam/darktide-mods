@@ -3,8 +3,6 @@ Copyright (C) 2026 Tomas Slusny
 
 SimpleSequencer is a separate implementation with adapted portions from Skitarius.
 Adapted portions include:
-- command-to-action phase expansions and sequence-cycle behavior from
-  scripts/mods/Skitarius/modules/SkitariusEngram.lua;
 - related sequence/profile settings from scripts/mods/Skitarius/Skitarius_data.lua;
 - chain-timing calibration data from scripts/mods/Skitarius/modules/SkitariusArmoury.lua;
 These portions were modified for SimpleSequencer in 2026.

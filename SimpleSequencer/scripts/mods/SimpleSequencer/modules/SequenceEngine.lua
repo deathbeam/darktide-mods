@@ -1,73 +1,8 @@
 local mod = get_mod('SimpleSequencer')
 local Profiles = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceProfiles')
 local WeaponContext = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/WeaponContext')
-local ActionClassifier = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ActionClassifier')
+local ActionSemantics = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ActionSemantics')
 local SequenceEngine = class('SimpleSequencerSequenceEngine')
-
-local HEAVY_WINDUP_COMMANDS = {
-    heavy_attack = 'heavy_attack',
-    special_heavy_execute = 'special_heavy_execute',
-}
-
-local PRIMARY_HOLD_COMMANDS = {
-    start_attack = true,
-    light_attack = true,
-    heavy_attack = true,
-    shoot = true,
-    push_follow_up = true,
-}
-
-local EXTRA_COMMANDS = {
-    special_start_attack = true,
-    special_light_attack = true,
-    special_heavy_execute = true,
-    special_action = true,
-    special_invert = true,
-}
-
-local PRIMARY_HOLD_PULSE = 'pulse'
-
-local CURRENT_ACTION_HOLD_OVERRIDES = {
-    start_attack = {
-        light_attack = false,
-        shoot = false,
-    },
-    light_attack = {
-        idle = false,
-        light_attack = false,
-    },
-    heavy_attack = {
-        idle = false,
-        light_attack = false,
-    },
-    push = {
-        start_attack = PRIMARY_HOLD_PULSE,
-        light_attack = false,
-        heavy_attack = false,
-        push = true,
-        push_follow_up = true,
-    },
-    push_follow_up = {
-        start_attack = PRIMARY_HOLD_PULSE,
-        block = true,
-        push = true,
-        push_follow_up = true,
-    },
-    block = {
-        start_attack = false,
-        light_attack = false,
-        heavy_attack = false,
-        push = true,
-        push_follow_up = true,
-    },
-    shoot = {
-        idle = true,
-        charge = true,
-    },
-    charge = {
-        shoot = false,
-    },
-}
 
 local INPUT_INTERRUPTS = {
     action_two_hold = true,
@@ -95,6 +30,7 @@ local function _empty_plan()
         commands = {},
         cycle_index = 0,
         repeating = false,
+        unresolved_steps = {},
     }
 end
 
@@ -173,7 +109,18 @@ function SequenceEngine:_refresh_context()
     local profile = context.kind ~= 'none' and self.mode_manager:profile(context.kind, context.name)
 
     if profile then
-        self.plan = Profiles.compile(profile, context.kind, self.ranged_mode, WeaponContext.has_special(context))
+        local profile_plan = Profiles.compile(profile, context.kind, self.ranged_mode)
+        self.plan = ActionSemantics.plan(profile_plan, context)
+
+        if #self.plan.unresolved_steps > 0 and self.mod.info then
+            local unresolved = {}
+
+            for _, step in ipairs(self.plan.unresolved_steps) do
+                unresolved[#unresolved + 1] = step.command
+            end
+
+            self.mod:info('[planner] unresolved steps for ' .. context.name .. ': ' .. table.concat(unresolved, ', '))
+        end
         self.profile = profile
         self.automatic_fire = context.kind == 'RANGED'
                 and (self.ranged_mode == 'ads' and profile.automatic_fire_ads or profile.automatic_fire_hip)
@@ -191,10 +138,11 @@ end
 function SequenceEngine:_current_action()
     local action_name, start_t, action_settings = WeaponContext.action(self.context)
     local command = self:_command()
-    local current_action = ActionClassifier.classify(action_name, action_settings, command)
+    local current_action = ActionSemantics.classify_current(action_name, action_settings, command)
     local chain_ready = false
 
-    local heavy_windup_action = HEAVY_WINDUP_COMMANDS[command]
+    local command_policy = ActionSemantics.command_policy(command)
+    local heavy_windup_action = command_policy and command_policy.heavy_windup
 
     if
         heavy_windup_action
@@ -283,7 +231,6 @@ function SequenceEngine:_maybe_advance(current_action, start_t, chain_ready, act
     end
 
     local action_matches = command == matched_action
-        or command == 'special_invert' and matched_action == 'special_action'
 
     if not action_matches then
         return
@@ -309,17 +256,13 @@ function SequenceEngine:_restore_after_no_repeat()
 end
 
 function SequenceEngine:_required(command, action_name)
-    if action_name == 'action_one_hold' then
-        return PRIMARY_HOLD_COMMANDS[command] or false
-    elseif action_name == 'action_two_hold' then
-        return command == 'charge' or command == 'block' or command == 'push' or command == 'push_follow_up'
-    elseif action_name == 'weapon_extra_pressed' or action_name == 'weapon_extra_hold' then
-        return EXTRA_COMMANDS[command] or false
-    elseif action_name == 'quick_wield' then
-        return command == 'quick_wield'
+    local policy = ActionSemantics.command_policy(command)
+
+    if not policy then
+        return false
     end
 
-    return false
+    return policy[action_name] == true
 end
 
 function SequenceEngine:_should_reset_for_interrupt(action_name, value, command)
@@ -392,11 +335,12 @@ function SequenceEngine:_override(
     action_settings,
     start_t
 )
+    local policy = ActionSemantics.command_policy(command)
     if action_name == 'action_one_hold' then
-        local current_action_overrides = CURRENT_ACTION_HOLD_OVERRIDES[current_action]
-        local current_action_override = current_action_overrides and current_action_overrides[command]
+        local hold_overrides = policy and policy.hold_overrides
+        local current_action_override = hold_overrides and hold_overrides[current_action]
 
-        if current_action_override == PRIMARY_HOLD_PULSE then
+        if current_action_override == 'pulse' then
             return self:_primary_hold_pulse(raw_value, current_action, start_t, action_settings)
         elseif current_action_override ~= nil then
             return current_action_override
@@ -404,11 +348,11 @@ function SequenceEngine:_override(
             return false
         elseif command == 'charge' then
             return raw_value
-        elseif EXTRA_COMMANDS[command] or command == 'block' or command == 'push' then
+        elseif policy and policy.suppress_primary_hold then
             return false
         end
 
-        return PRIMARY_HOLD_COMMANDS[command] and true or raw_value
+        return self:_required(command, action_name) and true or raw_value
     end
 
     if action_name == 'action_one_pressed' then
@@ -416,7 +360,7 @@ function SequenceEngine:_override(
             return false
         end
 
-        if command == 'heavy_attack' or command == 'charge' or command == 'block' or EXTRA_COMMANDS[command] then
+        if policy and policy.suppress_primary_pressed then
             return false
         end
 

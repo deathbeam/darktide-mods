@@ -5,11 +5,52 @@ root = root .. (root:sub(-1) == '/' and '' or '/')
 
 local DarktideMock = {}
 
+local DEFAULT_ACTION_INPUT_HIERARCHY = {
+    {
+        input = 'start_attack',
+        transition = {
+            { input = 'light_attack', transition = 'base' },
+            { input = 'heavy_attack', transition = 'base' },
+            { input = 'special_action_hold', transition = 'base' },
+        },
+    },
+    {
+        input = 'block',
+        transition = {
+            {
+                input = 'push',
+                transition = {
+                    { input = 'push_follow_up', transition = 'base' },
+                },
+            },
+        },
+    },
+    { input = 'special_action', transition = 'base' },
+    { input = 'special_action_hold', transition = 'base' },
+    { input = 'wield', transition = 'stay' },
+    { input = 'shoot_pressed', transition = 'base' },
+}
+
+local function _clone(value)
+    if type(value) ~= 'table' then
+        return value
+    end
+
+    local result = {}
+
+    for key, child in pairs(value) do
+        result[key] = _clone(child)
+    end
+
+    return result
+end
+
 local function _new_template(name, template)
     template = template or {}
     template.name = template.name or name
     template.actions = template.actions or {}
     template.action_inputs = template.action_inputs or {}
+    template.action_input_hierarchy = template.action_input_hierarchy or _clone(DEFAULT_ACTION_INPUT_HIERARCHY)
     template.displayed_attacks = template.displayed_attacks or {
         primary = { type = 'ranged' },
     }

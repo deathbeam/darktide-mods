@@ -105,6 +105,30 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_true(engine:_charge_ready(2, { kind = 'charge_ammo', keep_charge = true }))
     end)
 
+    it('keeps plasma standard autofire on the primary input', function()
+        local profile = {
+            automatic_fire_hip = 'standard',
+            automatic_fire_ads = 'standard',
+        }
+        mock:set_weapon('slot_secondary', 'plasmagun_p1_m1', {
+            action_input_hierarchy = {
+                { input = 'shoot_charge', transition = 'base' },
+            },
+            actions = {
+                action_charge_direct = {
+                    kind = 'overload_charge',
+                    start_input = 'shoot_charge',
+                },
+            },
+        })
+
+        local engine = mock:load_sequence_engine(new_manager(profile))
+        engine:_refresh_context()
+
+        assert.same({ 'shoot', 'idle' }, engine.plan.commands)
+        assert.is_true(engine:_required('shoot', 'action_one_hold'))
+    end)
+
     it('preserves a held primary input while changing ranged aim mode', function()
         local profile = {
             automatic_fire_hip = 'standard',

@@ -38,16 +38,6 @@ describe('SimpleSequencer WeaponContext', function()
         assert.is_nil(action_settings)
     end)
 
-    it('derives special support from weapon template metadata', function()
-        mock:set_weapon('slot_secondary', 'test_ranged', {
-            action_inputs = { special_action_hold = {} },
-        })
-
-        local context = WeaponContext.read()
-
-        assert.is_true(WeaponContext.has_special(context))
-    end)
-
     it('reads charge level, maximum, and start time defensively', function()
         mock:set_charge(0.5, 0.75, 2)
         local context = WeaponContext.read()

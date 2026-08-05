@@ -21,8 +21,8 @@ describe('SimpleSequencer SequenceProfiles', function()
         Profiles.ensure(data)
         local plan = Profiles.compile(data.mode_1.MELEE.global_melee, 'MELEE')
 
-        assert.same({ 'start_attack', 'light_attack', 'idle' }, plan.commands)
-        assert.are.equal(1, plan.cycle_index)
+        assert.same({ 'light_attack' }, plan.steps)
+        assert.are.equal(1, plan.cycle_step)
         assert.is_true(plan.repeating)
     end)
 
@@ -34,8 +34,8 @@ describe('SimpleSequencer SequenceProfiles', function()
 
         local plan = Profiles.compile(profile, 'MELEE')
 
-        assert.same({ 'start_attack', 'light_attack', 'idle' }, plan.commands)
-        assert.are.equal(0, plan.cycle_index)
+        assert.same({ 'light_attack' }, plan.steps)
+        assert.are.equal(0, plan.cycle_step)
         assert.is_false(plan.repeating)
     end)
 
