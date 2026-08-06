@@ -7,7 +7,7 @@ Just some nice quick mods that I needed/wanted and was not happy with existing m
 
 ### [SimpleActivate](https://www.nexusmods.com/warhammer40kdarktide/mods/1145)
 
-Automatically uses blitzes, crates and stimms when equipped to reduce button presses.
+Automatically uses blitzes, crates and stimms when their selection key is released, while allowing alternate held actions.
 
 ### [SimpleCharging](https://www.nexusmods.com/warhammer40kdarktide/mods/1141)
 

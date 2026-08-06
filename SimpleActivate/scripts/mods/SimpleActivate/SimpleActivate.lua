@@ -12,6 +12,21 @@ local SLOT_POCKETABLE = 'slot_pocketable'
 local SLOT_POCKETABLE_SMALL = 'slot_pocketable_small'
 local SLOT_GRENADE = 'slot_grenade_ability'
 
+local ACTIVATION_INPUT_NAMES = {
+    wield_3 = true,
+    wield_3_gamepad = true,
+    wield_4 = true,
+    grenade_ability_pressed = true,
+}
+
+local ACTIONS_THAT_END_WAITING = {
+    action_give = true,
+    action_place_complete = true,
+    action_throw_grenade = true,
+    action_use_ally = true,
+    action_use_self = true,
+}
+
 local SETTING_AUTO_USE_CRATE = 'auto_use_crate'
 local SETTING_AUTO_USE_STIMM = 'auto_use_stimm'
 local SETTING_AUTO_USE_BLITZ = 'auto_use_blitz'
@@ -21,6 +36,12 @@ local target_slot
 local stage_start_time = 0
 local last_check_time = 0
 local mod_enabled = false
+local activation_input_service
+local activation_input_name
+local activation_input_was_held = false
+local activation_requested = false
+local last_wield_input_service
+local last_wield_input_name
 
 local function _get_player_unit()
     local player_manager = Managers and Managers.player
@@ -39,6 +60,59 @@ local function _reset_state()
     current_stage = ACTION_STAGES.NONE
     target_slot = nil
     stage_start_time = 0
+    activation_input_service = nil
+    activation_input_name = nil
+    activation_input_was_held = false
+    activation_requested = false
+    last_wield_input_service = nil
+    last_wield_input_name = nil
+end
+
+local function _action_is_held(input_service, action_name)
+    if not input_service or not action_name then
+        return false
+    end
+
+    local ok, alias = pcall(input_service.get_alias_key, input_service, action_name)
+    if not ok or not alias then
+        return false
+    end
+
+    local keys_ok, keys = pcall(input_service.get_keys_from_alias, input_service, alias)
+    if not keys_ok then
+        return false
+    end
+
+    for _, key_name in ipairs(keys or {}) do
+        for _, device in pairs(input_service:devices() or {}) do
+            local index_ok, index = pcall(device.button_index, device, key_name)
+            if index_ok and index then
+                local held_ok, held = pcall(device.held, device, index)
+                if held_ok and held then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+local function _configure_activation_input()
+    if last_wield_input_service and ACTIVATION_INPUT_NAMES[last_wield_input_name] then
+        activation_input_service = last_wield_input_service
+        activation_input_name = last_wield_input_name
+        activation_input_was_held = true
+    end
+
+    last_wield_input_service = nil
+    last_wield_input_name = nil
+end
+
+local function _request_activation()
+    if current_stage == ACTION_STAGES.WAITING_FOR_USE then
+        activation_requested = true
+    end
 end
 
 local function _grenade_template()
@@ -110,6 +184,16 @@ mod.update = function()
         return
     end
 
+    if activation_input_service and not activation_requested then
+        local input_is_held = _action_is_held(activation_input_service, activation_input_name)
+
+        if activation_input_was_held and not input_is_held then
+            _request_activation()
+        end
+
+        activation_input_was_held = input_is_held
+    end
+
     local current_time = _get_gameplay_time()
     if current_time - last_check_time < CHECK_INTERVAL then
         return
@@ -127,13 +211,19 @@ local function _input_action_hook(func, self, action_name)
         return func(self, action_name)
     end
 
-    if current_stage == ACTION_STAGES.WAITING_FOR_USE and action_name == 'action_one_pressed' then
-        _reset_state()
+    local value = func(self, action_name)
+    if value and ACTIVATION_INPUT_NAMES[action_name] then
+        last_wield_input_service = self
+        last_wield_input_name = action_name
+    end
+
+    if action_name == 'action_one_pressed' and activation_requested and self == activation_input_service then
+        activation_requested = false
 
         return true
     end
 
-    return func(self, action_name)
+    return value
 end
 
 -- Hooks
@@ -168,6 +258,7 @@ mod:hook(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(func, self
             current_stage = ACTION_STAGES.WAITING_FOR_USE
             target_slot = slot_name
             stage_start_time = _get_gameplay_time()
+            _configure_activation_input()
         end
 
         if current_stage == ACTION_STAGES.WAITING_FOR_USE and slot_name ~= target_slot then
@@ -183,11 +274,7 @@ mod:hook_safe(CLASS.ActionHandler, 'start_action', function(self, id, action_obj
         mod_enabled
         and _get_player_unit() == self._unit
         and current_stage == ACTION_STAGES.WAITING_FOR_USE
-        and (
-            action_name == 'action_use_self'
-            or action_name == 'action_place_complete'
-            or action_name == 'action_throw_grenade'
-        )
+        and ACTIONS_THAT_END_WAITING[action_name]
     then
         _reset_state()
     end
