@@ -16,12 +16,12 @@ local PROGRESS_SOURCE_RULES = {
             'windup',
             'aim_time',
             'aiming',
-            'staggering_enemies',
         },
         excluded_patterns = {
             'continuous_fire',
             'heat',
             'overheat',
+            'charge_level',
             'stamina',
             'ammo',
             'clip',

@@ -9,7 +9,7 @@ local function _load_sources(mock)
 end
 
 describe('SimpleCharging ChargeSources', function()
-    it('reads stepped stacking blessings from the equipped item', function()
+    it('ignores stagger-based blessing stacks', function()
         local mock = DarktideMock.new()
         local ChargeSources = _load_sources(mock)
         local buff = {
@@ -34,13 +34,9 @@ describe('SimpleCharging ChargeSources', function()
             },
             wielded_slot = 'slot_secondary',
         }
-
         local sources = ChargeSources.collect(context)
 
-        assert.are.equal(1, #sources)
-        assert.are.equal(3, sources[1].value)
-        assert.are.equal(5, sources[1].maximum)
-        assert.are.equal(0.6, sources[1].fraction)
+        assert.are.equal(0, #sources)
     end)
 
     it('uses step count as maximum for charge-time proc buffs', function()
@@ -250,21 +246,16 @@ describe('SimpleCharging ChargeSources', function()
         assert.is_true(math.abs(sources[1].value - 0.18) < 0.0001)
     end)
 
-    it('hides inactive sources', function()
+    it('hides inactive charge-time sources', function()
         local mock = DarktideMock.new()
         local ChargeSources = _load_sources(mock)
         local buff = {
             _template = {
-                name = 'weapon_trait_bespoke_bolter_p1_stacking_power_bonus_on_staggering_enemies',
-                class_name = 'stepped_stat_buff',
-                min_max_step_func = function()
-                    return 0, 5
-                end,
+                name = 'weapon_trait_bespoke_power_bonus_based_on_charge_time_ranged',
+                class_name = 'buff',
+                max_stacks = 5,
             },
-            _template_data = {},
-            _template_context = {
-                item_slot_name = 'slot_secondary',
-            },
+            _template_context = { item_slot_name = 'slot_secondary' },
             visual_stack_count = function()
                 return 0
             end,
@@ -364,7 +355,7 @@ describe('SimpleCharging ChargeSources', function()
         assert.are.equal(0, #sources)
     end)
 
-    it('supports generic charge-time trait progress', function()
+    it('tracks Pinpointing target charge-time progress', function()
         local mock = DarktideMock.new()
         local ChargeSources = _load_sources(mock)
         local buff = {
@@ -498,6 +489,39 @@ describe('SimpleCharging ChargeSources', function()
         local sources = ChargeSources.collect(context)
 
         assert.are.equal(0, #sources)
+    end)
+
+    it('does not duplicate weapon charge for charge-level blessings', function()
+        local mock = DarktideMock.new()
+        local ChargeSources = _load_sources(mock)
+        local buff = {
+            _template = {
+                name = 'weapon_trait_bespoke_plasmagun_p1_charge_level_increases_critical_strike_chance',
+                class_name = 'stepped_stat_buff',
+                min_max_step_func = function()
+                    return 0, 5
+                end,
+            },
+            _template_context = { item_slot_name = 'slot_secondary' },
+            visual_stack_count = function()
+                return 3
+            end,
+        }
+        local context = {
+            wielded_slot = 'slot_secondary',
+            charge_component = {
+                charge_level = 0.6,
+                max_charge = 1,
+            },
+            weapon_action = { current_action_name = 'action_charge' },
+            weapon_template = { actions = { action_charge = {} } },
+            buff_extension = { _buffs = { buff } },
+        }
+
+        local sources = ChargeSources.collect(context)
+
+        assert.are.equal(1, #sources)
+        assert.are.equal('weapon_charge', sources[1].id)
     end)
 
     it('ignores charge from the combat ability slot (Chord Claw)', function()
