@@ -400,14 +400,52 @@ local function _has_native_charge_crosshair(context)
     return NATIVE_CHARGE_CROSSHAIR_TYPES[crosshair_type] == true
 end
 
+local function _action_uses_charge(action_settings, charge_template)
+    if charge_template then
+        return true
+    end
+
+    if not action_settings then
+        return false
+    end
+
+    if action_settings.charge_template or action_settings.use_charge or action_settings.use_charge_level then
+        return true
+    end
+
+    local fire_configuration = action_settings.fire_configuration
+    if fire_configuration and (fire_configuration.use_charge or fire_configuration.use_charge_level) then
+        return true
+    end
+
+    local fire_configurations = action_settings.fire_configurations
+    if fire_configurations then
+        for _, configuration in pairs(fire_configurations) do
+            if configuration and (configuration.use_charge or configuration.use_charge_level) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
 local function _collect_weapon_sources(sources, context)
     local charge_component = context.charge_component
     local charge_level = charge_component and charge_component.charge_level or 0
     local max_charge = charge_component and charge_component.max_charge or 0
     local action_name = context.weapon_action and context.weapon_action.current_action_name
-    local charging = action_name == ACTION_CHARGE or action_name and string.find(action_name, 'charge', 1, true)
+    local weapon_template = context.weapon_template
+    local actions = weapon_template and weapon_template.actions
+    local action_settings = actions and action_name and actions[action_name]
+    local charging = action_settings
+        and (action_name == ACTION_CHARGE or string.find(action_name, 'charge', 1, true) ~= nil)
+    local charge_template = _call(context.weapon_extension, 'charge_template')
+    local uses_charge = charging or _action_uses_charge(action_settings, charge_template)
+    local wielded_slot = context.wielded_slot
+    local is_weapon_slot = wielded_slot == 'slot_primary' or wielded_slot == 'slot_secondary'
 
-    if not _has_native_charge_crosshair(context) and max_charge > 0 and (charging or charge_level > 0) then
+    if is_weapon_slot and not _has_native_charge_crosshair(context) and max_charge > 0 and uses_charge then
         _add_source(sources, {
             id = 'weapon_charge',
             order = 1,

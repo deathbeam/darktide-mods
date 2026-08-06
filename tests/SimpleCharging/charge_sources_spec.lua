@@ -284,6 +284,7 @@ describe('SimpleCharging ChargeSources', function()
         local mock = DarktideMock.new()
         local ChargeSources = _load_sources(mock)
         local context = {
+            wielded_slot = 'slot_secondary',
             charge_component = {
                 charge_level = 0.5,
                 max_charge = 1,
@@ -291,6 +292,7 @@ describe('SimpleCharging ChargeSources', function()
             weapon_action = {
                 current_action_name = 'action_charge',
             },
+            weapon_template = { actions = { action_charge = {} } },
             buff_extension = {
                 _buffs = {},
             },
@@ -306,6 +308,7 @@ describe('SimpleCharging ChargeSources', function()
         local mock = DarktideMock.new()
         local ChargeSources = _load_sources(mock)
         local context = {
+            wielded_slot = 'slot_secondary',
             charge_component = {
                 charge_level = 0.5,
                 max_charge = 1,
@@ -495,5 +498,101 @@ describe('SimpleCharging ChargeSources', function()
         local sources = ChargeSources.collect(context)
 
         assert.are.equal(0, #sources)
+    end)
+
+    it('ignores charge from the combat ability slot (Chord Claw)', function()
+        local mock = DarktideMock.new()
+        local ChargeSources = _load_sources(mock)
+        local context = {
+            wielded_slot = 'slot_combat_ability',
+            charge_component = {
+                charge_level = 1,
+                max_charge = 1,
+            },
+            weapon_action = { current_action_name = 'action_unwield_to_previous' },
+            weapon_template = {
+                name = 'transonic_claw_p1_m1',
+                actions = {
+                    action_lunge_aim = { charge_template = 'cryptic_chordclaw' },
+                },
+            },
+            buff_extension = { _buffs = {} },
+        }
+
+        local sources = ChargeSources.collect(context)
+
+        assert.are.equal(0, #sources)
+    end)
+
+    it('hides stale weapon charge after leaving a charge action', function()
+        local mock = DarktideMock.new()
+        local ChargeSources = _load_sources(mock)
+        local context = {
+            wielded_slot = 'slot_primary',
+            charge_component = {
+                charge_level = 1,
+                max_charge = 1,
+            },
+            weapon_action = { current_action_name = 'action_light_attack' },
+            weapon_template = {
+                actions = { action_light_attack = {} },
+            },
+            buff_extension = { _buffs = {} },
+        }
+
+        local sources = ChargeSources.collect(context)
+
+        assert.are.equal(0, #sources)
+    end)
+
+    it('keeps charge bars for charge templates on non-charge-named actions', function()
+        local mock = DarktideMock.new()
+        local ChargeSources = _load_sources(mock)
+        local context = {
+            wielded_slot = 'slot_primary',
+            charge_component = {
+                charge_level = 0.5,
+                max_charge = 1,
+            },
+            weapon_action = { current_action_name = 'action_left_heavy' },
+            weapon_template = {
+                actions = {
+                    action_left_heavy = { charge_template = 'forcesword_p1_m1_weapon_special_hit' },
+                },
+            },
+            buff_extension = { _buffs = {} },
+        }
+
+        local sources = ChargeSources.collect(context)
+
+        assert.are.equal(1, #sources)
+        assert.are.equal(0.5, sources[1].fraction)
+    end)
+
+    it('keeps charge bars for the runtime charge template', function()
+        local mock = DarktideMock.new()
+        local ChargeSources = _load_sources(mock)
+        local context = {
+            wielded_slot = 'slot_secondary',
+            charge_component = {
+                charge_level = 0.5,
+                max_charge = 1,
+            },
+            weapon_action = { current_action_name = 'action_special' },
+            weapon_template = {
+                actions = { action_special = {} },
+            },
+            weapon_extension = {
+                charge_template = function()
+                    return { name = 'runtime_charge' }
+                end,
+            },
+            buff_extension = { _buffs = {} },
+        }
+
+        local sources = ChargeSources.collect(context)
+
+        assert.are.equal(1, #sources)
+        assert.are.equal(0.5, sources[1].fraction)
     end)
 end)
