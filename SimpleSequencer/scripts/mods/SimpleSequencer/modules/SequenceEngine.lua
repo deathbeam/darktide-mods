@@ -44,6 +44,7 @@ function SequenceEngine:init(mod, mode_manager)
     self.context_key = nil
     self.primary_down = false
     self.secondary_down = false
+    self.primary_release_required = false
     self.primary_hold_pulse_token = nil
     self.primary_rearm_pending = false
     self.ranged_mode = 'hip'
@@ -66,7 +67,10 @@ function SequenceEngine:is_in_action()
 end
 
 function SequenceEngine:is_active()
-    return self.primary_down and not self.completed and self.profile ~= nil and self:_command() ~= nil
+    return (self.primary_down or self:_secondary_driver_active())
+        and not self.completed
+        and self.profile ~= nil
+        and self:_command() ~= nil
 end
 
 function SequenceEngine:is_safe_to_switch_mode()
@@ -79,9 +83,15 @@ function SequenceEngine:_command()
     return self.index and self.plan.commands[self.index]
 end
 
+function SequenceEngine:_secondary_driver_active()
+    local policy = ActionSemantics.command_policy(self:_command())
+    return self.secondary_down and policy and policy.action_two_hold == true or false
+end
+
 function SequenceEngine:reset()
     self.primary_down = false
     self.secondary_down = false
+    self.primary_release_required = false
     self.primary_hold_pulse_token = nil
     self.primary_rearm_pending = false
     self.index = 1
@@ -475,11 +485,21 @@ function SequenceEngine:handle_input(action_name, raw_value)
     local released_primary = false
 
     if action_name == 'action_one_hold' then
-        local hold_interrupted_by_action = preserve_primary_hold and not raw_value
-        self.primary_down = hold_interrupted_by_action and previous_primary_down or not not raw_value
+        if self.primary_release_required then
+            self.primary_down = false
+            if not raw_value then
+                self.primary_release_required = false
+            end
+        else
+            local hold_interrupted_by_action = preserve_primary_hold and not raw_value
+            self.primary_down = hold_interrupted_by_action and previous_primary_down or not not raw_value
+        end
         released_primary = previous_primary_down and not self.primary_down
     elseif action_name == 'action_one_pressed' and raw_value then
-        self.primary_down = true
+        local push_input = self.context.kind == 'MELEE' and self.secondary_down
+        if not push_input and not self.primary_release_required then
+            self.primary_down = true
+        end
     end
 
     if self.primary_down and current_action == 'quick_wield' then
@@ -517,38 +537,34 @@ function SequenceEngine:handle_input(action_name, raw_value)
         and self.context.kind == 'RANGED'
         and self.automatic_fire == 'charged'
         and command == 'shoot'
-
-    if not self.primary_down and not auto_fire_without_primary then
-        return raw_value
-    end
-
     if self.completed then
         if action_name == 'action_one_pressed' or action_name == 'action_one_hold' then
             return false
         end
-
         return raw_value
     end
-
-    if not command or not self.profile or self.completed then
+    if not command or not self.profile then
         return raw_value
     end
-
     if self:_should_reset_for_interrupt(action_name, raw_value, command) then
+        local halt_until_primary_release = action_name == 'action_two_hold' and self.context.kind == 'MELEE'
         self:reset()
         if action_name == 'action_two_hold' then
             self.secondary_down = not not raw_value
+            self.primary_release_required = halt_until_primary_release
         end
         return raw_value
     end
-
+    if not self.primary_down and not auto_fire_without_primary then
+        return raw_value
+    end
     return self:_override(action_name, raw_value, current_action, command, chain_ready, action_settings, start_t)
 end
 
 function SequenceEngine:update()
     self:_refresh_context()
 
-    if not self.primary_down then
+    if not self.primary_down and not self:_secondary_driver_active() then
         return
     end
 

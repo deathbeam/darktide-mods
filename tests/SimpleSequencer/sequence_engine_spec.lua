@@ -35,6 +35,7 @@ describe('SimpleSequencer SequenceEngine', function()
         engine.completed = true
         engine.primary_down = true
         engine.secondary_down = true
+        engine.primary_release_required = true
         engine.primary_hold_pulse_token = 'push_follow_up:1'
         engine.primary_rearm_pending = true
         engine.last_action_token = 'shoot:1'
@@ -50,6 +51,7 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_false(engine.completed)
         assert.is_false(engine.primary_down)
         assert.is_false(engine.secondary_down)
+        assert.is_false(engine.primary_release_required)
         assert.is_nil(engine.primary_hold_pulse_token)
         assert.is_false(engine.primary_rearm_pending)
         assert.is_nil(engine.last_action_token)
@@ -60,7 +62,7 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_false(engine.no_repeat_restored)
     end)
 
-    it('reports active only while a primary-driven plan is running', function()
+    it('reports active before completion of a primary-driven plan', function()
         local engine = mock:load_sequence_engine(new_manager(nil))
         engine.profile = {}
         engine.plan.commands = { 'light_attack' }
@@ -69,6 +71,40 @@ describe('SimpleSequencer SequenceEngine', function()
 
         engine.completed = true
         assert.is_false(engine:is_active())
+    end)
+
+    it('reports active while a secondary-driven plan is running', function()
+        local engine = mock:load_sequence_engine(new_manager(nil))
+        engine.profile = {}
+        engine.plan.commands = { 'push' }
+        engine.secondary_down = true
+        assert.is_true(engine:is_active())
+    end)
+
+    it('does not treat ranged aim as a secondary-driven sequence', function()
+        local engine = mock:load_sequence_engine(new_manager(nil))
+        mock:set_wielded_slot('slot_secondary')
+        engine.context = mock:load_weapon_context().read()
+        engine.context_key = 'mode_1:RANGED:test_ranged:hip'
+        engine.profile = {}
+        engine.plan.commands = { 'shoot' }
+        engine.secondary_down = true
+        assert.is_false(engine:is_active())
+    end)
+
+    it('resets a secondary-driven sequence on an unexpected manual interrupt', function()
+        local engine = mock:load_sequence_engine(new_manager(nil))
+        engine.profile = {}
+        engine.plan.commands = { 'start_attack', 'heavy_attack' }
+        mock:set_wielded_slot('slot_primary')
+        engine.context = mock:load_weapon_context().read()
+        engine.context_key = 'mode_1:MELEE:test_melee:hip'
+        engine.index = 2
+        engine.secondary_down = true
+        mock:set_action('none')
+        assert.is_true(engine:handle_input('action_two_hold', true))
+        assert.are.equal(1, engine.index)
+        assert.is_true(engine.secondary_down)
     end)
 
     it('classifies charge-ammo actions using their metadata', function()
@@ -303,6 +339,48 @@ describe('SimpleSequencer SequenceEngine', function()
         local result = engine:handle_input('action_one_hold', true)
 
         assert.is_true(result)
+    end)
+
+    it('does not claim the primary press used by a manual push follow-up', function()
+        local engine = mock:load_sequence_engine(new_manager(nil))
+        mock:set_wielded_slot('slot_primary')
+        engine.context = mock:load_weapon_context().read()
+        engine.context_key = 'mode_1:MELEE:test_melee:hip'
+        engine.plan.commands = { 'start_attack' }
+        engine.profile = {}
+        engine.secondary_down = true
+        mock:set_action('none')
+        assert.is_true(engine:handle_input('action_one_pressed', true))
+        assert.is_false(engine.primary_down)
+    end)
+
+    it('does not re-arm a reset sequence from a held manual push input', function()
+        local engine = mock:load_sequence_engine(new_manager(nil))
+        mock:set_wielded_slot('slot_primary')
+        engine.context = mock:load_weapon_context().read()
+        engine.context_key = 'mode_1:MELEE:test_melee:hip'
+        engine.plan.commands = { 'start_attack', 'heavy_attack' }
+        engine.index = 2
+        engine.profile = {}
+        engine.primary_down = true
+        mock:set_action('none')
+
+        assert.is_true(engine:handle_input('action_two_hold', true))
+        assert.are.equal(1, engine.index)
+        assert.is_false(engine.primary_down)
+
+        mock:set_action('action_push_follow', { kind = 'sweep' }, 1)
+        engine:handle_input('action_one_hold', true)
+        engine:handle_input('action_two_hold', false)
+
+        assert.is_false(engine.primary_down)
+        assert.is_true(engine:handle_input('action_one_hold', true))
+        assert.is_false(engine.primary_down)
+
+        engine:handle_input('action_one_hold', false)
+        assert.is_false(engine.primary_release_required)
+        assert.is_true(engine:handle_input('action_one_pressed', true))
+        assert.is_true(engine.primary_down)
     end)
 
     it('pulses held ranged fire at the chain boundary', function()
