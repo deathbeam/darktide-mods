@@ -34,10 +34,17 @@ local function _ui_using_input()
     return ui_manager and ui_manager.using_input and ui_manager:using_input() or false
 end
 
+local function _is_local_player_unit(unit)
+    local player_manager = Managers and Managers.player
+    local player = player_manager and player_manager:local_player_safe(1)
+
+    return player and player.player_unit == unit or false
+end
+
 local function _input_hook(func, self, action_name, ...)
     local value = func(self, action_name, ...)
 
-    if not initialized or not enabled or _ui_using_input() then
+    if self.type ~= 'Ingame' or not initialized or not enabled or _ui_using_input() then
         return value
     end
 
@@ -45,8 +52,7 @@ local function _input_hook(func, self, action_name, ...)
 end
 
 local function _reset_for_disruptive_state(_, unit)
-    local player = Managers.player and Managers.player:local_player_safe(1)
-    if mod.ready() and player and player.player_unit == unit then
+    if mod.ready() and _is_local_player_unit(unit) then
         mod.engine:reset()
     end
 end
@@ -137,9 +143,7 @@ end
 mod:hook(CLASS.InputService, '_get', _input_hook)
 
 mod:hook_safe(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(self)
-    local player = Managers.player and Managers.player:local_player_safe(1)
-
-    if player and player.player_unit == self._unit then
+    if _is_local_player_unit(self._unit) then
         mod.engine:reset()
         mod.engine:invalidate()
     end
@@ -151,14 +155,16 @@ for _, state_class in pairs(RESET_STATE_CLASSES) do
     end
 end
 
-mod:hook_safe(CLASS.ActionSweep, '_reset_sweep_component', function()
-    if mod.ready() then
-        mod.engine:set_sweep_state('before_damage_window')
+local function _set_sweep_state(self, state)
+    if mod.ready() and _is_local_player_unit(self._player_unit) then
+        mod.engine:set_sweep_state(state)
     end
+end
+
+mod:hook_safe(CLASS.ActionSweep, '_reset_sweep_component', function(self)
+    _set_sweep_state(self, 'before_damage_window')
 end)
 
-mod:hook_safe(CLASS.ActionSweep, '_exit_damage_window', function()
-    if mod.ready() then
-        mod.engine:set_sweep_state('after_damage_window')
-    end
+mod:hook_safe(CLASS.ActionSweep, '_exit_damage_window', function(self)
+    _set_sweep_state(self, 'after_damage_window')
 end)

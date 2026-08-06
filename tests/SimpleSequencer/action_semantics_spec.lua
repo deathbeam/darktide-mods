@@ -271,6 +271,17 @@ describe('SimpleSequencer ActionSemantics', function()
         assert.is_false(plan.repeating)
     end)
 
+    it('ignores retired wield steps in saved profiles', function()
+        local plan = ActionSemantics.plan({
+            steps = { 'wield', 'light_attack' },
+            cycle_step = 0,
+            repeating = false,
+        }, { template = _template() })
+
+        assert.same({ 'start_attack', 'light_attack', 'idle' }, plan.commands)
+        assert.same({ { command = 'wield', step = 1 } }, plan.unresolved_steps)
+    end)
+
     it('translates profile-step cycle positions into runtime command positions', function()
         local plan = ActionSemantics.plan({
             steps = { 'light_attack', 'push_attack' },
@@ -287,6 +298,17 @@ describe('SimpleSequencer ActionSemantics', function()
             'push_follow_up',
         }, plan.commands)
         assert.are.equal(4, plan.cycle_index)
+        assert.is_true(plan.repeating)
+    end)
+
+    it('keeps repeating cycle positions inside the compiled command plan', function()
+        local plan = ActionSemantics.plan({
+            steps = { 'light_attack' },
+            cycle_step = 2,
+            repeating = true,
+        }, { template = _template() })
+
+        assert.are.equal(1, plan.cycle_index)
         assert.is_true(plan.repeating)
     end)
 
@@ -321,7 +343,7 @@ describe('SimpleSequencer ActionSemantics', function()
     end)
 
     it('falls back to common action-name patterns', function()
-        assert.are.equal('quick_wield', ActionSemantics.classify_current('quick_wield', nil, 'quick_wield'))
+        assert.are.equal('quick_wield', ActionSemantics.classify_current('quick_wield', nil))
         assert.are.equal('push_follow_up', ActionSemantics.classify_current('pushfollow', nil, 'push_follow_up'))
     end)
 

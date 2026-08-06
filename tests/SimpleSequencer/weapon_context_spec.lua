@@ -63,9 +63,55 @@ describe('SimpleSequencer WeaponContext', function()
         local context = WeaponContext.read()
         context.extension._weapon_action_component.time_scale = 2
         mock.now = 1.1
-        assert.is_true(WeaponContext.can_chain(settings, 1, 'shoot_pressed', 'test_ranged', context))
+        assert.is_true(WeaponContext.can_chain(settings, 1, 'shoot_pressed', context))
         mock.now = 1.05
-        assert.is_true(WeaponContext.can_chain(settings, 1, 'shoot_pressed', 'test_ranged', context))
+        assert.is_true(WeaponContext.can_chain(settings, 1, 'shoot_pressed', context))
+    end)
+
+    it('uses the weapon extension as the source of chain validity', function()
+        local settings = {
+            allowed_chain_actions = {
+                shoot_pressed = { chain_time = 0 },
+            },
+        }
+        mock:set_action('action_shoot', settings, 1)
+        local context = WeaponContext.read()
+        local calls = 0
+
+        function context.extension:action_input_is_currently_valid(component_name, action_input, used_input, current_t)
+            calls = calls + 1
+            assert.are.equal('weapon_action', component_name)
+            assert.are.equal('shoot_pressed', action_input)
+            assert.is_nil(used_input)
+            assert.are.equal(mock.now, current_t)
+
+            return false
+        end
+
+        assert.is_false(WeaponContext.can_chain(settings, 1, 'shoot_pressed', context))
+        assert.are.equal(1, calls)
+    end)
+
+    it('keeps calibrated heavy windups behind their corrected chain time', function()
+        local settings = {
+            kind = 'windup',
+            allowed_chain_actions = {
+                heavy_attack = {
+                    action_name = 'action_left_heavy',
+                    chain_time = 0.3,
+                },
+            },
+        }
+        mock:set_weapon('slot_primary', 'combatknife_p1_m1')
+        mock:set_wielded_slot('slot_primary')
+        mock:set_action('action_melee_start', settings, 1)
+        local context = WeaponContext.read()
+
+        mock.now = 1.3
+        assert.is_false(WeaponContext.can_chain(settings, 1, 'heavy_attack', context))
+
+        mock.now = 1.35
+        assert.is_true(WeaponContext.can_chain(settings, 1, 'heavy_attack', context))
     end)
 
     it('honors running action state requirements from the weapon chain', function()
@@ -85,12 +131,12 @@ describe('SimpleSequencer WeaponContext', function()
             end,
         }
         mock.now = 1.3
-        assert.is_false(WeaponContext.can_chain(settings, 1, 'shoot_pressed', 'test_ranged', context))
+        assert.is_false(WeaponContext.can_chain(settings, 1, 'shoot_pressed', context))
 
         context.extension._action_handler._registered_components.weapon_action.running_action.running_action_state = function()
             return 'ready'
         end
-        assert.is_true(WeaponContext.can_chain(settings, 1, 'shoot_pressed', 'test_ranged', context))
+        assert.is_true(WeaponContext.can_chain(settings, 1, 'shoot_pressed', context))
     end)
 
     it('does not report sprint-only chains after sprint or slide ends', function()
@@ -114,6 +160,6 @@ describe('SimpleSequencer WeaponContext', function()
             movement_state_component = { method = 'walking' },
         }
         mock.now = 2
-        assert.is_false(WeaponContext.can_chain(settings, 1, 'light_attack', 'test_ranged', context))
+        assert.is_false(WeaponContext.can_chain(settings, 1, 'light_attack', context))
     end)
 end)

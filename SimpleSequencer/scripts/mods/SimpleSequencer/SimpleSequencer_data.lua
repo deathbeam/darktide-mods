@@ -325,7 +325,6 @@ local MELEE_OPTIONS = {
     { text = 'block', value = 'block' },
     { text = 'push', value = 'push' },
     { text = 'push_attack', value = 'push_attack' },
-    { text = 'wield', value = 'wield' },
 }
 
 local RANGED_FIRE_OPTIONS = {

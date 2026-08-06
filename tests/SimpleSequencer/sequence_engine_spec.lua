@@ -37,7 +37,6 @@ describe('SimpleSequencer SequenceEngine', function()
         engine.secondary_down = true
         engine.primary_release_required = true
         engine.primary_hold_pulse_token = 'push_follow_up:1'
-        engine.primary_rearm_pending = true
         engine.last_action_token = 'shoot:1'
         engine.previous_command = 'charge'
         engine.idle_match_index = 2
@@ -53,13 +52,24 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_false(engine.secondary_down)
         assert.is_false(engine.primary_release_required)
         assert.is_nil(engine.primary_hold_pulse_token)
-        assert.is_false(engine.primary_rearm_pending)
         assert.is_nil(engine.last_action_token)
         assert.is_nil(engine.previous_command)
         assert.is_nil(engine.idle_match_index)
         assert.is_nil(engine.fire_token)
         assert.is_nil(engine.sweep_state)
         assert.is_false(engine.no_repeat_restored)
+    end)
+
+    it('refreshes the live context without recompiling an unchanged plan', function()
+        local engine = mock:load_sequence_engine(new_manager(nil))
+        local first = engine:_refresh_context()
+        local first_plan = engine.plan
+
+        local second = engine:_refresh_context()
+
+        assert.are_not.equal(first, second)
+        assert.are.equal(second, engine.context)
+        assert.are.equal(first_plan, engine.plan)
     end)
 
     it('reports active before completion of a primary-driven plan', function()
@@ -195,31 +205,6 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_true(result)
         assert.are.equal('ads', engine.ranged_mode)
         assert.is_true(engine.primary_down)
-    end)
-
-    it('rearms a held ranged primary after a weapon swap', function()
-        local profile = {
-            automatic_fire_hip = 'standard',
-            automatic_fire_ads = 'standard',
-        }
-        local engine = mock:load_sequence_engine(new_manager(profile))
-        local context = mock:load_weapon_context().read()
-        engine.context = context
-        engine.context_key = 'mode_1:RANGED:test_ranged:hip'
-        engine.plan.commands = { 'quick_wield', 'shoot' }
-        engine.index = 1
-        engine.profile = profile
-        engine.primary_down = true
-
-        mock:set_action('action_wield', { kind = 'windup' }, 1)
-        engine:handle_input('action_one_hold', true)
-        assert.is_true(engine.primary_rearm_pending)
-
-        mock:set_action('none')
-        local result = engine:handle_input('action_one_pressed', false)
-
-        assert.is_true(result)
-        assert.is_false(engine.primary_rearm_pending)
     end)
 
     it('does not end a sweep before its next chain becomes available', function()

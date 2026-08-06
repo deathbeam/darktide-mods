@@ -46,7 +46,6 @@ function SequenceEngine:init(mod, mode_manager)
     self.secondary_down = false
     self.primary_release_required = false
     self.primary_hold_pulse_token = nil
-    self.primary_rearm_pending = false
     self.ranged_mode = 'hip'
     self.last_action_token = nil
     self.previous_command = nil
@@ -93,7 +92,6 @@ function SequenceEngine:reset()
     self.secondary_down = false
     self.primary_release_required = false
     self.primary_hold_pulse_token = nil
-    self.primary_rearm_pending = false
     self.index = 1
     self.completed = false
     self.last_action_token = nil
@@ -111,13 +109,13 @@ end
 function SequenceEngine:_refresh_context()
     local context = WeaponContext.read()
     local key = self.mode_manager:active() .. ':' .. context.kind .. ':' .. context.name .. ':' .. self.ranged_mode
+    self.context = context
 
     if self.context_key == key then
         return context
     end
 
     self.context_key = key
-    self.context = context
     self.plan = _empty_plan()
 
     local profile = context.kind ~= 'none' and self.mode_manager:profile(context.kind, context.name)
@@ -161,26 +159,25 @@ function SequenceEngine:_current_action()
     if
         heavy_windup_action
         and (current_action == 'start_attack' or current_action == 'special_start_attack')
-        and WeaponContext.can_chain(action_settings, start_t, 'heavy_attack', self.context.name, self.context)
+        and WeaponContext.can_chain(action_settings, start_t, 'heavy_attack', self.context)
     then
         current_action = heavy_windup_action
     end
 
     if action_settings and action_settings.kind == 'sweep' and self.sweep_state == 'after_damage_window' then
-        chain_ready = WeaponContext.can_chain(action_settings, start_t, 'start_attack', self.context.name, self.context)
+        chain_ready = WeaponContext.can_chain(action_settings, start_t, 'start_attack', self.context)
     elseif current_action == 'light_attack' or current_action == 'heavy_attack' then
-        chain_ready = WeaponContext.can_chain(action_settings, start_t, 'start_attack', self.context.name, self.context)
+        chain_ready = WeaponContext.can_chain(action_settings, start_t, 'start_attack', self.context)
     elseif current_action == 'push' and command == 'idle' then
         -- Push actions expose the next chain before their nominal action end.
         local next_command = self.plan.commands[self.index + 1]
 
         if next_command then
-            chain_ready =
-                WeaponContext.can_chain(action_settings, start_t, next_command, self.context.name, self.context)
+            chain_ready = WeaponContext.can_chain(action_settings, start_t, next_command, self.context)
         end
     elseif current_action == 'shoot' then
         local chain_name = action_settings and action_settings.start_input or 'shoot_pressed'
-        chain_ready = WeaponContext.can_chain(action_settings, start_t, chain_name, self.context.name, self.context)
+        chain_ready = WeaponContext.can_chain(action_settings, start_t, chain_name, self.context)
     end
 
     return current_action, start_t, chain_ready, action_settings
@@ -324,13 +321,7 @@ function SequenceEngine:_primary_hold_pulse(raw_value, current_action, start_t, 
         return raw_value
     end
 
-    local chain_ready = WeaponContext.can_chain(
-        action_settings,
-        start_t,
-        'start_attack',
-        self.context and self.context.name,
-        self.context
-    )
+    local chain_ready = WeaponContext.can_chain(action_settings, start_t, 'start_attack', self.context)
     if not chain_ready then
         return false
     end
@@ -434,10 +425,6 @@ function SequenceEngine:_override(
         if self:_required(command, action_name) then
             return true
         end
-    elseif action_name == 'quick_wield' then
-        if self:_required(command, action_name) then
-            return true
-        end
     end
 
     return raw_value
@@ -500,25 +487,6 @@ function SequenceEngine:handle_input(action_name, raw_value)
         if not push_input and not self.primary_release_required then
             self.primary_down = true
         end
-    end
-
-    if self.primary_down and current_action == 'quick_wield' then
-        self.primary_rearm_pending = true
-    end
-
-    if self.primary_rearm_pending and current_action ~= 'quick_wield' and current_action ~= 'idle' then
-        self.primary_rearm_pending = false
-    end
-
-    if
-        action_name == 'action_one_pressed'
-        and not raw_value
-        and current_action == 'idle'
-        and self.primary_rearm_pending
-    then
-        local should_rearm = self.primary_down and self.context.kind == 'RANGED'
-        self.primary_rearm_pending = false
-        raw_value = should_rearm or raw_value
     end
 
     if released_primary then

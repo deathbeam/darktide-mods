@@ -73,5 +73,10 @@ describe('SimpleSequencer settings data', function()
         assert.is_nil(find_widget(data.options.widgets, 'mode_1_display_settings'))
         assert.is_not_nil(find_widget(data.options.widgets, 'mode_1_display_name'))
         assert.is_not_nil(find_widget(data.options.widgets, 'mode_4_display_color_b'))
+
+        local melee_step = find_widget(data.options.widgets, 'melee_sequence_step_1')
+        for _, option in ipairs(melee_step.options) do
+            assert.are_not.equal('wield', option.value)
+        end
     end)
 end)

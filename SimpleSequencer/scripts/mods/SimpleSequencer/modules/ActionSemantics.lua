@@ -8,7 +8,6 @@ local INPUT_STATE_ALIASES = {
     block = 'block',
     push = 'push',
     push_follow_up = 'push_follow_up',
-    wield = 'quick_wield',
     shoot = 'shoot',
     shoot_pressed = 'shoot',
     shoot_hold = 'shoot',
@@ -38,7 +37,6 @@ local COMMAND_TARGETS = {
     block = { 'block' },
     push = { 'push' },
     push_attack = { 'push_follow_up' },
-    wield = { 'wield' },
     standard = {
         'shoot_pressed',
         'shoot',
@@ -64,10 +62,7 @@ local COMMAND_TARGETS = {
     special_standard = { 'special_action', 'weapon_special', 'zoom_weapon_special' },
 }
 
-local NO_IDLE_COMMANDS = {
-    push_attack = true,
-    wield = true,
-}
+local NO_IDLE_COMMANDS = { push_attack = true }
 
 -- Policies are keyed by the expected command; hold overrides refine the current action.
 local COMMAND_POLICIES = {
@@ -162,7 +157,6 @@ local COMMAND_POLICIES = {
         suppress_primary_hold = true,
         suppress_primary_pressed = true,
     },
-    quick_wield = { quick_wield = true },
 }
 
 -- Input normalization
@@ -218,34 +212,16 @@ function ActionSemantics.classify_current(action_name, action_settings, expected
     local start_input = action_settings and action_settings.start_input
     local kind = action_settings and action_settings.kind
 
-    if start_input == 'special_action_pistol_whip' then
-        return 'special_light_attack'
-    elseif start_input == 'special_action_push' then
-        return 'special_light_attack'
-    elseif start_input == 'special_action_start' then
-        return 'special_start_attack'
-    elseif start_input == 'special_action_execute' then
-        return 'special_heavy_execute'
-    elseif start_input == 'special_action_hold' then
-        return 'special_start_attack'
-    elseif start_input == 'special_action_light' then
-        return 'special_light_attack'
-    elseif start_input == 'special_action_heavy' then
-        return 'special_heavy_execute'
-    elseif start_input == 'special_action' then
-        return 'special_action'
-    elseif start_input == 'weapon_special' or start_input == 'zoom_weapon_special' then
-        return 'special_action'
-    elseif start_input == 'start_attack' then
-        return 'start_attack'
-    elseif kind == 'charge_ammo' then
-        return 'charge'
-    elseif start_input == 'shoot_pressed' then
-        return 'shoot'
-    elseif start_input == 'charge' then
+    if kind == 'charge_ammo' then
         return 'charge'
     elseif kind == 'trigger_explosion' then
         return 'shoot'
+    end
+
+    local input_state = _classify_input(start_input)
+
+    if input_state then
+        return input_state
     end
 
     if
@@ -583,6 +559,10 @@ function ActionSemantics.plan(profile_plan, context)
         for i = 1, profile_plan.cycle_step - 1 do
             cycle_index = cycle_index + (expansion_lengths[i] or 0)
         end
+    end
+
+    if profile_plan.repeating and (cycle_index < 1 or cycle_index > #commands) then
+        cycle_index = 1
     end
 
     return _new_plan(commands, cycle_index, profile_plan.repeating, unresolved_steps)

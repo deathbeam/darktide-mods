@@ -123,6 +123,51 @@ function DarktideMock.new()
         return weapon
     end
 
+    function mock.extension:action_input_is_currently_valid(_, action_input, _, current_t)
+        local settings = self._running_action_settings
+        local chain_actions = settings
+            and settings.allowed_chain_actions
+            and settings.allowed_chain_actions[action_input]
+
+        if not chain_actions or not action_component.start_t then
+            return false
+        end
+
+        local time_scale = action_component.time_scale or 1
+        local time_in_action = current_t - action_component.start_t
+
+        for index = 1, chain_actions[1] and #chain_actions or 1 do
+            local chain_action = chain_actions[1] and chain_actions[index] or chain_actions
+            local chain_time = chain_action.chain_time and chain_action.chain_time / time_scale
+            local chain_until = chain_action.chain_until and chain_action.chain_until / time_scale
+            local chain_ready = not chain_time
+                or chain_time <= time_in_action
+                or chain_until and time_in_action <= chain_until
+            local state_requirement = chain_action.running_action_state_requirement
+            local handler_data = self._action_handler._registered_components.weapon_action
+            local running_action = handler_data.running_action
+            local running_state = state_requirement
+                and running_action
+                and running_action.running_action_state
+                and running_action:running_action_state(current_t, time_in_action)
+            local state_ready = not state_requirement or running_state and state_requirement[running_state]
+
+            local weapon = self:_wielded_weapon(self._inventory_component)
+            local target = chain_action.action_name
+                and weapon
+                and weapon.weapon_template.actions[chain_action.action_name]
+            local condition = target and target.action_condition_func
+            local condition_params = self._action_handler._action_context
+            local action_ready = not condition or condition(target, condition_params, nil, current_t, time_in_action)
+
+            if chain_ready and state_ready and action_ready then
+                return true
+            end
+        end
+
+        return false
+    end
+
     mock.player = {
         player_unit = mock.unit,
     }
