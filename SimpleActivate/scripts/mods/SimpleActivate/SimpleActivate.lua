@@ -13,10 +13,12 @@ local SLOT_POCKETABLE_SMALL = 'slot_pocketable_small'
 local SLOT_GRENADE = 'slot_grenade_ability'
 
 local ACTIVATION_INPUT_NAMES = {
+    grenade_ability_pressed = true,
     wield_3 = true,
     wield_3_gamepad = true,
     wield_4 = true,
-    grenade_ability_pressed = true,
+    wield_scroll_down = true,
+    wield_scroll_up = true,
 }
 
 local ACTIONS_THAT_END_WAITING = {
@@ -68,6 +70,7 @@ local function _reset_state()
     last_wield_input_name = nil
 end
 
+-- Wield inputs expose press events only, so release detection reads the bound device.
 local function _action_is_held(input_service, action_name)
     if not input_service or not action_name then
         return false
@@ -83,8 +86,10 @@ local function _action_is_held(input_service, action_name)
         return false
     end
 
+    local devices = input_service:devices() or {}
+
     for _, key_name in ipairs(keys or {}) do
-        for _, device in pairs(input_service:devices() or {}) do
+        for _, device in pairs(devices) do
             local index_ok, index = pcall(device.button_index, device, key_name)
             if index_ok and index then
                 local held_ok, held = pcall(device.held, device, index)
