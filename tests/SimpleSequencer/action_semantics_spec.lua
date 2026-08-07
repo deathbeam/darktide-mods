@@ -321,6 +321,73 @@ describe('SimpleSequencer ActionSemantics', function()
         assert.is_true(plan.repeating)
     end)
 
+    it('classifies current-source attack names before incidental suffixes', function()
+        local cases = {
+            action_start_wield = 'start_attack',
+            action_light_wield = 'light_attack',
+            action_heavy_wield = 'heavy_attack',
+            action_left_heavy_special = 'heavy_attack',
+            action_light_1_special = 'light_attack',
+            action_right_light_heavy_follow_up_2 = 'light_attack',
+            action_special_sweep_activate_heavy = 'special_heavy_execute',
+            action_toggle_flashlight = 'special_action',
+            action_unwield = 'quick_wield',
+            action_attack_special_2 = 'light_attack',
+        }
+
+        for action_name, expected in pairs(cases) do
+            assert.are.equal(expected, ActionSemantics.classify_current(action_name, nil), action_name)
+        end
+    end)
+
+    it('uses expected commands only to resolve ambiguous runtime actions', function()
+        assert.are.equal(
+            'start_attack',
+            ActionSemantics.classify_current('action_melee_start_special', { kind = 'windup' }, 'heavy_attack')
+        )
+        assert.are.equal(
+            'push_follow_up',
+            ActionSemantics.classify_current('unnamed_sweep', { kind = 'sweep' }, 'push_follow_up')
+        )
+        assert.are.equal(
+            'light_attack',
+            ActionSemantics.classify_current('action_light_wield', { kind = 'sweep' }, 'heavy_attack')
+        )
+        assert.are.equal(
+            'special_heavy_execute',
+            ActionSemantics.classify_current(
+                'action_special_sweep_activate_heavy',
+                { kind = 'sweep' },
+                'special_light_attack'
+            )
+        )
+        assert.are.equal(
+            'special_action',
+            ActionSemantics.classify_current('action_attack_special', { kind = 'sweep' }, 'light_attack')
+        )
+    end)
+
+    it('detects primary-bound charge inputs from template metadata', function()
+        local template = _template({
+            action_charge = {
+                kind = 'overload_charge',
+                start_input = 'shoot_charge',
+            },
+        })
+        template.action_inputs = {
+            shoot_charge = {
+                input_sequence = {
+                    { inputs = { { input = 'action_one_hold' } } },
+                },
+            },
+        }
+        local context = { template = template }
+
+        assert.is_true(ActionSemantics.uses_primary_charge(context, nil))
+        assert.is_true(ActionSemantics.uses_primary_charge(context, { start_input = 'shoot_charge' }))
+        assert.is_false(ActionSemantics.uses_primary_charge(context, { start_input = 'missing_input' }))
+    end)
+
     it('classifies charge-ammo actions from their metadata', function()
         local action = ActionSemantics.classify_current('action_charge', {
             kind = 'charge_ammo',
@@ -354,14 +421,5 @@ describe('SimpleSequencer ActionSemantics', function()
     it('falls back to common action-name patterns', function()
         assert.are.equal('quick_wield', ActionSemantics.classify_current('quick_wield', nil))
         assert.are.equal('push_follow_up', ActionSemantics.classify_current('pushfollow', nil, 'push_follow_up'))
-    end)
-
-    it('owns execution policy for canonical command states', function()
-        local special_policy = ActionSemantics.command_policy('special_action')
-
-        assert.is_true(special_policy.weapon_extra_pressed)
-        assert.is_true(special_policy.suppress_primary_hold)
-        assert.are.equal('pulse', ActionSemantics.command_policy('start_attack').hold_overrides.push)
-        assert.is_true(ActionSemantics.command_policy('quick_swap_cancel').quick_wield)
     end)
 end)

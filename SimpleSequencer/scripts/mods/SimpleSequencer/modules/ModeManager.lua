@@ -158,7 +158,7 @@ function ModeManager:select(mode)
 
     local engine = self.mod.engine
 
-    if engine and engine:is_in_action() and not engine:is_safe_to_switch_mode() then
+    if engine and not engine:can_switch_mode() then
         self.pending_mode = mode
     else
         self:_activate(mode)
@@ -188,7 +188,7 @@ end
 function ModeManager:update()
     local engine = self.mod.engine
 
-    if self.pending_mode and (not engine or not engine:is_in_action() or engine:is_safe_to_switch_mode()) then
+    if self.pending_mode and (not engine or engine:can_switch_mode()) then
         self:_activate(self.pending_mode)
     end
 end

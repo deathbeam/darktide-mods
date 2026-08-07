@@ -38,6 +38,8 @@ describe('SimpleSequencer SequenceEngine', function()
         engine.primary_release_required = true
         engine.primary_hold_pulse_token = 'push_follow_up:1'
         engine.last_action_token = 'shoot:1'
+        engine.running_action_token = 'slot_primary:shoot:1'
+        engine.running_action_state = 'shoot'
         engine.previous_command = 'charge'
         engine.idle_match_index = 2
         engine.fire_token = 4
@@ -54,6 +56,8 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_false(engine.primary_release_required)
         assert.is_nil(engine.primary_hold_pulse_token)
         assert.is_nil(engine.last_action_token)
+        assert.is_nil(engine.running_action_token)
+        assert.is_nil(engine.running_action_state)
         assert.is_nil(engine.previous_command)
         assert.is_nil(engine.idle_match_index)
         assert.is_nil(engine.fire_token)
@@ -185,7 +189,7 @@ describe('SimpleSequencer SequenceEngine', function()
         engine:_refresh_context()
 
         assert.same({ 'shoot', 'idle' }, engine.plan.commands)
-        assert.is_true(engine:_required('shoot', 'action_one_hold'))
+        assert.is_true(engine:_override('action_one_hold', false, 'idle', 'shoot', false, nil, 0))
     end)
 
     it('preserves a held primary input while changing ranged aim mode', function()
@@ -246,6 +250,72 @@ describe('SimpleSequencer SequenceEngine', function()
 
         assert.is_false(engine:is_active())
         assert.is_nil(engine.context_key)
+    end)
+
+    it('uses available game inputs to detect charged special windups', function()
+        for _, input_name in ipairs({ 'special_action_heavy', 'heavy_attack' }) do
+            local engine = mock:load_sequence_engine(new_manager(nil))
+            local allowed_chain_actions = {
+                [input_name] = { chain_time = 0.4 },
+            }
+            mock:set_wielded_slot('slot_secondary')
+            engine.context = mock:load_weapon_context().read()
+            engine.context_key = 'mode_1:RANGED:test_ranged:hip'
+            engine.plan.commands = { 'special_heavy_execute' }
+            engine.profile = {}
+            mock:set_action('action_bash_start', {
+                kind = 'windup',
+                start_input = 'special_action_hold',
+                allowed_chain_actions = allowed_chain_actions,
+            }, 0)
+
+            mock.now = 0.39
+            local charging_action = engine:_current_action()
+            mock.now = 0.4
+            local charged_action = engine:_current_action()
+
+            assert.are.equal('special_start_attack', charging_action, input_name)
+            assert.are.equal('special_heavy_execute', charged_action, input_name)
+        end
+    end)
+
+    it('keeps ambiguous running actions stable after advancing', function()
+        local engine = mock:load_sequence_engine(new_manager(nil))
+        mock:set_wielded_slot('slot_primary')
+        engine.context = mock:load_weapon_context().read()
+        engine.plan.commands = { 'special_light_attack', 'light_attack' }
+        engine.profile = {}
+        mock:set_action('unnamed_sweep', { kind = 'sweep' }, 0)
+
+        local current_action, start_t, chain_ready, action_settings = engine:_current_action()
+        engine:_maybe_advance(current_action, start_t, chain_ready, action_settings)
+        local same_action = engine:_current_action()
+
+        assert.are.equal(2, engine.index)
+        assert.are.equal('special_light_attack', same_action)
+    end)
+
+    it('does not consume one running action for repeated commands', function()
+        local engine = mock:load_sequence_engine(new_manager(nil))
+        mock:set_wielded_slot('slot_primary')
+        engine.context = mock:load_weapon_context().read()
+        engine.plan.commands = { 'light_attack', 'light_attack' }
+        engine.profile = {}
+        mock:set_action('action_light', { kind = 'sweep' }, 0)
+
+        local current_action, start_t, chain_ready, action_settings = engine:_current_action()
+        engine:_maybe_advance(current_action, start_t, chain_ready, action_settings)
+        current_action, start_t, chain_ready, action_settings = engine:_current_action()
+        engine:_maybe_advance(current_action, start_t, chain_ready, action_settings)
+
+        assert.are.equal(2, engine.index)
+        assert.is_false(engine.completed)
+
+        mock:set_action('action_light', { kind = 'sweep' }, 1)
+        current_action, start_t, chain_ready, action_settings = engine:_current_action()
+        engine:_maybe_advance(current_action, start_t, chain_ready, action_settings)
+
+        assert.is_true(engine.completed)
     end)
 
     it('does not end a sweep before its next chain becomes available', function()
