@@ -124,6 +124,9 @@ local localizations = {
     push_attack = {
         en = 'Push Attack',
     },
+    quick_swap_cancel = {
+        en = 'Wield',
+    },
     no_repeat = {
         en = 'No Repeat (Switch to Previous Mode)',
     },

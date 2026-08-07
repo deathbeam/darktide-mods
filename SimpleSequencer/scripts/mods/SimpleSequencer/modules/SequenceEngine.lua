@@ -53,6 +53,7 @@ function SequenceEngine:init(mod, mode_manager)
     self.fire_token = nil
     self.sweep_state = nil
     self.no_repeat_restored = false
+    self.swap_cancel = nil
 end
 
 function SequenceEngine:invalidate()
@@ -100,16 +101,44 @@ function SequenceEngine:reset()
     self.fire_token = nil
     self.sweep_state = nil
     self.no_repeat_restored = false
+    self.swap_cancel = nil
 end
 
 function SequenceEngine:set_sweep_state(state)
     self.sweep_state = state
 end
 
+function SequenceEngine:on_slot_wielded()
+    local context = WeaponContext.read()
+    local swap_cancel = self.swap_cancel
+    self.context = context
+
+    if not swap_cancel then
+        self:reset()
+        self:invalidate()
+        return
+    end
+
+    local at_origin = context.slot == swap_cancel.origin_slot
+
+    if not at_origin then
+        swap_cancel.returning = true
+    elseif swap_cancel.returning then
+        self.swap_cancel = nil
+        self:_advance()
+    end
+end
+
 function SequenceEngine:_refresh_context()
     local context = WeaponContext.read()
-    local key = self.mode_manager:active() .. ':' .. context.kind .. ':' .. context.name .. ':' .. self.ranged_mode
     self.context = context
+
+    -- The temporary weapon must not replace the plan compiled for the origin weapon.
+    if self.swap_cancel then
+        return context
+    end
+
+    local key = self.mode_manager:active() .. ':' .. context.kind .. ':' .. context.name .. ':' .. self.ranged_mode
 
     if self.context_key == key then
         return context
@@ -425,6 +454,13 @@ function SequenceEngine:_override(
         if self:_required(command, action_name) then
             return true
         end
+    elseif action_name == 'quick_wield' and self:_required(command, action_name) then
+        if not self.swap_cancel then
+            self.swap_cancel = { origin_slot = self.context.slot }
+            self.sweep_state = nil
+        end
+
+        return true
     end
 
     return raw_value
@@ -441,7 +477,7 @@ function SequenceEngine:handle_input(action_name, raw_value)
 
     local context = self:_refresh_context()
 
-    if action_name == 'action_two_hold' and context.kind == 'RANGED' then
+    if not self.swap_cancel and action_name == 'action_two_hold' and context.kind == 'RANGED' then
         local ranged_mode = raw_value and 'ads' or 'hip'
 
         if self.ranged_mode ~= ranged_mode then

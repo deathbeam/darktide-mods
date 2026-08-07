@@ -1,5 +1,7 @@
 local ActionSemantics = {}
 
+local QUICK_SWAP_CANCEL = 'quick_swap_cancel'
+
 -- Canonical action states
 local INPUT_STATE_ALIASES = {
     start_attack = 'start_attack',
@@ -61,8 +63,6 @@ local COMMAND_TARGETS = {
     special_charged = { 'special_action_heavy', 'special_action_execute' },
     special_standard = { 'special_action', 'weapon_special', 'zoom_weapon_special' },
 }
-
-local NO_IDLE_COMMANDS = { push_attack = true }
 
 -- Policies are keyed by the expected command; hold overrides refine the current action.
 local COMMAND_POLICIES = {
@@ -154,6 +154,11 @@ local COMMAND_POLICIES = {
     },
     special_action = {
         weapon_extra_pressed = true,
+        suppress_primary_hold = true,
+        suppress_primary_pressed = true,
+    },
+    [QUICK_SWAP_CANCEL] = {
+        quick_wield = true,
         suppress_primary_hold = true,
         suppress_primary_pressed = true,
     },
@@ -458,7 +463,15 @@ local function _has_state(states, expected)
     return false
 end
 
-local function _expand_command(template, command)
+local function _expand_command(context, command)
+    if command == QUICK_SWAP_CANCEL then
+        local slot = context.slot
+
+        return (slot == 'slot_primary' or slot == 'slot_secondary') and { command } or nil
+    end
+
+    local template = context.template
+
     local candidates = COMMAND_TARGETS[command]
 
     if not candidates then
@@ -468,7 +481,7 @@ local function _expand_command(template, command)
     local path = _find_path(template, candidates)
 
     if not path and (command == 'special' or command == 'special_charged') then
-        return _expand_command(template, 'special_action')
+        return _expand_command(context, 'special_action')
     end
 
     if not path then
@@ -504,7 +517,7 @@ local function _expand_command(template, command)
         states[#states + 1] = 'shoot'
     end
 
-    if #states > 0 and not NO_IDLE_COMMANDS[command] then
+    if #states > 0 and command ~= 'push_attack' then
         states[#states + 1] = 'idle'
     end
 
@@ -533,7 +546,7 @@ function ActionSemantics.plan(profile_plan, context)
 
     for i = 1, #steps do
         local command = steps[i]
-        local expansion = _expand_command(context.template, command)
+        local expansion = _expand_command(context, command)
 
         expansion_lengths[i] = expansion and #expansion or 0
 

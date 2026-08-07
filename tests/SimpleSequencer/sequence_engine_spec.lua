@@ -43,6 +43,7 @@ describe('SimpleSequencer SequenceEngine', function()
         engine.fire_token = 4
         engine.sweep_state = 'after_damage_window'
         engine.no_repeat_restored = true
+        engine.swap_cancel = { origin_slot = 'slot_primary' }
 
         engine:reset()
 
@@ -58,6 +59,7 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_nil(engine.fire_token)
         assert.is_nil(engine.sweep_state)
         assert.is_false(engine.no_repeat_restored)
+        assert.is_nil(engine.swap_cancel)
     end)
 
     it('refreshes the live context without recompiling an unchanged plan', function()
@@ -205,6 +207,45 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_true(result)
         assert.are.equal('ads', engine.ranged_mode)
         assert.is_true(engine.primary_down)
+    end)
+
+    it('quick-swaps away and back before advancing the cancel step', function()
+        local profile = {
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'quick_swap_cancel',
+            sequence_step_2 = 'light_attack',
+        }
+        local engine = mock:load_sequence_engine(new_manager(profile))
+        mock:set_wielded_slot('slot_primary')
+
+        assert.is_false(engine:handle_input('action_one_hold', true))
+        assert.is_true(engine:handle_input('quick_wield', false))
+
+        mock:set_wielded_slot('slot_secondary')
+        engine:on_slot_wielded()
+        assert.is_true(engine:handle_input('quick_wield', false))
+
+        mock:set_wielded_slot('slot_primary')
+        engine:on_slot_wielded()
+        assert.is_false(engine:handle_input('quick_wield', false))
+        assert.is_true(engine:handle_input('action_one_pressed', false))
+    end)
+
+    it('resets normally when a slot change is not part of a quick-swap cancel', function()
+        local profile = {
+            sequence_cycle_point = 'sequence_step_1',
+            sequence_step_1 = 'light_attack',
+        }
+        local engine = mock:load_sequence_engine(new_manager(profile))
+        mock:set_wielded_slot('slot_primary')
+        engine:handle_input('action_one_hold', true)
+        assert.is_true(engine:is_active())
+
+        mock:set_wielded_slot('slot_secondary')
+        engine:on_slot_wielded()
+
+        assert.is_false(engine:is_active())
+        assert.is_nil(engine.context_key)
     end)
 
     it('does not end a sweep before its next chain becomes available', function()

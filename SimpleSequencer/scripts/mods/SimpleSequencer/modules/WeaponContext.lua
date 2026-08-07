@@ -84,6 +84,7 @@ function WeaponContext.read()
         weapon = weapon,
         template = template,
         name = name or 'none',
+        slot = slot,
         kind = kind or 'none',
     }
 end

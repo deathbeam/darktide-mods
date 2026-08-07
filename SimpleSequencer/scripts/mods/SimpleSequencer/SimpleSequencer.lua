@@ -144,8 +144,7 @@ mod:hook(CLASS.InputService, '_get', _input_hook)
 
 mod:hook_safe(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(self)
     if _is_local_player_unit(self._unit) then
-        mod.engine:reset()
-        mod.engine:invalidate()
+        mod.engine:on_slot_wielded()
     end
 end)
 

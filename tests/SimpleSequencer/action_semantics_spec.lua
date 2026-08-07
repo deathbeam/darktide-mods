@@ -271,15 +271,24 @@ describe('SimpleSequencer ActionSemantics', function()
         assert.is_false(plan.repeating)
     end)
 
-    it('ignores retired wield steps in saved profiles', function()
-        local plan = ActionSemantics.plan({
-            steps = { 'wield', 'light_attack' },
-            cycle_step = 0,
-            repeating = false,
-        }, { template = _template() })
+    it('plans quick-swap cancels only for weapon slots that can return to their origin', function()
+        local profile_plan = {
+            steps = { 'quick_swap_cancel' },
+            cycle_step = 1,
+            repeating = true,
+        }
+        local supported = ActionSemantics.plan(profile_plan, {
+            template = _template(),
+            slot = 'slot_primary',
+        })
+        local unsupported = ActionSemantics.plan(profile_plan, {
+            template = _template(),
+            slot = 'slot_grenade_ability',
+        })
 
-        assert.same({ 'start_attack', 'light_attack', 'idle' }, plan.commands)
-        assert.same({ { command = 'wield', step = 1 } }, plan.unresolved_steps)
+        assert.same({ 'quick_swap_cancel' }, supported.commands)
+        assert.same({}, unsupported.commands)
+        assert.same({ { command = 'quick_swap_cancel', step = 1 } }, unsupported.unresolved_steps)
     end)
 
     it('translates profile-step cycle positions into runtime command positions', function()
@@ -353,5 +362,6 @@ describe('SimpleSequencer ActionSemantics', function()
         assert.is_true(special_policy.weapon_extra_pressed)
         assert.is_true(special_policy.suppress_primary_hold)
         assert.are.equal('pulse', ActionSemantics.command_policy('start_attack').hold_overrides.push)
+        assert.is_true(ActionSemantics.command_policy('quick_swap_cancel').quick_wield)
     end)
 end)
