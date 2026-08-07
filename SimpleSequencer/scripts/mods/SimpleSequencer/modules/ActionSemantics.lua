@@ -473,25 +473,23 @@ local function _expand_command(context, command)
     return states
 end
 
-local function _new_plan(commands, cycle_index, repeating, unresolved_steps)
-    return {
-        commands = commands,
-        cycle_index = cycle_index,
-        repeating = repeating,
-        unresolved_steps = unresolved_steps or {},
+-- Sequence compilation
+function ActionSemantics.compile(sequence, context)
+    local plan = {
+        commands = {},
+        cycle_index = 0,
+        repeating = false,
+        unresolved_steps = {},
     }
-end
 
--- Profile plan compilation
-function ActionSemantics.plan(profile_plan, context)
-    if not profile_plan or not context or not context.template then
-        return _new_plan({}, 0, false)
+    if not sequence or not context or not context.template then
+        return plan
     end
 
-    local commands = {}
+    local commands = plan.commands
     local expansion_lengths = {}
-    local unresolved_steps = {}
-    local steps = profile_plan.steps or {}
+    local unresolved_steps = plan.unresolved_steps
+    local steps = sequence.steps or {}
 
     for i = 1, #steps do
         local command = steps[i]
@@ -510,24 +508,27 @@ function ActionSemantics.plan(profile_plan, context)
     end
 
     if #commands == 0 then
-        return _new_plan({}, 0, false, unresolved_steps)
+        return plan
     end
 
     local cycle_index = 0
 
-    if profile_plan.cycle_step and profile_plan.cycle_step > 0 then
+    if sequence.cycle_step and sequence.cycle_step > 0 then
         cycle_index = 1
 
-        for i = 1, profile_plan.cycle_step - 1 do
+        for i = 1, sequence.cycle_step - 1 do
             cycle_index = cycle_index + (expansion_lengths[i] or 0)
         end
     end
 
-    if profile_plan.repeating and (cycle_index < 1 or cycle_index > #commands) then
+    if sequence.repeating and (cycle_index < 1 or cycle_index > #commands) then
         cycle_index = 1
     end
 
-    return _new_plan(commands, cycle_index, profile_plan.repeating, unresolved_steps)
+    plan.cycle_index = cycle_index
+    plan.repeating = sequence.repeating
+
+    return plan
 end
 
 return ActionSemantics

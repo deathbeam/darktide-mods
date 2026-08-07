@@ -81,24 +81,12 @@ function Profiles.get(data, mode, kind, weapon_name)
     return kind_data[global_key], global_key
 end
 
-local function _new_plan(steps, cycle_step, repeating)
-    return {
-        steps = steps,
-        cycle_step = cycle_step,
-        repeating = repeating,
-    }
-end
-
-function Profiles.compile(profile, kind, ranged_mode)
-    if not profile then
-        return _new_plan({}, 0, false)
-    end
-
+function Profiles.build_sequence(profile, kind, ranged_mode)
     local steps = {}
     local cycle_step = 0
     local repeating = false
 
-    if kind == 'MELEE' then
+    if profile and kind == 'MELEE' then
         local cycle_point = profile.sequence_cycle_point or ProfileSchema.defaults.MELEE.sequence_cycle_point
         local no_repeat = cycle_point == 'no_repeat'
 
@@ -116,23 +104,21 @@ function Profiles.compile(profile, kind, ranged_mode)
                 steps[#steps + 1] = action
             end
         end
-    else
-        local fire_mode
+    elseif profile and kind == 'RANGED' then
+        local fire_mode = ranged_mode == 'ads' and profile.automatic_fire_ads or profile.automatic_fire_hip
 
-        if kind == 'RANGED' then
-            fire_mode = ranged_mode == 'ads' and profile.automatic_fire_ads or profile.automatic_fire_hip
+        if fire_mode and fire_mode ~= 'none' then
+            steps[1] = fire_mode
+            cycle_step = 1
+            repeating = true
         end
-
-        if not fire_mode or fire_mode == 'none' then
-            return _new_plan(steps, cycle_step, repeating)
-        end
-
-        steps[1] = fire_mode
-        cycle_step = 1
-        repeating = true
     end
 
-    return _new_plan(steps, cycle_step, repeating)
+    return {
+        steps = steps,
+        cycle_step = cycle_step,
+        repeating = repeating,
+    }
 end
 
 return Profiles

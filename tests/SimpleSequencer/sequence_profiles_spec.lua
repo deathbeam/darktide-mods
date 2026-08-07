@@ -5,7 +5,7 @@ local ProfileSchema = dofile(root .. '/SimpleSequencer/scripts/mods/SimpleSequen
 local Profiles = dofile(root .. '/SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceProfiles.lua')
 
 describe('SimpleSequencer SequenceProfiles', function()
-    it('expands a repeating melee profile into action states', function()
+    it('builds a repeating melee sequence from its profile', function()
         local data = {
             mode_1 = {
                 MELEE = {
@@ -19,11 +19,11 @@ describe('SimpleSequencer SequenceProfiles', function()
         }
 
         Profiles.ensure(data)
-        local plan = Profiles.compile(data.mode_1.MELEE.global_melee, 'MELEE')
+        local sequence = Profiles.build_sequence(data.mode_1.MELEE.global_melee, 'MELEE')
 
-        assert.same({ 'light_attack' }, plan.steps)
-        assert.are.equal(1, plan.cycle_step)
-        assert.is_true(plan.repeating)
+        assert.same({ 'light_attack' }, sequence.steps)
+        assert.are.equal(1, sequence.cycle_step)
+        assert.is_true(sequence.repeating)
     end)
 
     it('leaves a no-repeat melee profile without a cycle point', function()
@@ -32,11 +32,11 @@ describe('SimpleSequencer SequenceProfiles', function()
             sequence_step_1 = 'light_attack',
         }
 
-        local plan = Profiles.compile(profile, 'MELEE')
+        local sequence = Profiles.build_sequence(profile, 'MELEE')
 
-        assert.same({ 'light_attack' }, plan.steps)
-        assert.are.equal(0, plan.cycle_step)
-        assert.is_false(plan.repeating)
+        assert.same({ 'light_attack' }, sequence.steps)
+        assert.are.equal(0, sequence.cycle_step)
+        assert.is_false(sequence.repeating)
     end)
 
     it('fills missing profile settings without replacing existing values', function()

@@ -251,8 +251,8 @@ function SequenceEngine:_refresh_context()
     local profile = context.kind ~= 'none' and self.mode_manager:profile(context.kind, context.name)
 
     if profile then
-        local profile_plan = Profiles.compile(profile, context.kind, self.ranged_mode)
-        self.plan = ActionSemantics.plan(profile_plan, context)
+        local sequence = Profiles.build_sequence(profile, context.kind, self.ranged_mode)
+        self.plan = ActionSemantics.compile(sequence, context)
 
         if #self.plan.unresolved_steps > 0 and self.mod.info then
             local unresolved = {}

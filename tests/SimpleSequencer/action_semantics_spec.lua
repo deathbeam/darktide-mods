@@ -38,7 +38,7 @@ local function _template(actions)
 end
 
 local function _plan(template, command)
-    return ActionSemantics.plan({
+    return ActionSemantics.compile({
         steps = { command },
         cycle_step = 1,
         repeating = true,
@@ -58,7 +58,7 @@ describe('SimpleSequencer ActionSemantics', function()
         transitions[#transitions + 1] = { input = 'block', transition = 'base' }
         transitions[#transitions + 1] = { input = 'special_action', transition = 'base' }
 
-        local plan = ActionSemantics.plan({
+        local plan = ActionSemantics.compile({
             steps = { 'push_attack', 'light_attack', 'special_action' },
             cycle_step = 1,
             repeating = true,
@@ -260,7 +260,7 @@ describe('SimpleSequencer ActionSemantics', function()
     end)
 
     it('reports unresolved commands when the runtime graph cannot describe them', function()
-        local plan = ActionSemantics.plan({
+        local plan = ActionSemantics.compile({
             steps = { 'light_attack' },
             cycle_step = 1,
             repeating = true,
@@ -272,16 +272,16 @@ describe('SimpleSequencer ActionSemantics', function()
     end)
 
     it('plans quick-swap cancels only for weapon slots that can return to their origin', function()
-        local profile_plan = {
+        local sequence = {
             steps = { 'quick_swap_cancel' },
             cycle_step = 1,
             repeating = true,
         }
-        local supported = ActionSemantics.plan(profile_plan, {
+        local supported = ActionSemantics.compile(sequence, {
             template = _template(),
             slot = 'slot_primary',
         })
-        local unsupported = ActionSemantics.plan(profile_plan, {
+        local unsupported = ActionSemantics.compile(sequence, {
             template = _template(),
             slot = 'slot_grenade_ability',
         })
@@ -292,7 +292,7 @@ describe('SimpleSequencer ActionSemantics', function()
     end)
 
     it('translates profile-step cycle positions into runtime command positions', function()
-        local plan = ActionSemantics.plan({
+        local plan = ActionSemantics.compile({
             steps = { 'light_attack', 'push_attack' },
             cycle_step = 2,
             repeating = true,
@@ -311,7 +311,7 @@ describe('SimpleSequencer ActionSemantics', function()
     end)
 
     it('keeps repeating cycle positions inside the compiled command plan', function()
-        local plan = ActionSemantics.plan({
+        local plan = ActionSemantics.compile({
             steps = { 'light_attack' },
             cycle_step = 2,
             repeating = true,
