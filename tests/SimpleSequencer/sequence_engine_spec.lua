@@ -252,6 +252,25 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_nil(engine.context_key)
     end)
 
+    it('buffers a held primary pressed during a ranged weapon swap', function()
+        local profile = { automatic_fire_hip = 'standard' }
+        local engine = mock:load_sequence_engine(new_manager(profile))
+        mock:set_wielded_slot('slot_primary')
+
+        mock:set_wielded_slot('slot_secondary')
+        mock:set_action('action_wield', { kind = 'ranged_wield' }, 1)
+        engine:on_slot_wielded()
+        assert.is_true(engine:handle_input('action_one_hold', true))
+        assert.is_true(engine:handle_input('action_one_pressed', true))
+
+        mock:set_action('none')
+        assert.is_true(engine:handle_input('action_one_hold', true))
+        local buffered_press = engine:handle_input('action_one_pressed', false)
+
+        assert.is_true(engine.primary_down)
+        assert.is_true(buffered_press)
+    end)
+
     it('uses available game inputs to detect charged special windups', function()
         for _, input_name in ipairs({ 'special_action_heavy', 'heavy_attack' }) do
             local engine = mock:load_sequence_engine(new_manager(nil))

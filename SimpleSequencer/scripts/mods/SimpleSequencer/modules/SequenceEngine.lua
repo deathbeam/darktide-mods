@@ -429,18 +429,21 @@ function SequenceEngine:_should_reset_for_interrupt(action_name, value, command)
 end
 
 function SequenceEngine:_fire_pulse(current_action, raw_value, chain_ready)
-    if raw_value then
-        self.fire_token = self.index
-
-        return true
-    end
-
-    local can_fire = chain_ready
+    local fire_ready = current_action == 'idle'
+        or chain_ready
         or current_action == 'charge'
         or current_action == 'special_action'
         or current_action == 'special_light_attack'
 
-    if (current_action ~= 'idle' and not can_fire) or self.fire_token == self.index then
+    if raw_value then
+        if fire_ready then
+            self.fire_token = self.index
+        end
+
+        return true
+    end
+
+    if not fire_ready or self.fire_token == self.index then
         return false
     end
     self.fire_token = self.index
