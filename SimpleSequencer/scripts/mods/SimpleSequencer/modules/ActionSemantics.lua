@@ -173,13 +173,13 @@ function ActionSemantics.matched_input_index(goal, start_input, action_name, tem
         end
     end
 
-    if action_name and template then
-        for index, input_name in ipairs(goal.inputs or {}) do
-            if _action_chain_matches_input(template, input_name, action_name) then
-                return index
-            end
+    for index, input_name in ipairs(goal.inputs or {}) do
+        if input_name == start_input then
+            return index
         end
+    end
 
+    if action_name and template then
         local action = template.actions and template.actions[action_name]
 
         for index, input_name in ipairs(goal.inputs or {}) do
@@ -187,11 +187,11 @@ function ActionSemantics.matched_input_index(goal, start_input, action_name, tem
                 return index
             end
         end
-    end
 
-    for index, input_name in ipairs(goal.inputs or {}) do
-        if input_name == start_input then
-            return index
+        for index, input_name in ipairs(goal.inputs or {}) do
+            if _action_chain_matches_input(template, input_name, action_name) then
+                return index
+            end
         end
     end
 

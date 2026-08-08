@@ -126,4 +126,18 @@ describe('SimpleSequencer ActionSemantics', function()
 
         assert.are.equal(2, ActionSemantics.matched_input_index(goal, nil, 'action_left_light', template))
     end)
+
+    it('prefers the active action start input over a shared chain target', function()
+        local template = _template({
+            action_push = {
+                allowed_chain_actions = {
+                    push = { action_name = 'action_block' },
+                },
+            },
+            action_block = { start_input = 'block' },
+        })
+        local goal = { inputs = { 'block', 'push' } }
+
+        assert.are.equal(1, ActionSemantics.matched_input_index(goal, 'block', 'action_block', template))
+    end)
 end)
