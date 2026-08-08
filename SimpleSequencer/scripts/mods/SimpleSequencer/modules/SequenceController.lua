@@ -365,7 +365,8 @@ function SequenceController:_charge_ready(start_t, action_settings)
         return false
     end
 
-    return charge_level >= (max_charge and math.min(threshold, max_charge) or threshold)
+    local required_charge = threshold * (max_charge or 1)
+    return charge_level >= required_charge
 end
 
 function SequenceController:_goal_input()

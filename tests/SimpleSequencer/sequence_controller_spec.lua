@@ -118,6 +118,32 @@ describe('SimpleSequencer SequenceController', function()
         assert.is_true(engine:handle_input('action_one_pressed', false))
     end)
 
+    it('interprets charge thresholds as a percentage of maximum charge', function()
+        local profile = {
+            automatic_fire_ads = 'charged',
+            auto_charge_threshold = 50,
+        }
+        mock:set_weapon('slot_secondary', 'test_fractional_charge', {
+            action_inputs = {
+                brace = { input_sequence = { { input = 'action_two_hold', value = true } } },
+            },
+            actions = {
+                action_charge = {
+                    kind = 'overload_charge',
+                    start_input = 'brace',
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_secondary')
+        local engine = mock:load_controller(new_manager(profile))
+        engine:_refresh_context()
+        engine.plan = { goals = { { command = 'charged', inputs = { 'brace' } } } }
+        mock:set_charge(0.2625, 0.525, 0)
+        mock:set_action('action_charge', engine.context.template.actions.action_charge, 0)
+
+        assert.is_true(engine:_charge_ready(0, engine.context.template.actions.action_charge))
+    end)
+
     it('keeps automatic fire on the ADS plan with toggle ADS', function()
         local profile = {
             automatic_fire_ads = 'charged',
