@@ -2,8 +2,8 @@ local mod = get_mod('SimpleSequencer')
 local Profiles = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceProfiles')
 local WeaponContext = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/WeaponContext')
 local ActionSemantics = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ActionSemantics')
-local ActionInputDriver = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ActionInputDriver')
-local SequenceEngine = class('SimpleSequencerSequenceEngine')
+local SequenceInterpreter = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceInterpreter')
+local SequenceController = class('SimpleSequencerSequenceController')
 
 local INPUT_INTERRUPTS = {
     action_two_hold = true,
@@ -59,7 +59,7 @@ local function _empty_plan()
     }
 end
 
-function SequenceEngine:init(mod, mode_manager)
+function SequenceController:init(mod, mode_manager)
     self.mod = mod
     self.mode_manager = mode_manager
     self.index = 1
@@ -78,22 +78,22 @@ function SequenceEngine:init(mod, mode_manager)
     self.chain_origin_input = nil
     self.chain_origin_followup = nil
     self.interrupt_halt = false
-    self.native_blocked = false
+    self.input_override_blocked = false
     self.action_event_token = nil
     self.action_event_input = nil
     self.damage_window_exit_token = nil
-    self.input_driver = ActionInputDriver:new()
+    self.interpreter = SequenceInterpreter:new()
 end
 
-function SequenceEngine:invalidate()
+function SequenceController:invalidate()
     self.context_key = nil
 end
 
-function SequenceEngine:is_active()
-    return self:_native_driver_active() and not self.completed and self.profile ~= nil
+function SequenceController:is_active()
+    return self:_input_override_active() and not self.completed and self.profile ~= nil
 end
 
-function SequenceEngine:can_switch_mode()
+function SequenceController:can_switch_mode()
     local action_name, start_t, action_settings = WeaponContext.action(self.context)
 
     if not action_name or action_name == 'idle' then
@@ -113,11 +113,11 @@ function SequenceEngine:can_switch_mode()
     return next_input and WeaponContext.can_chain(action_settings, start_t, next_input, self.context) or false
 end
 
-function SequenceEngine:_goal()
+function SequenceController:_goal()
     return self.index and self.plan.goals and self.plan.goals[self.index]
 end
 
-function SequenceEngine:_next_goal()
+function SequenceController:_next_goal()
     local goals = self.plan.goals
     local next_index = self.index and self.index + 1
 
@@ -132,7 +132,7 @@ function SequenceEngine:_next_goal()
     return next_index and goals[next_index]
 end
 
-function SequenceEngine:_damage_window_closed(action_name, start_t, action_settings)
+function SequenceController:_damage_window_closed(action_name, start_t, action_settings)
     if action_settings and action_settings.kind == 'sweep' and action_settings.damage_window_end then
         return self.damage_window_exit_token == _action_token(action_name, start_t)
     end
@@ -140,7 +140,7 @@ function SequenceEngine:_damage_window_closed(action_name, start_t, action_setti
     return true
 end
 
-function SequenceEngine:_advance_if_chain_ready(start_t, action_settings)
+function SequenceController:_advance_if_chain_ready(start_t, action_settings)
     local next_goal = self:_next_goal()
     local action_name = WeaponContext.action(self.context)
     if not self:_damage_window_closed(action_name, start_t, action_settings) then
@@ -177,7 +177,7 @@ function SequenceEngine:_advance_if_chain_ready(start_t, action_settings)
     return true
 end
 
-function SequenceEngine:reset()
+function SequenceController:reset()
     self.primary_down = false
     self.secondary_down = false
     self.primary_release_required = false
@@ -189,19 +189,19 @@ function SequenceEngine:reset()
     self.chain_origin_input = nil
     self.chain_origin_followup = nil
     self.interrupt_halt = false
-    self.native_blocked = false
+    self.input_override_blocked = false
     self.action_event_token = nil
     self.action_event_input = nil
     self.damage_window_exit_token = nil
-    self.input_driver:reset()
+    self.interpreter:reset()
 end
 
-function SequenceEngine:_event_input(action_token)
+function SequenceController:_event_input(action_token)
     return self.action_event_token == action_token and self.action_event_input or nil
 end
 
 -- Action start events are the authoritative progress signal; polling only fills gaps.
-function SequenceEngine:on_action_started(action_name, used_input, t)
+function SequenceController:on_action_started(action_name, used_input, t)
     if not action_name or action_name == 'none' then
         return
     end
@@ -210,7 +210,7 @@ function SequenceEngine:on_action_started(action_name, used_input, t)
     self.action_event_input = used_input
 end
 
-function SequenceEngine:on_damage_window_exited()
+function SequenceController:on_damage_window_exited()
     local action_name, start_t, action_settings = WeaponContext.action(self.context)
 
     if action_settings and action_settings.kind == 'sweep' and action_settings.damage_window_end then
@@ -218,13 +218,13 @@ function SequenceEngine:on_damage_window_exited()
     end
 end
 
-function SequenceEngine:on_slot_wielded()
+function SequenceController:on_slot_wielded()
     self.context = WeaponContext.read()
     self:reset()
     self:invalidate()
 end
 
-function SequenceEngine:_refresh_context()
+function SequenceController:_refresh_context()
     local context = WeaponContext.read()
     self.context = context
 
@@ -263,7 +263,7 @@ function SequenceEngine:_refresh_context()
     return context
 end
 
-function SequenceEngine:_advance()
+function SequenceController:_advance()
     local goals = self.plan.goals
 
     if not goals or #goals == 0 then
@@ -283,14 +283,14 @@ function SequenceEngine:_advance()
     end
 
     self.goal_terminal_token = nil
-    self.native_blocked = false
-    self.input_driver:reset()
+    self.input_override_blocked = false
+    self.interpreter:reset()
     self.chain_origin_token = nil
     self.chain_origin_input = nil
     self.chain_origin_followup = nil
 end
 
-function SequenceEngine:_maybe_advance_goal()
+function SequenceController:_maybe_advance_goal()
     local goal = self:_goal()
 
     if not goal then
@@ -349,7 +349,7 @@ function SequenceEngine:_maybe_advance_goal()
     return true
 end
 
-function SequenceEngine:_charge_ready(start_t, action_settings)
+function SequenceController:_charge_ready(start_t, action_settings)
     local goal = self:_goal()
     local action_kind = action_settings and action_settings.kind
 
@@ -368,7 +368,7 @@ function SequenceEngine:_charge_ready(start_t, action_settings)
     return charge_level >= (max_charge and math.min(threshold, max_charge) or threshold)
 end
 
-function SequenceEngine:_native_goal_input()
+function SequenceController:_goal_input()
     local goal = self:_goal()
 
     if not goal or self.goal_terminal_token then
@@ -423,13 +423,13 @@ function SequenceEngine:_native_goal_input()
     end
 end
 
-function SequenceEngine:_sync_native_driver()
+function SequenceController:_sync_interpreter()
     local t = _game_time(self.context)
-    local target, followup_input = self:_native_goal_input()
+    local target, followup_input = self:_goal_input()
     local _, start_t = WeaponContext.action(self.context)
     local followup_inputs = followup_input and { followup_input } or nil
 
-    self.input_driver:set_target(
+    self.interpreter:set_target(
         self.context and self.context.template,
         target,
         t,
@@ -441,44 +441,44 @@ function SequenceEngine:_sync_native_driver()
     return target, t
 end
 
-function SequenceEngine:_native_driver_active()
-    return self:_goal() ~= nil and not self.native_blocked and (self.primary_down or self.secondary_down)
+function SequenceController:_input_override_active()
+    return self:_goal() ~= nil and not self.input_override_blocked and (self.primary_down or self.secondary_down)
 end
 
-function SequenceEngine:_native_override(action_name, raw_value)
-    if self.native_blocked then
+function SequenceController:_override_input(action_name, raw_value)
+    if self.input_override_blocked then
         return raw_value
     end
 
-    local target, t = self:_sync_native_driver()
+    local target, t = self:_sync_interpreter()
 
     if
         PRIMARY_INPUTS[action_name]
         and (
             self.goal_terminal_token
             or not target
-            or SPECIAL_INPUTS[target] and not self.input_driver:controls(action_name)
+            or SPECIAL_INPUTS[target] and not self.interpreter:controls(action_name)
         )
     then
         return false
     end
 
-    if target and self.input_driver:can_drive() then
-        return self.input_driver:value(action_name, raw_value, t)
+    if target and self.interpreter:can_interpret() then
+        return self.interpreter:value(action_name, raw_value, t)
     end
 
     if target then
-        self.native_blocked = true
+        self.input_override_blocked = true
 
         if self.mod.info then
-            self.mod:info('[driver] missing input_sequence for ' .. tostring(target))
+            self.mod:info('[interpreter] missing input_sequence for ' .. tostring(target))
         end
     end
 
     return raw_value
 end
 
-function SequenceEngine:_restore_after_no_repeat()
+function SequenceController:_restore_after_no_repeat()
     if not self.completed or self.plan.repeating or self.no_repeat_restored then
         return false
     end
@@ -489,7 +489,7 @@ function SequenceEngine:_restore_after_no_repeat()
     return true
 end
 
-function SequenceEngine:_should_reset_for_interrupt(action_name, value)
+function SequenceController:_should_reset_for_interrupt(action_name, value)
     if not value or not self.mod:get('reset_on_interrupt') or not INPUT_INTERRUPTS[action_name] then
         return false
     end
@@ -498,12 +498,12 @@ function SequenceEngine:_should_reset_for_interrupt(action_name, value)
         return false
     end
 
-    self:_sync_native_driver()
+    self:_sync_interpreter()
 
-    return not self.input_driver:controls(action_name)
+    return not self.interpreter:controls(action_name)
 end
 
-function SequenceEngine:handle_input(action_name, raw_value)
+function SequenceController:handle_input(action_name, raw_value)
     if action_name == 'toggle_ads' then
         self.input_settings.toggle_ads = not not raw_value
 
@@ -545,9 +545,9 @@ function SequenceEngine:handle_input(action_name, raw_value)
         self.secondary_down = self.ranged_mode == 'ads'
     end
 
-    local native_plan = self.plan.goals and #self.plan.goals > 0
+    local has_goals = self.plan.goals and #self.plan.goals > 0
 
-    if not native_plan then
+    if not has_goals then
         return raw_value
     end
 
@@ -606,7 +606,7 @@ function SequenceEngine:handle_input(action_name, raw_value)
         return raw_value
     end
 
-    local auto_active = self:_native_driver_active()
+    local auto_active = self:_input_override_active()
 
     if not self.primary_down and not auto_active then
         return raw_value
@@ -628,23 +628,23 @@ function SequenceEngine:handle_input(action_name, raw_value)
         return raw_value
     end
 
-    return self:_native_override(action_name, raw_value)
+    return self:_override_input(action_name, raw_value)
 end
 
-function SequenceEngine:update()
+function SequenceController:update()
     self:_refresh_context()
 
-    local native_plan = self.plan.goals and #self.plan.goals > 0
+    local has_goals = self.plan.goals and #self.plan.goals > 0
 
-    if native_plan then
+    if has_goals then
         self:_maybe_advance_goal()
     end
 
-    if self:_native_driver_active() then
-        self:_sync_native_driver()
+    if self:_input_override_active() then
+        self:_sync_interpreter()
     else
         self:_restore_after_no_repeat()
     end
 end
 
-return SequenceEngine
+return SequenceController

@@ -1,7 +1,7 @@
 local mod = get_mod('SimpleSequencer')
 
 local ModeManager = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ModeManager')
-local SequenceEngine = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceEngine')
+local SequenceController = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceController')
 
 local RESET_STATE_CLASSES = {
     CLASS.PlayerCharacterStateStunned,
@@ -26,7 +26,7 @@ local initialized = false
 local enabled = true
 
 mod.mode_manager = ModeManager:new(mod)
-mod.engine = SequenceEngine:new(mod, mod.mode_manager)
+mod.controller = SequenceController:new(mod, mod.mode_manager)
 
 local function _ui_using_input()
     local ui_manager = Managers and Managers.ui
@@ -48,12 +48,12 @@ local function _input_hook(func, self, action_name, ...)
         return value
     end
 
-    return mod.engine:handle_input(action_name, value)
+    return mod.controller:handle_input(action_name, value)
 end
 
 local function _reset_for_disruptive_state(_, unit)
     if mod.ready() and _is_local_player_unit(unit) then
-        mod.engine:reset()
+        mod.controller:reset()
     end
 end
 
@@ -67,12 +67,12 @@ end
 
 function mod.on_disabled()
     enabled = false
-    mod.engine:reset()
+    mod.controller:reset()
 end
 
 function mod.on_all_mods_loaded()
     mod.mode_manager:sync_settings()
-    mod.engine:invalidate()
+    mod.controller:invalidate()
     initialized = true
 end
 
@@ -82,13 +82,13 @@ function mod.on_setting_changed(setting_name)
     end
 
     if setting_name == 'reset_on_interrupt' then
-        mod.engine:reset()
+        mod.controller:reset()
     end
 end
 
 function mod.on_game_state_changed()
-    mod.engine:reset()
-    mod.engine:invalidate()
+    mod.controller:reset()
+    mod.controller:invalidate()
 end
 
 function mod.update()
@@ -97,7 +97,7 @@ function mod.update()
     end
 
     mod.mode_manager:update()
-    mod.engine:update()
+    mod.controller:update()
 end
 
 local function _select_mode(index)
@@ -144,19 +144,19 @@ mod:hook(CLASS.InputService, '_get', _input_hook)
 
 mod:hook_safe(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(self)
     if _is_local_player_unit(self._unit) then
-        mod.engine:on_slot_wielded()
+        mod.controller:on_slot_wielded()
     end
 end)
 
 mod:hook_safe(CLASS.ActionHandler, 'start_action', function(self, id, _, action_name, _, _, used_input, t)
     if id == 'weapon_action' and _is_local_player_unit(self._unit) then
-        mod.engine:on_action_started(action_name, used_input, t)
+        mod.controller:on_action_started(action_name, used_input, t)
     end
 end)
 
 mod:hook_safe(CLASS.ActionSweep, '_exit_damage_window', function(self)
     if mod.ready() and _is_local_player_unit(self._player_unit) then
-        mod.engine:on_damage_window_exited()
+        mod.controller:on_damage_window_exited()
     end
 end)
 

@@ -138,8 +138,8 @@ function HudElementSimpleSequencer:update(dt, t, ui_renderer, render_settings, i
 
     local layout = DISPLAY_MODES[display_mode]
     local display = manager:display()
-    local engine = mod.engine
-    local sequencer_active = engine and engine:is_active() or false
+    local controller = mod.controller
+    local sequencer_active = controller and controller:is_active() or false
     display.color[1] = sequencer_active and ACTIVE_ALPHA or 255
     local position_x = tonumber(mod:get('hud_position_x')) or 0
     local position_y = tonumber(mod:get('hud_position_y')) or 70

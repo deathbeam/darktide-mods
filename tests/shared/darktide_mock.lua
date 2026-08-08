@@ -295,10 +295,10 @@ function DarktideMock.new()
         action_component.start_t = start_t
         mock.extension._running_action_settings = settings
 
-        local engine = mock._engine
+        local controller = mock._controller
 
-        if engine and action_name and action_name ~= 'none' then
-            engine:on_action_started(action_name, used_input, start_t)
+        if controller and action_name and action_name ~= 'none' then
+            controller:on_action_started(action_name, used_input, start_t)
         end
     end
 
@@ -526,13 +526,12 @@ function DarktideMock.new()
         }
     end
 
-    function mock:load_sequence_engine(mode_manager)
+    function mock:load_controller(mode_manager)
         self:install()
-        local sequence_engine =
-            dofile(root .. 'SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceEngine.lua')
-        local engine = sequence_engine:new(self.mod, mode_manager)
-        mock._engine = engine
-        return engine
+        local Controller = dofile(root .. 'SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceController.lua')
+        local controller = Controller:new(self.mod, mode_manager)
+        mock._controller = controller
+        return controller
     end
 
     function mock:load_weapon_context()

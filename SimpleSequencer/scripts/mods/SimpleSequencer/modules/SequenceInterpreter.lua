@@ -1,4 +1,4 @@
-local ActionInputDriver = class('SimpleSequencerActionInputDriver')
+local SequenceInterpreter = class('SimpleSequencerSequenceInterpreter')
 
 local function _requirements(element, input_settings)
     local active_element = element
@@ -32,11 +32,11 @@ local function _requirements(element, input_settings)
     return result
 end
 
-function ActionInputDriver:init()
+function SequenceInterpreter:init()
     self:reset()
 end
 
-function ActionInputDriver:reset()
+function SequenceInterpreter:reset()
     self.template = nil
     self.target_name = nil
     self.input_name = nil
@@ -54,7 +54,7 @@ function ActionInputDriver:reset()
     self.restart_after = nil
 end
 
-function ActionInputDriver:_begin_input(input_name, t)
+function SequenceInterpreter:_begin_input(input_name, t)
     local config = self.template.action_inputs and self.template.action_inputs[input_name]
 
     self.input_name = input_name
@@ -67,7 +67,7 @@ function ActionInputDriver:_begin_input(input_name, t)
     self.submitted = false
 end
 
-function ActionInputDriver:_begin_next_followup(t)
+function SequenceInterpreter:_begin_next_followup(t)
     local followups = self.followup_inputs
     local input_name = followups and followups[self.followup_index]
 
@@ -81,7 +81,7 @@ function ActionInputDriver:_begin_next_followup(t)
     return true
 end
 
-function ActionInputDriver:set_target(template, input_name, t, input_settings, sequence_start_t, followup_inputs)
+function SequenceInterpreter:set_target(template, input_name, t, input_settings, sequence_start_t, followup_inputs)
     if self.template == template and self.target_name == input_name then
         self.input_settings = input_settings
         return
@@ -105,11 +105,11 @@ function ActionInputDriver:set_target(template, input_name, t, input_settings, s
     self:_begin_input(input_name, sequence_start_t or t or 0)
 end
 
-function ActionInputDriver:can_drive()
+function SequenceInterpreter:can_interpret()
     return self.input_name ~= nil and type(self.elements) == 'table' and #self.elements > 0
 end
 
-function ActionInputDriver:_advance_frame(t)
+function SequenceInterpreter:_advance_frame(t)
     if self.frame_t == t then
         return
     end
@@ -157,19 +157,19 @@ function ActionInputDriver:_advance_frame(t)
     end
 end
 
-function ActionInputDriver:_current_requirements()
+function SequenceInterpreter:_current_requirements()
     local element = self.elements and self.elements[self.element_index]
 
     return element and _requirements(element, self.input_settings) or nil
 end
 
-function ActionInputDriver:controls(action_name)
+function SequenceInterpreter:controls(action_name)
     local requirements = self:_current_requirements()
 
     return self.input_name ~= nil and requirements and requirements[action_name] ~= nil
 end
 
-function ActionInputDriver:value(action_name, raw_value, t)
+function SequenceInterpreter:value(action_name, raw_value, t)
     if not self.input_name then
         return raw_value
     end
@@ -202,4 +202,4 @@ function ActionInputDriver:value(action_name, raw_value, t)
     return requirement.value
 end
 
-return ActionInputDriver
+return SequenceInterpreter

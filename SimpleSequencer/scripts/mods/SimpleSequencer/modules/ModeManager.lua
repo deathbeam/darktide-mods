@@ -138,9 +138,9 @@ function ModeManager:_activate(mode)
     self.active_mode = mode
     self.previous_mode = previous_mode
     self.pending_mode = nil
-    if self.mod.engine then
-        self.mod.engine:invalidate()
-        self.mod.engine:reset()
+    if self.mod.controller then
+        self.mod.controller:invalidate()
+        self.mod.controller:reset()
     end
 end
 
@@ -156,9 +156,9 @@ function ModeManager:select(mode)
         return changed
     end
 
-    local engine = self.mod.engine
+    local controller = self.mod.controller
 
-    if engine and not engine:can_switch_mode() then
+    if controller and not controller:can_switch_mode() then
         self.pending_mode = mode
     else
         self:_activate(mode)
@@ -186,9 +186,9 @@ function ModeManager:toggle()
 end
 
 function ModeManager:update()
-    local engine = self.mod.engine
+    local controller = self.mod.controller
 
-    if self.pending_mode and (not engine or engine:can_switch_mode()) then
+    if self.pending_mode and (not controller or controller:can_switch_mode()) then
         self:_activate(self.pending_mode)
     end
 end
@@ -229,8 +229,8 @@ function ModeManager:_save()
     self.mod:set(PROFILE_DATA_KEY, self.data, false)
     self.mod:set(SELECTED_WEAPONS_KEY, self.selected_weapons, false)
 
-    if self.mod.engine then
-        self.mod.engine:invalidate()
+    if self.mod.controller then
+        self.mod.controller:invalidate()
     end
 end
 

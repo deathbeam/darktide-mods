@@ -1,6 +1,6 @@
 local DarktideMock = require('tests.shared.darktide_mock')
 
-describe('SimpleSequencer native action chains', function()
+describe('SimpleSequencer action chains', function()
     local mock
 
     before_each(function()
@@ -46,7 +46,7 @@ describe('SimpleSequencer native action chains', function()
             },
         })
         mock:set_wielded_slot('slot_secondary')
-        local engine = mock:load_sequence_engine(new_manager({ automatic_fire_ads = 'charged' }))
+        local engine = mock:load_controller(new_manager({ automatic_fire_ads = 'charged' }))
         mock:set_charge(0.99, 1, 0)
 
         local _, input = mock:run_input_frame(engine, { action_two_hold = true })
@@ -103,7 +103,7 @@ describe('SimpleSequencer native action chains', function()
             },
         })
         mock:set_wielded_slot('slot_primary')
-        local engine = mock:load_sequence_engine(new_manager({
+        local engine = mock:load_controller(new_manager({
             sequence_cycle_point = 'no_repeat',
             sequence_step_1 = 'push',
             sequence_step_2 = 'push_attack',
@@ -141,7 +141,7 @@ describe('SimpleSequencer native action chains', function()
             },
         })
         mock:set_wielded_slot('slot_secondary')
-        local engine = mock:load_sequence_engine(new_manager({ automatic_fire_hip = 'standard' }))
+        local engine = mock:load_controller(new_manager({ automatic_fire_hip = 'standard' }))
         local held_inputs = { action_one_hold = true }
 
         mock:run_input_frame(engine, held_inputs)
@@ -179,7 +179,7 @@ describe('SimpleSequencer native action chains', function()
             },
         })
         mock:set_wielded_slot('slot_primary')
-        local engine = mock:load_sequence_engine(new_manager({
+        local engine = mock:load_controller(new_manager({
             sequence_cycle_point = 'no_repeat',
             sequence_step_1 = 'heavy_attack',
         }))
@@ -216,7 +216,7 @@ describe('SimpleSequencer native action chains', function()
             },
         })
         mock:set_wielded_slot('slot_secondary')
-        local engine = mock:load_sequence_engine(new_manager({ automatic_fire_hip = 'standard' }))
+        local engine = mock:load_controller(new_manager({ automatic_fire_hip = 'standard' }))
         local held_inputs = { action_one_hold = true }
 
         mock:run_input_frame(engine, held_inputs)
@@ -272,7 +272,7 @@ describe('SimpleSequencer native action chains', function()
             },
         })
         mock:set_wielded_slot('slot_primary')
-        local engine = mock:load_sequence_engine(new_manager({
+        local engine = mock:load_controller(new_manager({
             sequence_cycle_point = 'no_repeat',
             sequence_step_1 = 'light_attack',
         }))
@@ -351,7 +351,7 @@ describe('SimpleSequencer native action chains', function()
             },
         })
         mock:set_wielded_slot('slot_primary')
-        local engine = mock:load_sequence_engine(new_manager({
+        local engine = mock:load_controller(new_manager({
             sequence_cycle_point = 'sequence_step_1',
             sequence_step_1 = 'light_attack',
         }))
@@ -394,7 +394,7 @@ describe('SimpleSequencer native action chains', function()
             },
         })
         mock:set_wielded_slot('slot_primary')
-        local engine = mock:load_sequence_engine(new_manager({
+        local engine = mock:load_controller(new_manager({
             sequence_cycle_point = 'no_repeat',
             sequence_step_1 = 'special_action',
             sequence_step_2 = 'light_attack',
@@ -461,7 +461,7 @@ describe('SimpleSequencer native action chains', function()
             },
         })
         mock:set_wielded_slot('slot_primary')
-        local engine = mock:load_sequence_engine(new_manager({
+        local engine = mock:load_controller(new_manager({
             sequence_cycle_point = 'sequence_step_1',
             sequence_step_1 = 'special_action',
             sequence_step_2 = 'light_attack',
@@ -513,7 +513,7 @@ describe('SimpleSequencer native action chains', function()
             },
         })
         mock:set_wielded_slot('slot_primary')
-        local engine = mock:load_sequence_engine(new_manager({
+        local engine = mock:load_controller(new_manager({
             sequence_cycle_point = 'sequence_step_1',
             sequence_step_1 = 'light_attack',
         }))

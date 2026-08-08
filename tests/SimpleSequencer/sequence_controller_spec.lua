@@ -1,6 +1,6 @@
 local DarktideMock = require('tests.shared.darktide_mock')
 
-describe('SimpleSequencer SequenceEngine', function()
+describe('SimpleSequencer SequenceController', function()
     local mock
 
     before_each(function()
@@ -27,8 +27,8 @@ describe('SimpleSequencer SequenceEngine', function()
         return manager
     end
 
-    it('resets native goal and input state', function()
-        local engine = mock:load_sequence_engine(new_manager(nil))
+    it('resets goal and input state', function()
+        local engine = mock:load_controller(new_manager(nil))
 
         engine.index = 2
         engine.plan.goals = { { command = 'light_attack', inputs = { 'start_attack' } } }
@@ -38,7 +38,7 @@ describe('SimpleSequencer SequenceEngine', function()
         engine.primary_release_required = true
         engine.no_repeat_restored = true
         engine.goal_terminal_token = 'light_attack:1'
-        engine.native_blocked = true
+        engine.input_override_blocked = true
 
         engine:reset()
 
@@ -49,15 +49,15 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_false(engine.primary_release_required)
         assert.is_false(engine.no_repeat_restored)
         assert.is_nil(engine.goal_terminal_token)
-        assert.is_false(engine.native_blocked)
+        assert.is_false(engine.input_override_blocked)
     end)
 
-    it('advances goals from native action-input metadata', function()
+    it('advances goals from action-input metadata', function()
         local profile = {
             sequence_cycle_point = 'no_repeat',
             sequence_step_1 = 'light_attack',
         }
-        local engine = mock:load_sequence_engine(new_manager(profile))
+        local engine = mock:load_controller(new_manager(profile))
         mock:set_wielded_slot('slot_primary')
         engine:_refresh_context()
 
@@ -105,7 +105,7 @@ describe('SimpleSequencer SequenceEngine', function()
             },
         })
         mock:set_wielded_slot('slot_secondary')
-        local engine = mock:load_sequence_engine(new_manager(profile))
+        local engine = mock:load_controller(new_manager(profile))
         mock:set_charge(1, 1, 0)
 
         mock:set_action('none')
@@ -164,7 +164,7 @@ describe('SimpleSequencer SequenceEngine', function()
             },
         })
         mock:set_wielded_slot('slot_secondary')
-        local engine = mock:load_sequence_engine(new_manager(profile))
+        local engine = mock:load_controller(new_manager(profile))
         mock:set_charge(1, 1, 0)
 
         engine:handle_input('toggle_ads', true)
@@ -203,7 +203,7 @@ describe('SimpleSequencer SequenceEngine', function()
             },
         })
         mock:set_wielded_slot('slot_primary')
-        local engine = mock:load_sequence_engine(new_manager(profile))
+        local engine = mock:load_controller(new_manager(profile))
         mock:set_action('action_push', {
             kind = 'push',
             start_input = 'push',
@@ -220,7 +220,7 @@ describe('SimpleSequencer SequenceEngine', function()
             sequence_cycle_point = 'no_repeat',
             sequence_step_1 = 'light_attack',
         }
-        mock:set_weapon('slot_primary', 'test_melee_native', {
+        mock:set_weapon('slot_primary', 'test_melee', {
             displayed_attacks = { primary = { type = 'melee' } },
             actions = {
                 action_melee_start = {
@@ -234,7 +234,7 @@ describe('SimpleSequencer SequenceEngine', function()
             },
         })
         mock:set_wielded_slot('slot_primary')
-        local engine = mock:load_sequence_engine(new_manager(profile))
+        local engine = mock:load_controller(new_manager(profile))
         engine:_refresh_context()
         engine.primary_down = true
 
@@ -258,7 +258,7 @@ describe('SimpleSequencer SequenceEngine', function()
             },
         })
         mock:set_wielded_slot('slot_primary')
-        local engine = mock:load_sequence_engine(new_manager(profile))
+        local engine = mock:load_controller(new_manager(profile))
         engine:_refresh_context()
         engine.primary_down = true
 
@@ -268,7 +268,7 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_not_nil(engine.goal_terminal_token)
     end)
 
-    it('advances to the next goal at a native chain boundary', function()
+    it('advances to the next goal at an action chain boundary', function()
         local profile = {
             sequence_cycle_point = 'no_repeat',
             sequence_step_1 = 'heavy_attack',
@@ -288,7 +288,7 @@ describe('SimpleSequencer SequenceEngine', function()
             },
         })
         mock:set_wielded_slot('slot_primary')
-        local engine = mock:load_sequence_engine(new_manager(profile))
+        local engine = mock:load_controller(new_manager(profile))
         engine:_refresh_context()
         engine.primary_down = true
 
@@ -303,26 +303,26 @@ describe('SimpleSequencer SequenceEngine', function()
 
         assert.are.equal(2, engine.index)
         assert.same({ 'start_attack', 'light_attack' }, engine.plan.goals[2].inputs)
-        assert.are.equal('start_attack', engine:_native_goal_input())
+        assert.are.equal('start_attack', engine:_goal_input())
     end)
 
-    it('blocks unsupported native inputs instead of falling back', function()
+    it('blocks unsupported inputs instead of falling back', function()
         local profile = {
             sequence_cycle_point = 'no_repeat',
             sequence_step_1 = 'light_attack',
         }
-        local engine = mock:load_sequence_engine(new_manager(profile))
+        local engine = mock:load_controller(new_manager(profile))
         mock:set_wielded_slot('slot_primary')
         engine:_refresh_context()
         engine.context.template.action_inputs.start_attack = nil
         engine.primary_down = true
 
-        assert.is_false(engine:_native_override('action_one_pressed', false))
-        assert.is_true(engine.native_blocked)
+        assert.is_false(engine:_override_input('action_one_pressed', false))
+        assert.is_true(engine.input_override_blocked)
     end)
 
-    it('reports activity only for a running native goal', function()
-        local engine = mock:load_sequence_engine(new_manager(nil))
+    it('reports activity only for a running goal', function()
+        local engine = mock:load_controller(new_manager(nil))
         engine.profile = {}
         engine.plan.goals = { { command = 'light_attack', inputs = { 'start_attack' } } }
         engine.primary_down = true
@@ -333,13 +333,13 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_false(engine:is_active())
     end)
 
-    it('resets a native sequence on an unexpected manual interrupt', function()
+    it('resets a sequence on an unexpected manual interrupt', function()
         local profile = {
             sequence_cycle_point = 'no_repeat',
             sequence_step_1 = 'light_attack',
             sequence_step_2 = 'heavy_attack',
         }
-        local engine = mock:load_sequence_engine(new_manager(profile))
+        local engine = mock:load_controller(new_manager(profile))
         mock:set_wielded_slot('slot_primary')
         engine:_refresh_context()
         engine.index = 2
@@ -351,9 +351,9 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_true(engine.secondary_down)
     end)
 
-    it('restores a no-repeat mode only once after native completion', function()
+    it('restores a no-repeat mode only once after completion', function()
         local manager = new_manager(nil)
-        local engine = mock:load_sequence_engine(manager)
+        local engine = mock:load_controller(manager)
 
         engine.plan.goals = { { command = 'light_attack', inputs = { 'start_attack' } } }
         engine.index = 1
@@ -398,7 +398,7 @@ describe('SimpleSequencer SequenceEngine', function()
             },
         })
         mock:set_wielded_slot('slot_primary')
-        local engine = mock:load_sequence_engine(new_manager(nil))
+        local engine = mock:load_controller(new_manager(nil))
         engine:_refresh_context()
         engine.profile = {}
         engine.plan = {
