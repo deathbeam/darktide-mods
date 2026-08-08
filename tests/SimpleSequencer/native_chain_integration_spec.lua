@@ -485,4 +485,68 @@ describe('SimpleSequencer native action chains', function()
         assert.are.equal('special_action', input)
         assert.are.equal('action_special_uppercut', mock:current_action_name())
     end)
+
+    it('keeps held primary out of an external action before the light release', function()
+        mock:set_weapon('slot_primary', 'test_ability_interrupt', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            actions = {
+                action_melee_start = {
+                    kind = 'windup',
+                    start_input = 'start_attack',
+                    allowed_chain_actions = {
+                        light_attack = { action_name = 'action_light' },
+                        combat_ability = { action_name = 'combat_ability' },
+                    },
+                },
+                action_light = { kind = 'sweep', start_input = 'light_attack' },
+                combat_ability = {
+                    kind = 'unwield_to_specific',
+                    start_input = 'combat_ability',
+                },
+                action_wield = {
+                    kind = 'wield',
+                    start_input = 'wield',
+                    allowed_chain_actions = {
+                        start_attack = { action_name = 'action_melee_start', chain_time = 0.1 },
+                    },
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_sequence_engine(new_manager({
+            sequence_cycle_point = 'sequence_step_1',
+            sequence_step_1 = 'light_attack',
+        }))
+        local held_inputs = { action_one_hold = true }
+
+        mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('action_melee_start', mock:current_action_name())
+
+        mock.now = 0.01
+        mock:set_action('combat_ability', {
+            kind = 'unwield_to_specific',
+            start_input = 'combat_ability',
+        }, 0.01, 'combat_ability')
+        local inputs = mock:run_input_frame(engine, held_inputs)
+
+        assert.is_false(inputs.action_one_hold)
+
+        mock.now = 1
+        mock:set_action('action_wield', {
+            kind = 'wield',
+            start_input = 'wield',
+            allowed_chain_actions = {
+                start_attack = { action_name = 'action_melee_start', chain_time = 0.1 },
+            },
+        }, 1, 'wield')
+        mock:run_input_frame(engine, held_inputs)
+
+        mock.now = 1.1
+        mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('action_melee_start', mock:current_action_name())
+
+        mock.now = 1.11
+        mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('action_light', mock:current_action_name())
+    end)
 end)

@@ -456,7 +456,8 @@ function SequenceEngine:_native_override(action_name, raw_value)
         PRIMARY_INPUTS[action_name]
         and (
             self.goal_terminal_token
-            or target and SPECIAL_INPUTS[target] and not self.input_driver:controls(action_name)
+            or not target
+            or SPECIAL_INPUTS[target] and not self.input_driver:controls(action_name)
         )
     then
         return false
