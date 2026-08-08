@@ -153,6 +153,24 @@ local function _chain_action_at(chain_actions, index)
     return index == 1 and chain_actions or nil
 end
 
+local function _chain_actions_for_input(settings, chain_name)
+    local allowed_chain_actions = settings and settings.allowed_chain_actions
+    local resolved_chain_name = chain_name
+    local chain_actions = allowed_chain_actions and allowed_chain_actions[resolved_chain_name]
+
+    if not chain_actions and chain_name == 'heavy_attack' and allowed_chain_actions then
+        if allowed_chain_actions.special_action_heavy then
+            resolved_chain_name = 'special_action_heavy'
+        elseif allowed_chain_actions.heavy_attack_special then
+            resolved_chain_name = 'heavy_attack_special'
+        end
+
+        chain_actions = allowed_chain_actions[resolved_chain_name]
+    end
+
+    return resolved_chain_name, chain_actions
+end
+
 local function _scaled_chain_time(value, time_scale, action_kind)
     if not value then
         return nil
@@ -217,19 +235,7 @@ local function _calibration_allows(settings, start_t, chain_actions, context, cu
 end
 
 function WeaponContext.can_chain(settings, start_t, chain_name, context)
-    local allowed_chain_actions = settings and settings.allowed_chain_actions
-    local resolved_chain_name = chain_name
-    local chain_actions = allowed_chain_actions and allowed_chain_actions[resolved_chain_name]
-
-    if not chain_actions and chain_name == 'heavy_attack' and allowed_chain_actions then
-        if allowed_chain_actions.special_action_heavy then
-            resolved_chain_name = 'special_action_heavy'
-        elseif allowed_chain_actions.heavy_attack_special then
-            resolved_chain_name = 'heavy_attack_special'
-        end
-
-        chain_actions = allowed_chain_actions[resolved_chain_name]
-    end
+    local resolved_chain_name, chain_actions = _chain_actions_for_input(settings, chain_name)
 
     if not chain_actions or not start_t then
         return false
@@ -254,6 +260,52 @@ function WeaponContext.charge_state(context)
     return charge_component and charge_component.charge_level or 0,
         max_charge and max_charge > 0 and max_charge or nil,
         charge_component and charge_component.charge_start_time or nil
+end
+
+function WeaponContext.can_buffer_input(settings, start_t, chain_name, context)
+    local template = context and context.template
+    local input = template and template.action_inputs and template.action_inputs[chain_name]
+    local buffer_time = input and input.buffer_time
+    local resolved_chain_name, chain_actions = _chain_actions_for_input(settings, chain_name)
+    local extension = context and context.extension
+    local current_time = extension and extension._last_fixed_t
+        or Managers and Managers.time and Managers.time:time('gameplay')
+    local action_component = extension and extension._weapon_action_component
+    local time_scale = action_component and action_component.time_scale or 1
+
+    if
+        not buffer_time
+        or buffer_time <= 0
+        or not chain_actions
+        or not start_t
+        or not current_time
+        or time_scale <= 0
+    then
+        return false
+    end
+
+    if not _game_chain_ready(context, resolved_chain_name, current_time + buffer_time) then
+        return false
+    end
+
+    local time_in_action = current_time - start_t
+    local action_kind = settings and settings.kind
+    local weapon_overrides = context and CHAIN_TIME_OVERRIDES[context.name]
+
+    for index = 1, chain_actions[1] and #chain_actions or 1 do
+        local chain_action = _chain_action_at(chain_actions, index)
+        local action_override = weapon_overrides and chain_action and weapon_overrides[chain_action.action_name]
+        local configured_chain_time = action_override and action_override[chain_action.chain_time]
+            or chain_action and chain_action.chain_time
+        local chain_time = _scaled_chain_time(configured_chain_time or 0, time_scale, action_kind)
+        local queue_start_t = math.max(0, chain_time - buffer_time)
+
+        if queue_start_t <= time_in_action then
+            return true
+        end
+    end
+
+    return false
 end
 
 return WeaponContext

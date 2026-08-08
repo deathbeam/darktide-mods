@@ -2,6 +2,7 @@ local mod = get_mod('SimpleSequencer')
 local Profiles = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceProfiles')
 local WeaponContext = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/WeaponContext')
 local ActionSemantics = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ActionSemantics')
+local ActionInputDriver = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ActionInputDriver')
 local SequenceEngine = class('SimpleSequencerSequenceEngine')
 
 local INPUT_INTERRUPTS = {
@@ -13,111 +14,21 @@ local INPUT_INTERRUPTS = {
     sprint = true,
 }
 
-local PRIMARY_PRESS_CHAIN_STATES = {
-    block = true,
-    heavy_attack = true,
-    push = true,
-    start_attack = true,
+local PRIMARY_INPUTS = {
+    action_one_pressed = true,
+    action_one_hold = true,
 }
 
-local HEAVY_WINDUP_INPUTS = { 'heavy_attack' }
-local SPECIAL_HEAVY_WINDUP_INPUTS = { 'special_action_heavy', 'special_action_execute', 'heavy_attack' }
-
-local SPECIAL_ATTACK_INPUT_POLICY = {
-    weapon_extra_hold = true,
-    suppress_primary_hold = true,
-    suppress_primary_pressed = true,
-}
-
-local INPUT_POLICIES = {
-    idle = {
-        suppress_primary_hold = true,
-        suppress_primary_pressed = true,
-        hold_overrides = {
-            light_attack = false,
-            heavy_attack = false,
-            shoot = true,
-        },
-    },
-    start_attack = {
-        action_one_hold = true,
-        press_when_idle = true,
-        hold_overrides = {
-            block = false,
-            push = 'pulse',
-            push_follow_up = 'pulse',
-        },
-    },
-    light_attack = {
-        action_one_hold = true,
-        press_from = PRIMARY_PRESS_CHAIN_STATES,
-        hold_overrides = {
-            start_attack = false,
-            light_attack = false,
-            heavy_attack = false,
-            block = false,
-            push = false,
-        },
-    },
-    heavy_attack = {
-        action_one_hold = true,
-        suppress_primary_pressed = true,
-        hold_overrides = {
-            block = false,
-            push = false,
-        },
-    },
-    shoot = {
-        action_one_hold = true,
-        hold_overrides = {
-            start_attack = false,
-            charge = false,
-        },
-    },
-    charge = {
-        action_two_hold = true,
-        suppress_primary_pressed = true,
-        hold_overrides = { shoot = true },
-    },
-    block = {
-        action_two_hold = true,
-        suppress_primary_hold = true,
-        suppress_primary_pressed = true,
-        hold_overrides = { push_follow_up = true },
-    },
-    push = {
-        action_two_hold = true,
-        suppress_primary_hold = true,
-        press_from = PRIMARY_PRESS_CHAIN_STATES,
-        hold_overrides = {
-            block = true,
-            push = true,
-            push_follow_up = true,
-        },
-    },
-    push_follow_up = {
-        action_one_hold = true,
-        action_two_hold = true,
-        press_from = PRIMARY_PRESS_CHAIN_STATES,
-        hold_overrides = {
-            block = true,
-            push = true,
-            push_follow_up = true,
-        },
-    },
-    special_start_attack = SPECIAL_ATTACK_INPUT_POLICY,
-    special_light_attack = SPECIAL_ATTACK_INPUT_POLICY,
-    special_heavy_execute = SPECIAL_ATTACK_INPUT_POLICY,
-    special_action = {
-        weapon_extra_pressed = true,
-        suppress_primary_hold = true,
-        suppress_primary_pressed = true,
-    },
-    quick_swap_cancel = {
-        quick_wield = true,
-        suppress_primary_hold = true,
-        suppress_primary_pressed = true,
-    },
+local SPECIAL_INPUTS = {
+    special_action = true,
+    special_action_hold = true,
+    special_action_light = true,
+    special_action_heavy = true,
+    special_action_execute = true,
+    special_action_pistol_whip = true,
+    special_action_push = true,
+    weapon_special = true,
+    zoom_weapon_special = true,
 }
 
 local function _action_token(action, start_t)
@@ -128,10 +39,21 @@ local function _action_token(action, start_t)
     return action .. ':' .. tostring(start_t or 0)
 end
 
+local function _game_time(context)
+    local extension = context and context.extension
+    local fixed_time = extension and extension._last_fixed_t
+
+    if fixed_time then
+        return fixed_time
+    end
+
+    return Managers and Managers.time and Managers.time:time('gameplay') or 0
+end
+
 local function _empty_plan()
     return {
-        commands = {},
-        cycle_index = 0,
+        goals = {},
+        goal_cycle_index = 0,
         repeating = false,
         unresolved_steps = {},
     }
@@ -148,17 +70,20 @@ function SequenceEngine:init(mod, mode_manager)
     self.primary_down = false
     self.secondary_down = false
     self.primary_release_required = false
-    self.primary_hold_pulse_token = nil
     self.ranged_mode = 'hip'
-    self.last_action_token = nil
-    self.running_action_token = nil
-    self.running_action_state = nil
-    self.previous_command = nil
-    self.idle_match_index = nil
-    self.fire_token = nil
-    self.sweep_state = nil
+    self.toggle_ads = false
+    self.input_settings = { toggle_ads = false }
     self.no_repeat_restored = false
-    self.swap_cancel = nil
+    self.goal_terminal_token = nil
+    self.chain_origin_token = nil
+    self.chain_origin_input = nil
+    self.chain_origin_followup = nil
+    self.interrupt_halt = false
+    self.native_blocked = false
+    self.action_event_token = nil
+    self.action_event_input = nil
+    self.damage_window_exit_token = nil
+    self.input_driver = ActionInputDriver:new()
 end
 
 function SequenceEngine:invalidate()
@@ -166,78 +91,143 @@ function SequenceEngine:invalidate()
 end
 
 function SequenceEngine:is_active()
-    return (self.primary_down or self:_secondary_driver_active())
-        and not self.completed
-        and self.profile ~= nil
-        and self:_command() ~= nil
+    return self:_native_driver_active() and not self.completed and self.profile ~= nil
 end
 
 function SequenceEngine:can_switch_mode()
-    local current_action, _, chain_ready = self:_current_action()
+    local action_name, start_t, action_settings = WeaponContext.action(self.context)
 
-    return current_action == 'idle' or chain_ready
+    if not action_name or action_name == 'idle' then
+        return true
+    end
+
+    local goal = self:_goal()
+    local progress = ActionSemantics.matched_input_index(
+        goal,
+        action_settings and action_settings.start_input,
+        action_name,
+        self.context and self.context.template,
+        self:_event_input(_action_token(action_name, start_t))
+    )
+    local next_input = progress and goal.inputs[progress + 1]
+
+    return next_input and WeaponContext.can_chain(action_settings, start_t, next_input, self.context) or false
 end
 
-function SequenceEngine:_command()
-    return self.index and self.plan.commands[self.index]
+function SequenceEngine:_goal()
+    return self.index and self.plan.goals and self.plan.goals[self.index]
 end
 
-function SequenceEngine:_secondary_driver_active()
-    local policy = INPUT_POLICIES[self:_command()]
-    return self.secondary_down and policy and policy.action_two_hold == true or false
+function SequenceEngine:_next_goal()
+    local goals = self.plan.goals
+    local next_index = self.index and self.index + 1
+
+    if not next_index or not goals then
+        return nil
+    end
+
+    if next_index > #goals then
+        next_index = self.plan.goal_cycle_index > 0 and self.plan.goal_cycle_index or self.plan.repeating and 1
+    end
+
+    return next_index and goals[next_index]
+end
+
+function SequenceEngine:_damage_window_closed(action_name, start_t, action_settings)
+    if action_settings and action_settings.kind == 'sweep' and action_settings.damage_window_end then
+        return self.damage_window_exit_token == _action_token(action_name, start_t)
+    end
+
+    return true
+end
+
+function SequenceEngine:_advance_if_chain_ready(start_t, action_settings)
+    local next_goal = self:_next_goal()
+    local action_name = WeaponContext.action(self.context)
+    if not self:_damage_window_closed(action_name, start_t, action_settings) then
+        return false
+    end
+
+    local next_progress = ActionSemantics.matched_input_index(
+        next_goal,
+        action_settings and action_settings.start_input,
+        action_name,
+        self.context and self.context.template,
+        self:_event_input(_action_token(action_name, start_t))
+    )
+
+    if next_goal and next_progress == #(next_goal.inputs or {}) then
+        next_progress = 0
+    end
+    local next_input = next_goal and next_goal.inputs and next_goal.inputs[(next_progress or 0) + 1]
+
+    local can_chain = next_input and WeaponContext.can_chain(action_settings, start_t, next_input, self.context)
+    local can_buffer = next_input
+        and next_input ~= 'start_attack'
+        and WeaponContext.can_buffer_input(action_settings, start_t, next_input, self.context)
+
+    if not (can_chain or can_buffer) then
+        return false
+    end
+
+    self:_advance()
+    self.chain_origin_token = _action_token(action_name, start_t)
+    self.chain_origin_input = next_input
+    self.chain_origin_followup = next_input == 'start_attack' and next_goal.inputs[(next_progress or 0) + 2] or nil
+
+    return true
 end
 
 function SequenceEngine:reset()
     self.primary_down = false
     self.secondary_down = false
     self.primary_release_required = false
-    self.primary_hold_pulse_token = nil
     self.index = 1
     self.completed = false
-    self.last_action_token = nil
-    self.running_action_token = nil
-    self.running_action_state = nil
-    self.previous_command = nil
-    self.idle_match_index = nil
-    self.fire_token = nil
-    self.sweep_state = nil
     self.no_repeat_restored = false
-    self.swap_cancel = nil
+    self.goal_terminal_token = nil
+    self.chain_origin_token = nil
+    self.chain_origin_input = nil
+    self.chain_origin_followup = nil
+    self.interrupt_halt = false
+    self.native_blocked = false
+    self.action_event_token = nil
+    self.action_event_input = nil
+    self.damage_window_exit_token = nil
+    self.input_driver:reset()
 end
 
-function SequenceEngine:set_sweep_state(state)
-    self.sweep_state = state
+function SequenceEngine:_event_input(action_token)
+    return self.action_event_token == action_token and self.action_event_input or nil
 end
 
-function SequenceEngine:on_slot_wielded()
-    local context = WeaponContext.read()
-    local swap_cancel = self.swap_cancel
-    self.context = context
-
-    if not swap_cancel then
-        self:reset()
-        self:invalidate()
+-- Action start events are the authoritative progress signal; polling only fills gaps.
+function SequenceEngine:on_action_started(action_name, used_input, t)
+    if not action_name or action_name == 'none' then
         return
     end
 
-    local at_origin = context.slot == swap_cancel.origin_slot
+    self.action_event_token = _action_token(action_name, t)
+    self.action_event_input = used_input
+end
 
-    if not at_origin then
-        swap_cancel.returning = true
-    elseif swap_cancel.returning then
-        self.swap_cancel = nil
-        self:_advance()
+function SequenceEngine:on_damage_window_exited()
+    local action_name, start_t, action_settings = WeaponContext.action(self.context)
+
+    if action_settings and action_settings.kind == 'sweep' and action_settings.damage_window_end then
+        self.damage_window_exit_token = _action_token(action_name, start_t)
     end
+end
+
+function SequenceEngine:on_slot_wielded()
+    self.context = WeaponContext.read()
+    self:reset()
+    self:invalidate()
 end
 
 function SequenceEngine:_refresh_context()
     local context = WeaponContext.read()
     self.context = context
-
-    -- The temporary weapon must not replace the plan compiled for the origin weapon.
-    if self.swap_cancel then
-        return context
-    end
 
     local key = self.mode_manager:active() .. ':' .. context.kind .. ':' .. context.name .. ':' .. self.ranged_mode
 
@@ -251,6 +241,7 @@ function SequenceEngine:_refresh_context()
     local profile = context.kind ~= 'none' and self.mode_manager:profile(context.kind, context.name)
 
     if profile then
+        context.ranged_mode = self.ranged_mode
         local sequence = Profiles.build_sequence(profile, context.kind, self.ranged_mode)
         self.plan = ActionSemantics.compile(sequence, context)
 
@@ -264,12 +255,8 @@ function SequenceEngine:_refresh_context()
             self.mod:info('[planner] unresolved steps for ' .. context.name .. ': ' .. table.concat(unresolved, ', '))
         end
         self.profile = profile
-        self.automatic_fire = context.kind == 'RANGED'
-                and (self.ranged_mode == 'ads' and profile.automatic_fire_ads or profile.automatic_fire_hip)
-            or nil
     else
         self.profile = nil
-        self.automatic_fire = nil
     end
 
     self:reset()
@@ -277,79 +264,16 @@ function SequenceEngine:_refresh_context()
     return context
 end
 
-function SequenceEngine:_current_action()
-    local action_name, start_t, action_settings = WeaponContext.action(self.context)
-    local command = self:_command()
-    local running_action_token = (self.context and self.context.slot or 'none')
-        .. ':'
-        .. _action_token(action_name, start_t)
-
-    -- Expected-command disambiguation must not relabel an action after the sequence advances.
-    if self.running_action_token ~= running_action_token then
-        self.running_action_token = running_action_token
-        self.running_action_state = ActionSemantics.classify_current(action_name, action_settings, command)
-    end
-
-    local current_action = self.running_action_state
-    local windup_inputs
-
-    if current_action == 'start_attack' and command == 'heavy_attack' then
-        windup_inputs = HEAVY_WINDUP_INPUTS
-    elseif current_action == 'special_start_attack' and command == 'special_heavy_execute' then
-        windup_inputs = SPECIAL_HEAVY_WINDUP_INPUTS
-    end
-
-    for _, input_name in ipairs(windup_inputs or {}) do
-        if WeaponContext.can_chain(action_settings, start_t, input_name, self.context) then
-            current_action = command
-            self.running_action_state = command
-            break
-        end
-    end
-
-    local next_command = self.index and self.plan.commands[self.index + 1]
-    local chain_input
-
-    if action_settings and action_settings.kind == 'sweep' and self.sweep_state == 'after_damage_window' then
-        chain_input = 'start_attack'
-    elseif current_action == 'light_attack' or current_action == 'heavy_attack' then
-        chain_input = 'start_attack'
-    elseif current_action == 'push' and command == 'idle' then
-        -- Push actions expose the next chain before their nominal action end.
-        chain_input = next_command
-    elseif current_action == 'shoot' then
-        chain_input = action_settings and action_settings.start_input or 'shoot_pressed'
-    end
-
-    local chain_ready = chain_input and WeaponContext.can_chain(action_settings, start_t, chain_input, self.context)
-        or false
-
-    return current_action, start_t, chain_ready, action_settings
-end
-
-function SequenceEngine:_charge_ready(start_t, action_settings)
-    local threshold = (self.profile and self.profile.auto_charge_threshold or 100) / 100
-    local charge_level, max_charge, charge_start_t = WeaponContext.charge_state(self.context)
-    threshold = max_charge and math.min(threshold, max_charge) or threshold
-    local keep_charge = action_settings and action_settings.keep_charge
-
-    if charge_start_t and start_t and charge_start_t < start_t and not keep_charge then
-        return false
-    end
-
-    return charge_level >= threshold
-end
-
 function SequenceEngine:_advance()
-    local completed_command = self:_command()
+    local goals = self.plan.goals
 
-    if completed_command then
-        self.previous_command = completed_command
+    if not goals or #goals == 0 then
+        return
     end
 
-    if self.index >= #self.plan.commands then
-        if self.plan.cycle_index > 0 or self.plan.repeating then
-            self.index = self.plan.cycle_index > 0 and self.plan.cycle_index or 1
+    if self.index >= #goals then
+        if self.plan.goal_cycle_index > 0 or self.plan.repeating then
+            self.index = self.plan.goal_cycle_index > 0 and self.plan.goal_cycle_index or 1
             self.completed = false
         else
             self.index = nil
@@ -359,49 +283,199 @@ function SequenceEngine:_advance()
         self.index = self.index + 1
     end
 
-    self.idle_match_index = nil
-    self.fire_token = nil
+    self.goal_terminal_token = nil
+    self.native_blocked = false
+    self.input_driver:reset()
+    self.chain_origin_token = nil
+    self.chain_origin_input = nil
+    self.chain_origin_followup = nil
 end
 
-function SequenceEngine:_maybe_advance(current_action, start_t, chain_ready, action_settings)
-    local command = self:_command()
-    if not command then
-        return
-    end
-    if command == 'charge' and current_action == 'charge' and not self:_charge_ready(start_t, action_settings) then
-        return
+function SequenceEngine:_maybe_advance_goal()
+    local goal = self:_goal()
+
+    if not goal then
+        return false
     end
 
-    local matched_action = current_action
+    local action_name, start_t, action_settings = WeaponContext.action(self.context)
 
-    if chain_ready and command == 'idle' then
-        matched_action = 'idle'
-    end
-
-    -- Ranged weapons can enter their next charge action without an idle action; melee windups must finish first.
-    local direct_chain = self.context.kind == 'RANGED'
-        and self.previous_command
-        and matched_action ~= self.previous_command
-
-    if command == 'idle' and (matched_action == 'idle' or direct_chain) then
-        if self.idle_match_index ~= self.index then
-            self.idle_match_index = self.index
+    if action_name == 'idle' then
+        if self.goal_terminal_token then
             self:_advance()
         end
 
-        return
+        return true
     end
 
-    if command ~= matched_action then
-        return
+    local start_input = action_settings and action_settings.start_input
+    local used_input = self:_event_input(_action_token(action_name, start_t))
+    local progress = ActionSemantics.matched_input_index(
+        goal,
+        start_input,
+        action_name,
+        self.context and self.context.template,
+        used_input
+    )
+
+    if not progress then
+        return false
     end
 
-    local token = _action_token(current_action, start_t)
+    local action_token = _action_token(action_name, start_t)
 
-    if self.last_action_token ~= token then
-        self.last_action_token = token
-        self:_advance()
+    if self.chain_origin_token == action_token then
+        return true
     end
+
+    if self.chain_origin_token then
+        self.chain_origin_token = nil
+    end
+
+    if self.goal_terminal_token then
+        if action_token ~= self.goal_terminal_token then
+            self:_advance()
+        else
+            self:_advance_if_chain_ready(start_t, action_settings)
+        end
+
+        return true
+    end
+
+    if progress == #(goal.inputs or {}) then
+        self.goal_terminal_token = action_token
+        self:_advance_if_chain_ready(start_t, action_settings)
+    end
+
+    return true
+end
+
+function SequenceEngine:_charge_ready(start_t, action_settings)
+    local goal = self:_goal()
+    local action_kind = action_settings and action_settings.kind
+
+    if not goal or goal.command ~= 'charged' or not action_kind or not string.find(action_kind, 'charge', 1, true) then
+        return true
+    end
+
+    local threshold = (self.profile and self.profile.auto_charge_threshold or 100) / 100
+    local charge_level, max_charge, charge_start_t = WeaponContext.charge_state(self.context)
+    local keep_charge = action_settings.keep_charge
+
+    if charge_start_t and start_t and charge_start_t < start_t and not keep_charge then
+        return false
+    end
+
+    return charge_level >= (max_charge and math.min(threshold, max_charge) or threshold)
+end
+
+function SequenceEngine:_native_goal_input()
+    local goal = self:_goal()
+
+    if not goal or self.goal_terminal_token then
+        return nil
+    end
+
+    local action_name, start_t, action_settings = WeaponContext.action(self.context)
+    local action_token = _action_token(action_name, start_t)
+
+    if self.chain_origin_token == action_token then
+        return self.chain_origin_input, self.chain_origin_followup
+    elseif self.chain_origin_token then
+        self.chain_origin_token = nil
+        self.chain_origin_input = nil
+        self.chain_origin_followup = nil
+    end
+    local used_input = self:_event_input(action_token)
+    local progress = action_name == 'idle' and 0
+        or ActionSemantics.matched_input_index(
+            goal,
+            action_settings and action_settings.start_input,
+            action_name,
+            self.context and self.context.template,
+            used_input
+        )
+
+    if progress == nil and action_settings then
+        local first_input = goal.inputs and goal.inputs[1]
+        local can_start = first_input and WeaponContext.can_chain(action_settings, start_t, first_input, self.context)
+
+        progress = can_start and 0 or nil
+    end
+
+    if progress == nil then
+        return nil
+    end
+
+    if not self:_charge_ready(start_t, action_settings) then
+        return nil
+    end
+
+    local next_input = goal.inputs[progress + 1]
+    local followup_input = next_input == 'start_attack' and goal.inputs[progress + 2] or nil
+    local can_chain = progress == 0
+        or next_input and WeaponContext.can_chain(action_settings, start_t, next_input, self.context)
+    local can_buffer = next_input
+        and next_input ~= 'start_attack'
+        and WeaponContext.can_buffer_input(action_settings, start_t, next_input, self.context)
+
+    if can_chain or can_buffer then
+        return next_input, followup_input
+    end
+end
+
+function SequenceEngine:_sync_native_driver()
+    local t = _game_time(self.context)
+    local target, followup_input = self:_native_goal_input()
+    local _, start_t = WeaponContext.action(self.context)
+    local followup_inputs = followup_input and { followup_input } or nil
+
+    self.input_driver:set_target(
+        self.context and self.context.template,
+        target,
+        t,
+        self.input_settings,
+        start_t,
+        followup_inputs
+    )
+
+    return target, t
+end
+
+function SequenceEngine:_native_driver_active()
+    return self:_goal() ~= nil and not self.native_blocked and (self.primary_down or self.secondary_down)
+end
+
+function SequenceEngine:_native_override(action_name, raw_value)
+    if self.native_blocked then
+        return raw_value
+    end
+
+    local target, t = self:_sync_native_driver()
+
+    if
+        PRIMARY_INPUTS[action_name]
+        and (
+            self.goal_terminal_token
+            or target and SPECIAL_INPUTS[target] and not self.input_driver:controls(action_name)
+        )
+    then
+        return false
+    end
+
+    if target and self.input_driver:can_drive() then
+        return self.input_driver:value(action_name, raw_value, t)
+    end
+
+    if target then
+        self.native_blocked = true
+
+        if self.mod.info then
+            self.mod:info('[driver] missing input_sequence for ' .. tostring(target))
+        end
+    end
+
+    return raw_value
 end
 
 function SequenceEngine:_restore_after_no_repeat()
@@ -415,7 +489,7 @@ function SequenceEngine:_restore_after_no_repeat()
     return true
 end
 
-function SequenceEngine:_should_reset_for_interrupt(action_name, value, command)
+function SequenceEngine:_should_reset_for_interrupt(action_name, value)
     if not value or not self.mod:get('reset_on_interrupt') or not INPUT_INTERRUPTS[action_name] then
         return false
     end
@@ -424,176 +498,92 @@ function SequenceEngine:_should_reset_for_interrupt(action_name, value, command)
         return false
     end
 
-    local policy = INPUT_POLICIES[command]
-    return not (policy and policy[action_name])
-end
+    self:_sync_native_driver()
 
-function SequenceEngine:_fire_pulse(current_action, raw_value, chain_ready)
-    local fire_ready = current_action == 'idle'
-        or chain_ready
-        or current_action == 'charge'
-        or current_action == 'special_action'
-        or current_action == 'special_light_attack'
-
-    if raw_value then
-        if fire_ready then
-            self.fire_token = self.index
-        end
-
-        return true
-    end
-
-    if not fire_ready or self.fire_token == self.index then
-        return false
-    end
-    self.fire_token = self.index
-
-    return true
-end
-
-function SequenceEngine:_primary_hold_pulse(raw_value, current_action, start_t, action_settings)
-    if self.secondary_down then
-        return raw_value
-    end
-
-    local chain_ready = WeaponContext.can_chain(action_settings, start_t, 'start_attack', self.context)
-    if not chain_ready then
-        return false
-    end
-
-    local action_token = _action_token(current_action, start_t)
-    if self.primary_hold_pulse_token == action_token then
-        return false
-    end
-
-    if raw_value then
-        self.primary_hold_pulse_token = action_token
-        return true
-    end
-
-    return false
-end
-
-function SequenceEngine:_override(
-    action_name,
-    raw_value,
-    current_action,
-    command,
-    chain_ready,
-    action_settings,
-    start_t
-)
-    local policy = INPUT_POLICIES[command]
-    if action_name == 'action_one_hold' then
-        local hold_overrides = policy and policy.hold_overrides
-        local current_action_override = hold_overrides and hold_overrides[current_action]
-
-        if current_action_override == 'pulse' then
-            return self:_primary_hold_pulse(raw_value, current_action, start_t, action_settings)
-        elseif current_action_override ~= nil then
-            return current_action_override
-        elseif policy and policy.suppress_primary_hold then
-            return false
-        end
-
-        return policy and policy[action_name] and true or raw_value
-    end
-
-    if action_name == 'action_one_pressed' then
-        if policy and policy.suppress_primary_pressed then
-            return false
-        elseif command == 'shoot' then
-            return self:_fire_pulse(current_action, raw_value, chain_ready)
-        elseif policy and policy.press_when_idle then
-            return raw_value or current_action == 'idle'
-        elseif policy and policy.press_from then
-            return raw_value or policy.press_from[current_action] == true
-        end
-    elseif action_name == 'action_two_hold' then
-        local kind = action_settings and action_settings.kind
-        local preserve_input = kind == 'aim'
-            or kind == 'unaim'
-            or ActionSemantics.uses_primary_charge(self.context, action_settings)
-
-        if preserve_input then
-            return raw_value
-        elseif command == 'shoot' and self.automatic_fire == 'charged' and current_action == 'charge' then
-            return true
-        elseif policy and policy[action_name] then
-            return true
-        end
-    elseif
-        (action_name == 'weapon_extra_pressed' or action_name == 'weapon_extra_hold')
-        and policy
-        and policy[action_name]
-    then
-        return true
-    elseif action_name == 'quick_wield' and policy and policy[action_name] then
-        if not self.swap_cancel then
-            self.swap_cancel = { origin_slot = self.context.slot }
-            self.sweep_state = nil
-        end
-
-        return true
-    end
-
-    return raw_value
+    return not self.input_driver:controls(action_name)
 end
 
 function SequenceEngine:handle_input(action_name, raw_value)
+    if action_name == 'toggle_ads' then
+        self.toggle_ads = not not raw_value
+        self.input_settings.toggle_ads = self.toggle_ads
+
+        return raw_value
+    end
+
     if
         action_name ~= 'action_one_pressed'
         and action_name ~= 'action_one_hold'
+        and action_name ~= 'action_two_pressed'
         and not INPUT_INTERRUPTS[action_name]
     then
         return raw_value
     end
 
     local context = self:_refresh_context()
+    local ranged_mode
 
-    if not self.swap_cancel and action_name == 'action_two_hold' and context.kind == 'RANGED' then
-        local ranged_mode = raw_value and 'ads' or 'hip'
-
-        if self.ranged_mode ~= ranged_mode then
-            local primary_down = self.primary_down
-            self.ranged_mode = ranged_mode
-            self.context_key = nil
-            context = self:_refresh_context()
-            local active_action, active_start_t = self:_current_action()
-            if active_action ~= 'idle' then
-                self.last_action_token = _action_token(active_action, active_start_t)
-            end
-            self.primary_down = primary_down
+    if context.kind == 'RANGED' then
+        if action_name == 'action_two_hold' and not self.toggle_ads then
+            ranged_mode = raw_value and 'ads' or 'hip'
+        elseif action_name == 'action_two_pressed' and self.toggle_ads and raw_value then
+            ranged_mode = self.ranged_mode == 'ads' and 'hip' or 'ads'
         end
+    end
+
+    if ranged_mode and self.ranged_mode ~= ranged_mode then
+        local primary_down = self.primary_down
+        self.ranged_mode = ranged_mode
+        self.context_key = nil
+        context = self:_refresh_context()
+        self.primary_down = primary_down
     end
 
     if action_name == 'action_two_hold' then
         self.secondary_down = not not raw_value
+    elseif action_name == 'action_two_pressed' and self.toggle_ads and raw_value then
+        self.secondary_down = self.ranged_mode == 'ads'
     end
 
-    local current_action, start_t, chain_ready, action_settings = self:_current_action()
+    local native_plan = self.plan.goals and #self.plan.goals > 0
+
+    if not native_plan then
+        return raw_value
+    end
+
+    if self.interrupt_halt and PRIMARY_INPUTS[action_name] then
+        self.primary_down = false
+
+        if not raw_value then
+            self.interrupt_halt = false
+        end
+
+        return false
+    end
+
+    self:_maybe_advance_goal()
+
+    local _, _, action_settings = WeaponContext.action(context)
     local preserve_primary_hold = action_settings and action_settings.kind == 'vent_overheat'
 
-    -- Automatic venting aborts the pending shot action, so held autofire must rearm afterward.
-    if preserve_primary_hold then
-        self.fire_token = nil
-    end
     local previous_primary_down = self.primary_down
     local released_primary = false
 
     if action_name == 'action_one_hold' then
         if self.primary_release_required then
             self.primary_down = false
+
             if not raw_value then
                 self.primary_release_required = false
             end
         else
-            local hold_interrupted_by_action = preserve_primary_hold and not raw_value
-            self.primary_down = hold_interrupted_by_action and previous_primary_down or not not raw_value
+            self.primary_down = preserve_primary_hold and not raw_value and previous_primary_down or not not raw_value
         end
+
         released_primary = previous_primary_down and not self.primary_down
     elseif action_name == 'action_one_pressed' and raw_value then
-        local push_input = self.context.kind == 'MELEE' and self.secondary_down
+        local push_input = context.kind == 'MELEE' and self.secondary_down
+
         if not push_input and not self.primary_release_required then
             self.primary_down = true
         end
@@ -604,50 +594,57 @@ function SequenceEngine:handle_input(action_name, raw_value)
         return raw_value
     end
 
-    self:_maybe_advance(current_action, start_t, chain_ready, action_settings)
     if self:_restore_after_no_repeat() then
         return raw_value
     end
 
-    local command = self:_command()
-    local auto_fire_without_primary = action_name == 'action_one_pressed'
-        and self.context.kind == 'RANGED'
-        and self.automatic_fire == 'charged'
-        and command == 'shoot'
     if self.completed then
-        if action_name == 'action_one_pressed' or action_name == 'action_one_hold' then
+        if PRIMARY_INPUTS[action_name] then
             return false
         end
+
         return raw_value
     end
-    if not command or not self.profile then
+
+    local auto_active = self:_native_driver_active()
+
+    if not self.primary_down and not auto_active then
         return raw_value
     end
-    if self:_should_reset_for_interrupt(action_name, raw_value, command) then
-        local halt_until_primary_release = action_name == 'action_two_hold' and self.context.kind == 'MELEE'
+
+    if self:_should_reset_for_interrupt(action_name, raw_value) then
+        local is_block = action_name == 'action_two_hold' and context.kind == 'MELEE'
+
         self:reset()
+
         if action_name == 'action_two_hold' then
             self.secondary_down = not not raw_value
-            self.primary_release_required = halt_until_primary_release
+            self.primary_release_required = is_block
+        else
+            -- Movement interrupts must keep the held primary from re-arming an attack, so sprint/slide can sustain until the player releases.
+            self.interrupt_halt = true
         end
+
         return raw_value
     end
-    if not self.primary_down and not auto_fire_without_primary then
-        return raw_value
-    end
-    return self:_override(action_name, raw_value, current_action, command, chain_ready, action_settings, start_t)
+
+    return self:_native_override(action_name, raw_value)
 end
 
 function SequenceEngine:update()
     self:_refresh_context()
 
-    if not self.primary_down and not self:_secondary_driver_active() then
-        return
+    local native_plan = self.plan.goals and #self.plan.goals > 0
+
+    if native_plan then
+        self:_maybe_advance_goal()
     end
 
-    local current_action, start_t, chain_ready, action_settings = self:_current_action()
-    self:_maybe_advance(current_action, start_t, chain_ready, action_settings)
-    self:_restore_after_no_repeat()
+    if self:_native_driver_active() then
+        self:_sync_native_driver()
+    else
+        self:_restore_after_no_repeat()
+    end
 end
 
 return SequenceEngine

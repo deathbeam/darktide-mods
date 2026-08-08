@@ -148,22 +148,20 @@ mod:hook_safe(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(self)
     end
 end)
 
+mod:hook_safe(CLASS.ActionHandler, 'start_action', function(self, id, _, action_name, _, _, used_input, t)
+    if id == 'weapon_action' and _is_local_player_unit(self._unit) then
+        mod.engine:on_action_started(action_name, used_input, t)
+    end
+end)
+
+mod:hook_safe(CLASS.ActionSweep, '_exit_damage_window', function(self)
+    if mod.ready() and _is_local_player_unit(self._player_unit) then
+        mod.engine:on_damage_window_exited()
+    end
+end)
+
 for _, state_class in pairs(RESET_STATE_CLASSES) do
     if state_class then
         mod:hook_safe(state_class, 'on_enter', _reset_for_disruptive_state)
     end
 end
-
-local function _set_sweep_state(self, state)
-    if mod.ready() and _is_local_player_unit(self._player_unit) then
-        mod.engine:set_sweep_state(state)
-    end
-end
-
-mod:hook_safe(CLASS.ActionSweep, '_reset_sweep_component', function(self)
-    _set_sweep_state(self, 'before_damage_window')
-end)
-
-mod:hook_safe(CLASS.ActionSweep, '_exit_damage_window', function(self)
-    _set_sweep_state(self, 'after_damage_window')
-end)

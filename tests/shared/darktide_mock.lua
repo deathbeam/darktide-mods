@@ -31,6 +31,108 @@ local DEFAULT_ACTION_INPUT_HIERARCHY = {
     { input = 'shoot_pressed', transition = 'base' },
 }
 
+local DEFAULT_ACTION_INPUTS = {
+    start_attack = {
+        buffer_time = 0.3,
+        input_sequence = { { input = 'action_one_hold', value = true } },
+    },
+    light_attack = {
+        buffer_time = 0.3,
+        input_sequence = { { input = 'action_one_hold', value = false } },
+    },
+    heavy_attack = {
+        buffer_time = 0.5,
+        input_sequence = {
+            { duration = 0.25, input = 'action_one_hold', value = true },
+            { input = 'action_one_hold', value = false },
+        },
+    },
+    block = {
+        buffer_time = 0.1,
+        input_sequence = { { input = 'action_two_hold', value = true } },
+    },
+    push = {
+        buffer_time = 0.2,
+        input_sequence = {
+            { hold_input = 'action_two_hold', input = 'action_one_pressed', value = true },
+        },
+    },
+    push_follow_up = {
+        buffer_time = 0.3,
+        input_sequence = {
+            { duration = 0.25, hold_input = 'action_two_hold', input = 'action_one_hold', value = true },
+        },
+    },
+    special_action_hold = {
+        input_sequence = { { input = 'weapon_extra_hold', value = true } },
+    },
+    special_action = {
+        input_sequence = { { input = 'weapon_extra_pressed', value = true } },
+    },
+    shoot_pressed = {
+        input_sequence = { { input = 'action_one_pressed', value = true } },
+    },
+    shoot = {
+        input_sequence = { { input = 'action_one_pressed', value = true } },
+    },
+    shoot_hold = {
+        input_sequence = { { input = 'action_one_hold', value = true } },
+    },
+    shoot_charge = {
+        input_sequence = { { input = 'action_one_pressed', value = true } },
+    },
+}
+
+local FRAME_INPUTS = {
+    'action_one_pressed',
+    'action_one_hold',
+    'action_two_pressed',
+    'action_two_hold',
+    'weapon_extra_pressed',
+    'weapon_extra_hold',
+    'weapon_reload_hold',
+    'quick_wield',
+    'sprint',
+    'toggle_ads',
+}
+
+local function _active_input_element(element, inputs)
+    local input_setting = element.input_setting
+
+    if input_setting and inputs[input_setting.setting] == input_setting.setting_value then
+        return input_setting
+    end
+
+    return element
+end
+
+local function _element_matches(element, inputs)
+    local active_element = _active_input_element(element, inputs)
+    local candidates = active_element.inputs
+
+    if candidates then
+        if active_element.input_mode == 'all' then
+            for _, candidate in ipairs(candidates) do
+                if inputs[candidate.input] ~= candidate.value then
+                    return false
+                end
+            end
+
+            return true
+        end
+
+        for _, candidate in ipairs(candidates) do
+            if inputs[candidate.input] == candidate.value then
+                return true
+            end
+        end
+
+        return false
+    end
+
+    return active_element.input and inputs[active_element.input] == active_element.value or false
+end
+
 local function _clone(value)
     if type(value) ~= 'table' then
         return value
@@ -50,6 +152,12 @@ local function _new_template(name, template)
     template.name = template.name or name
     template.actions = template.actions or {}
     template.action_inputs = template.action_inputs or {}
+
+    for input_name, input in pairs(DEFAULT_ACTION_INPUTS) do
+        if template.action_inputs[input_name] == nil then
+            template.action_inputs[input_name] = _clone(input)
+        end
+    end
     template.action_input_hierarchy = template.action_input_hierarchy or _clone(DEFAULT_ACTION_INPUT_HIERARCHY)
     template.displayed_attacks = template.displayed_attacks or {
         primary = { type = 'ranged' },
@@ -182,10 +290,16 @@ function DarktideMock.new()
         return dofile(root .. filename)
     end
 
-    function mock:set_action(action_name, settings, start_t)
+    function mock:set_action(action_name, settings, start_t, used_input)
         action_component.current_action_name = action_name or 'none'
         action_component.start_t = start_t
         mock.extension._running_action_settings = settings
+
+        local engine = mock._engine
+
+        if engine and action_name and action_name ~= 'none' then
+            engine:on_action_started(action_name, used_input, start_t)
+        end
     end
 
     function mock:set_charge(level, max_charge, start_t)
@@ -202,6 +316,185 @@ function DarktideMock.new()
 
     function mock:set_wielded_slot(slot)
         inventory.wielded_slot = slot
+    end
+
+    local function _wielded_template()
+        local weapon = weapons[inventory.wielded_slot]
+        return weapon and weapon.weapon_template or nil
+    end
+
+    local function _set_input_hierarchy(template, hierarchy)
+        mock._input_template = template
+        mock._input_hierarchy = hierarchy
+        mock._input_sequences = {}
+
+        for _, entry in ipairs(hierarchy or {}) do
+            mock._input_sequences[entry.input] = {
+                index = 1,
+                start_t = mock.now,
+            }
+        end
+    end
+
+    local function _transition_input_hierarchy(template, input_name)
+        for _, entry in ipairs(mock._input_hierarchy or {}) do
+            if entry.input == input_name then
+                local transition = entry.transition
+
+                if transition == 'base' then
+                    _set_input_hierarchy(template, template.action_input_hierarchy)
+                elseif type(transition) == 'table' then
+                    _set_input_hierarchy(template, transition)
+                end
+
+                return
+            end
+        end
+    end
+
+    local function _completed_input(template, inputs)
+        for _, entry in ipairs(mock._input_hierarchy or {}) do
+            local input_name = entry.input
+            local config = template.action_inputs and template.action_inputs[input_name]
+            local elements = config and config.input_sequence
+            local sequence = mock._input_sequences[input_name]
+
+            if elements and sequence then
+                local element = elements[sequence.index]
+                local active_element = element and _active_input_element(element, inputs)
+                local held = not active_element or not active_element.hold_input or inputs[active_element.hold_input]
+                local matched = active_element and _element_matches(element, inputs)
+                local elapsed = active_element and mock.now - sequence.start_t or 0
+                local complete = false
+
+                if active_element and active_element.duration then
+                    if not matched or not held then
+                        sequence.start_t = mock.now
+                    elseif elapsed >= active_element.duration then
+                        complete = true
+                    end
+                elseif active_element and active_element.time_window then
+                    if matched and held and elapsed <= active_element.time_window then
+                        complete = true
+                    elseif elapsed > active_element.time_window and active_element.auto_complete then
+                        complete = true
+                    end
+                elseif matched and held then
+                    complete = true
+                end
+
+                if complete then
+                    if elements[sequence.index + 1] then
+                        sequence.index = sequence.index + 1
+                        sequence.start_t = mock.now
+                    else
+                        sequence.index = 1
+                        sequence.start_t = mock.now
+
+                        return input_name
+                    end
+                end
+            end
+        end
+    end
+
+    local function _chain_action(chain_actions)
+        return chain_actions and (chain_actions[1] or chain_actions) or nil
+    end
+
+    local function _apply_input(template, input_name)
+        local action_name = action_component.current_action_name
+        local action_settings = mock.extension._running_action_settings
+
+        if not action_name or action_name == 'none' then
+            for next_action_name, settings in pairs(template.actions or {}) do
+                if settings.start_input == input_name then
+                    mock:set_action(next_action_name, settings, mock.now, input_name)
+
+                    return true
+                end
+            end
+
+            return false
+        end
+
+        local chain_actions = action_settings and action_settings.allowed_chain_actions
+        local chain_action = _chain_action(chain_actions and chain_actions[input_name])
+        local next_action_name = chain_action and chain_action.action_name
+        local next_settings = next_action_name and template.actions[next_action_name]
+        local valid = chain_action
+            and mock.extension:action_input_is_currently_valid('weapon_action', input_name, nil, mock.now)
+        if not valid or not next_settings then
+            return false
+        end
+
+        mock:set_action(next_action_name, next_settings, mock.now, input_name)
+
+        return true
+    end
+
+    local function _queue_input(template, input_name)
+        local config = template.action_inputs and template.action_inputs[input_name] or {}
+        local buffer_time = config.buffer_time or 0
+        local queue = mock._input_queue
+
+        queue[#queue + 1] = {
+            input_name = input_name,
+            expires_t = mock.now + buffer_time,
+        }
+    end
+
+    local function _apply_queued_input(template)
+        local queue = mock._input_queue
+        local index = 1
+
+        while queue[index] do
+            local entry = queue[index]
+
+            if mock.now > entry.expires_t then
+                table.remove(queue, index)
+            elseif _apply_input(template, entry.input_name) then
+                table.remove(queue, index)
+
+                return entry.input_name
+            else
+                index = index + 1
+            end
+        end
+    end
+
+    function mock:run_input_frame(engine, raw_inputs)
+        raw_inputs = raw_inputs or {}
+        local inputs = {}
+
+        for _, input_name in ipairs(FRAME_INPUTS) do
+            local raw_value = raw_inputs[input_name] or false
+            inputs[input_name] = engine:handle_input(input_name, raw_value)
+        end
+
+        local template = _wielded_template()
+        if not template then
+            return inputs, nil
+        end
+
+        if mock._input_template ~= template then
+            mock._input_queue = {}
+            _set_input_hierarchy(template, template.action_input_hierarchy)
+        end
+
+        local input_name = _completed_input(template, inputs)
+        if input_name then
+            _transition_input_hierarchy(template, input_name)
+            _queue_input(template, input_name)
+        end
+
+        local applied_input = _apply_queued_input(template)
+
+        return inputs, input_name or applied_input
+    end
+
+    function mock:current_action_name()
+        return action_component.current_action_name
     end
 
     function mock:install()
@@ -237,8 +530,9 @@ function DarktideMock.new()
         self:install()
         local sequence_engine =
             dofile(root .. 'SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceEngine.lua')
-
-        return sequence_engine:new(self.mod, mode_manager)
+        local engine = sequence_engine:new(self.mod, mode_manager)
+        mock._engine = engine
+        return engine
     end
 
     function mock:load_weapon_context()

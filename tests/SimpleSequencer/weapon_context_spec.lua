@@ -38,17 +38,6 @@ describe('SimpleSequencer WeaponContext', function()
         assert.is_nil(action_settings)
     end)
 
-    it('reads charge level, maximum, and start time defensively', function()
-        mock:set_charge(0.5, 0.75, 2)
-        local context = WeaponContext.read()
-
-        local charge_level, max_charge, charge_start_time = WeaponContext.charge_state(context)
-
-        assert.are.equal(0.5, charge_level)
-        assert.are.equal(0.75, max_charge)
-        assert.are.equal(2, charge_start_time)
-    end)
-
     it('matches game chain timing at the boundary and inside a chain window', function()
         local settings = {
             start_input = 'shoot_pressed',
@@ -66,6 +55,62 @@ describe('SimpleSequencer WeaponContext', function()
         assert.is_true(WeaponContext.can_chain(settings, 1, 'shoot_pressed', context))
         mock.now = 1.05
         assert.is_true(WeaponContext.can_chain(settings, 1, 'shoot_pressed', context))
+    end)
+
+    it('opens an action-input buffer before its chain boundary', function()
+        local settings = {
+            kind = 'windup',
+            allowed_chain_actions = {
+                light_attack = {
+                    action_name = 'action_light',
+                    chain_time = 0.31,
+                },
+            },
+        }
+        mock:set_weapon('slot_primary', 'test_buffered_light', {
+            action_inputs = {
+                light_attack = { buffer_time = 0.3 },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        mock:set_action('action_melee_start', settings, 1)
+        local context = WeaponContext.read()
+
+        mock.now = 1.009
+        assert.is_false(WeaponContext.can_buffer_input(settings, 1, 'light_attack', context))
+
+        mock.now = 1.01
+        assert.is_true(WeaponContext.can_buffer_input(settings, 1, 'light_attack', context))
+    end)
+
+    it('does not buffer a chain whose target action condition cannot pass', function()
+        local settings = {
+            kind = 'windup',
+            allowed_chain_actions = {
+                light_attack = {
+                    action_name = 'action_light',
+                    chain_time = 0.31,
+                },
+            },
+        }
+        mock:set_weapon('slot_primary', 'test_blocked_buffer', {
+            action_inputs = {
+                light_attack = { buffer_time = 0.3 },
+            },
+            actions = {
+                action_light = {
+                    action_condition_func = function()
+                        return false
+                    end,
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        mock:set_action('action_melee_start', settings, 1)
+        local context = WeaponContext.read()
+
+        mock.now = 1.01
+        assert.is_false(WeaponContext.can_buffer_input(settings, 1, 'light_attack', context))
     end)
 
     it('uses the weapon extension as the source of chain validity', function()

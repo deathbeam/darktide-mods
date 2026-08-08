@@ -27,25 +27,18 @@ describe('SimpleSequencer SequenceEngine', function()
         return manager
     end
 
-    it('resets transient sequence and input state', function()
+    it('resets native goal and input state', function()
         local engine = mock:load_sequence_engine(new_manager(nil))
 
-        engine.index = 4
-        engine.plan.commands = { 'shoot' }
+        engine.index = 2
+        engine.plan.goals = { { command = 'light_attack', inputs = { 'start_attack' } } }
         engine.completed = true
         engine.primary_down = true
         engine.secondary_down = true
         engine.primary_release_required = true
-        engine.primary_hold_pulse_token = 'push_follow_up:1'
-        engine.last_action_token = 'shoot:1'
-        engine.running_action_token = 'slot_primary:shoot:1'
-        engine.running_action_state = 'shoot'
-        engine.previous_command = 'charge'
-        engine.idle_match_index = 2
-        engine.fire_token = 4
-        engine.sweep_state = 'after_damage_window'
         engine.no_repeat_restored = true
-        engine.swap_cancel = { origin_slot = 'slot_primary' }
+        engine.goal_terminal_token = 'light_attack:1'
+        engine.native_blocked = true
 
         engine:reset()
 
@@ -54,513 +47,315 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.is_false(engine.primary_down)
         assert.is_false(engine.secondary_down)
         assert.is_false(engine.primary_release_required)
-        assert.is_nil(engine.primary_hold_pulse_token)
-        assert.is_nil(engine.last_action_token)
-        assert.is_nil(engine.running_action_token)
-        assert.is_nil(engine.running_action_state)
-        assert.is_nil(engine.previous_command)
-        assert.is_nil(engine.idle_match_index)
-        assert.is_nil(engine.fire_token)
-        assert.is_nil(engine.sweep_state)
         assert.is_false(engine.no_repeat_restored)
-        assert.is_nil(engine.swap_cancel)
+        assert.is_nil(engine.goal_terminal_token)
+        assert.is_false(engine.native_blocked)
     end)
 
-    it('refreshes the live context without recompiling an unchanged plan', function()
-        local engine = mock:load_sequence_engine(new_manager(nil))
-        local first = engine:_refresh_context()
-        local first_plan = engine.plan
+    it('advances goals from native action-input metadata', function()
+        local profile = {
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'light_attack',
+        }
+        local engine = mock:load_sequence_engine(new_manager(profile))
+        mock:set_wielded_slot('slot_primary')
+        engine:_refresh_context()
 
-        local second = engine:_refresh_context()
+        assert.same({ 'start_attack', 'light_attack' }, engine.plan.goals[1].inputs)
 
-        assert.are_not.equal(first, second)
-        assert.are.equal(second, engine.context)
-        assert.are.equal(first_plan, engine.plan)
+        engine.primary_down = true
+        mock:set_action('action_melee_start', { kind = 'windup', start_input = 'start_attack' }, 0)
+        engine:handle_input('action_one_hold', true)
+
+        mock:set_action('action_light', { kind = 'sweep', start_input = 'light_attack' }, 1)
+        engine:handle_input('action_one_hold', true)
+        assert.is_not_nil(engine.goal_terminal_token)
+
+        mock:set_action('none')
+        engine:handle_input('action_one_hold', true)
+
+        assert.is_true(engine.completed)
+        assert.is_nil(engine.index)
     end)
 
-    it('reports active before completion of a primary-driven plan', function()
+    it('waits for the braced charge chain before firing', function()
+        local profile = {
+            automatic_fire_ads = 'charged',
+        }
+        mock:set_weapon('slot_secondary', 'test_ads', {
+            action_inputs = {
+                brace = { input_sequence = { { input = 'action_two_hold', value = true } } },
+                shoot_braced = { input_sequence = { { input = 'action_one_pressed', value = true } } },
+            },
+            action_input_hierarchy = {
+                {
+                    input = 'brace',
+                    transition = { { input = 'shoot_braced', transition = 'base' } },
+                },
+            },
+            actions = {
+                action_charge = {
+                    kind = 'overload_charge',
+                    start_input = 'brace',
+                    allowed_chain_actions = {
+                        shoot_braced = { action_name = 'action_shoot_charged', chain_time = 0.75 },
+                    },
+                },
+                action_shoot_charged = { kind = 'shoot_hit_scan', use_charge = true },
+            },
+        })
+        mock:set_wielded_slot('slot_secondary')
+        local engine = mock:load_sequence_engine(new_manager(profile))
+        mock:set_charge(1, 1, 0)
+
+        mock:set_action('none')
+        assert.is_true(engine:handle_input('action_two_hold', true))
+
+        mock:set_action('action_charge', engine.context.template.actions.action_charge, 0)
+        assert.is_false(engine:handle_input('action_one_pressed', false))
+
+        mock.now = 0.75
+        assert.is_true(engine:handle_input('action_one_pressed', false))
+    end)
+
+    it('keeps automatic fire on the ADS plan with toggle ADS', function()
+        local profile = {
+            automatic_fire_ads = 'charged',
+        }
+        mock:set_weapon('slot_secondary', 'test_toggle_ads', {
+            action_inputs = {
+                brace = {
+                    input_sequence = {
+                        {
+                            input = 'action_two_hold',
+                            value = true,
+                            input_setting = {
+                                input = 'action_two_pressed',
+                                setting = 'toggle_ads',
+                                setting_value = true,
+                                value = true,
+                            },
+                        },
+                    },
+                },
+                shoot_braced = { input_sequence = { { input = 'action_one_pressed', value = true } } },
+            },
+            action_input_hierarchy = {
+                {
+                    input = 'brace',
+                    transition = { { input = 'shoot_braced', transition = 'base' } },
+                },
+            },
+            actions = {
+                action_charge = {
+                    kind = 'overload_charge',
+                    start_input = 'brace',
+                    allowed_chain_actions = {
+                        shoot_braced = { action_name = 'action_shoot_charged', chain_time = 0.75 },
+                    },
+                },
+                action_shoot_charged = {
+                    kind = 'shoot_hit_scan',
+                    use_charge = true,
+                    allowed_chain_actions = {
+                        brace = { action_name = 'action_charge', chain_time = 0 },
+                    },
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_secondary')
+        local engine = mock:load_sequence_engine(new_manager(profile))
+        mock:set_charge(1, 1, 0)
+
+        engine:handle_input('toggle_ads', true)
+        engine:handle_input('action_two_pressed', true)
+        mock:set_action('action_charge', {
+            kind = 'overload_charge',
+            start_input = 'brace',
+            allowed_chain_actions = {
+                shoot_braced = { action_name = 'action_shoot_charged', chain_time = 0.75 },
+            },
+        }, 0)
+        mock.now = 0.75
+        assert.is_true(engine:handle_input('action_one_pressed', false))
+
+        mock:set_action('action_shoot_charged', {
+            kind = 'shoot_hit_scan',
+            allowed_chain_actions = {
+                brace = { action_name = 'action_charge', chain_time = 0 },
+            },
+        }, 0.75)
+        engine:handle_input('action_one_pressed', false)
+
+        assert.is_true(engine:handle_input('action_two_pressed', false))
+    end)
+
+    it('continues from a push into its follow-up chain', function()
+        local profile = {
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'push',
+            sequence_step_2 = 'push_attack',
+        }
+        mock:set_weapon('slot_primary', 'test_push_follow_up', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            actions = {
+                action_push_follow = { kind = 'sweep' },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_sequence_engine(new_manager(profile))
+        mock:set_action('action_push', {
+            kind = 'push',
+            start_input = 'push',
+            allowed_chain_actions = {
+                push_follow_up = { action_name = 'action_push_follow', chain_time = 0 },
+            },
+        }, 0)
+
+        assert.is_true(engine:handle_input('action_one_hold', true))
+    end)
+
+    it('recognizes a chained melee action without start-input metadata', function()
+        local profile = {
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'light_attack',
+        }
+        mock:set_weapon('slot_primary', 'test_melee_native', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            actions = {
+                action_melee_start = {
+                    kind = 'windup',
+                    start_input = 'start_attack',
+                    allowed_chain_actions = {
+                        light_attack = { action_name = 'action_left_light' },
+                    },
+                },
+                action_left_light = { kind = 'sweep' },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_sequence_engine(new_manager(profile))
+        engine:_refresh_context()
+        engine.primary_down = true
+
+        mock:set_action('action_melee_start', { kind = 'windup', start_input = 'start_attack' }, 0)
+        engine:handle_input('action_one_hold', true)
+        mock:set_action('action_left_light', { kind = 'sweep' }, 1)
+        engine:handle_input('action_one_hold', true)
+
+        assert.is_not_nil(engine.goal_terminal_token)
+    end)
+
+    it('uses the action-start event input when chain metadata cannot resolve progress', function()
+        local profile = {
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'light_attack',
+        }
+        mock:set_weapon('slot_primary', 'test_transonic_variant', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            actions = {
+                action_light_1_special = { kind = 'sweep' },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_sequence_engine(new_manager(profile))
+        engine:_refresh_context()
+        engine.primary_down = true
+
+        mock:set_action('action_light_1_special', { kind = 'sweep' }, 1, 'light_attack')
+        engine:handle_input('action_one_hold', true)
+
+        assert.is_not_nil(engine.goal_terminal_token)
+    end)
+
+    it('advances to the next goal at a native chain boundary', function()
+        local profile = {
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'heavy_attack',
+            sequence_step_2 = 'light_attack',
+        }
+        mock:set_weapon('slot_primary', 'test_melee_chain', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            actions = {
+                action_melee_start = {
+                    kind = 'windup',
+                    start_input = 'start_attack',
+                    allowed_chain_actions = {
+                        heavy_attack = { action_name = 'action_left_heavy' },
+                    },
+                },
+                action_left_heavy = { kind = 'sweep' },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_sequence_engine(new_manager(profile))
+        engine:_refresh_context()
+        engine.primary_down = true
+
+        mock:set_action('action_left_heavy', {
+            kind = 'sweep',
+            allowed_chain_actions = {
+                start_attack = { chain_time = 0, action_name = 'action_melee_start' },
+            },
+        }, 1)
+        mock.now = 1
+        engine:handle_input('action_one_hold', true)
+
+        assert.are.equal(2, engine.index)
+        assert.same({ 'start_attack', 'light_attack' }, engine.plan.goals[2].inputs)
+        assert.are.equal('start_attack', engine:_native_goal_input())
+    end)
+
+    it('blocks unsupported native inputs instead of falling back', function()
+        local profile = {
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'light_attack',
+        }
+        local engine = mock:load_sequence_engine(new_manager(profile))
+        mock:set_wielded_slot('slot_primary')
+        engine:_refresh_context()
+        engine.context.template.action_inputs.start_attack = nil
+        engine.primary_down = true
+
+        assert.is_false(engine:_native_override('action_one_pressed', false))
+        assert.is_true(engine.native_blocked)
+    end)
+
+    it('reports activity only for a running native goal', function()
         local engine = mock:load_sequence_engine(new_manager(nil))
         engine.profile = {}
-        engine.plan.commands = { 'light_attack' }
+        engine.plan.goals = { { command = 'light_attack', inputs = { 'start_attack' } } }
         engine.primary_down = true
+
         assert.is_true(engine:is_active())
 
         engine.completed = true
         assert.is_false(engine:is_active())
     end)
 
-    it('reports active while a secondary-driven plan is running', function()
-        local engine = mock:load_sequence_engine(new_manager(nil))
-        engine.profile = {}
-        engine.plan.commands = { 'push' }
-        engine.secondary_down = true
-        assert.is_true(engine:is_active())
-    end)
-
-    it('does not treat ranged aim as a secondary-driven sequence', function()
-        local engine = mock:load_sequence_engine(new_manager(nil))
-        mock:set_wielded_slot('slot_secondary')
-        engine.context = mock:load_weapon_context().read()
-        engine.context_key = 'mode_1:RANGED:test_ranged:hip'
-        engine.profile = {}
-        engine.plan.commands = { 'shoot' }
-        engine.secondary_down = true
-        assert.is_false(engine:is_active())
-    end)
-
-    it('resets a secondary-driven sequence on an unexpected manual interrupt', function()
-        local engine = mock:load_sequence_engine(new_manager(nil))
-        engine.profile = {}
-        engine.plan.commands = { 'start_attack', 'heavy_attack' }
+    it('resets a native sequence on an unexpected manual interrupt', function()
+        local profile = {
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'light_attack',
+            sequence_step_2 = 'heavy_attack',
+        }
+        local engine = mock:load_sequence_engine(new_manager(profile))
         mock:set_wielded_slot('slot_primary')
-        engine.context = mock:load_weapon_context().read()
-        engine.context_key = 'mode_1:MELEE:test_melee:hip'
+        engine:_refresh_context()
         engine.index = 2
         engine.secondary_down = true
         mock:set_action('none')
+
         assert.is_true(engine:handle_input('action_two_hold', true))
         assert.are.equal(1, engine.index)
         assert.is_true(engine.secondary_down)
     end)
 
-    it('classifies charge-ammo actions using their metadata', function()
-        mock:set_action('action_charge', {
-            kind = 'charge_ammo',
-            start_input = 'shoot_pressed',
-        }, 1)
-
-        local engine = mock:load_sequence_engine(new_manager(nil))
-        local current_action = engine:_current_action()
-
-        assert.are.equal('charge', current_action)
-    end)
-
-    it('allows an ammo-limited charge to complete at its maximum', function()
-        mock:set_charge(0.25, 0.25, 2)
-        mock:set_action('action_charge', {
-            kind = 'charge_ammo',
-            start_input = 'shoot_pressed',
-        }, 1)
-
-        local engine = mock:load_sequence_engine(new_manager(nil))
-        engine.context = engine.context or mock:load_weapon_context().read()
-        engine.profile = {
-            auto_charge_threshold = 100,
-        }
-
-        assert.is_true(engine:_charge_ready(1, { kind = 'charge_ammo' }))
-    end)
-
-    it('rejects inherited charge time unless the action keeps the charge', function()
-        mock:set_charge(1, 1, 1)
-        mock:set_action('action_charge', {
-            kind = 'charge_ammo',
-            start_input = 'shoot_pressed',
-        }, 2)
-
-        local engine = mock:load_sequence_engine(new_manager(nil))
-        engine.context = mock:load_weapon_context().read()
-        engine.profile = {
-            auto_charge_threshold = 100,
-        }
-
-        assert.is_false(engine:_charge_ready(2, { kind = 'charge_ammo' }))
-        assert.is_true(engine:_charge_ready(2, { kind = 'charge_ammo', keep_charge = true }))
-    end)
-
-    it('keeps plasma standard autofire on the primary input', function()
-        local profile = {
-            automatic_fire_hip = 'standard',
-            automatic_fire_ads = 'standard',
-        }
-        mock:set_weapon('slot_secondary', 'plasmagun_p1_m1', {
-            action_input_hierarchy = {
-                { input = 'shoot_charge', transition = 'base' },
-            },
-            actions = {
-                action_charge_direct = {
-                    kind = 'overload_charge',
-                    start_input = 'shoot_charge',
-                },
-            },
-        })
-
-        local engine = mock:load_sequence_engine(new_manager(profile))
-        engine:_refresh_context()
-
-        assert.same({ 'shoot', 'idle' }, engine.plan.commands)
-        assert.is_true(engine:_override('action_one_hold', false, 'idle', 'shoot', false, nil, 0))
-    end)
-
-    it('preserves a held primary input while changing ranged aim mode', function()
-        local profile = {
-            automatic_fire_hip = 'standard',
-            automatic_fire_ads = 'standard',
-        }
-        local engine = mock:load_sequence_engine(new_manager(profile))
-
-        mock:set_action('action_aim', {
-            kind = 'aim',
-            start_input = 'zoom',
-        }, 1)
-        engine:handle_input('action_one_hold', true)
-        assert.is_true(engine.primary_down)
-
-        local result = engine:handle_input('action_two_hold', true)
-
-        assert.is_true(result)
-        assert.are.equal('ads', engine.ranged_mode)
-        assert.is_true(engine.primary_down)
-    end)
-
-    it('quick-swaps away and back before advancing the cancel step', function()
-        local profile = {
-            sequence_cycle_point = 'no_repeat',
-            sequence_step_1 = 'quick_swap_cancel',
-            sequence_step_2 = 'light_attack',
-        }
-        local engine = mock:load_sequence_engine(new_manager(profile))
-        mock:set_wielded_slot('slot_primary')
-
-        assert.is_false(engine:handle_input('action_one_hold', true))
-        assert.is_true(engine:handle_input('quick_wield', false))
-
-        mock:set_wielded_slot('slot_secondary')
-        engine:on_slot_wielded()
-        assert.is_true(engine:handle_input('quick_wield', false))
-
-        mock:set_wielded_slot('slot_primary')
-        engine:on_slot_wielded()
-        assert.is_false(engine:handle_input('quick_wield', false))
-        assert.is_true(engine:handle_input('action_one_pressed', false))
-    end)
-
-    it('resets normally when a slot change is not part of a quick-swap cancel', function()
-        local profile = {
-            sequence_cycle_point = 'sequence_step_1',
-            sequence_step_1 = 'light_attack',
-        }
-        local engine = mock:load_sequence_engine(new_manager(profile))
-        mock:set_wielded_slot('slot_primary')
-        engine:handle_input('action_one_hold', true)
-        assert.is_true(engine:is_active())
-
-        mock:set_wielded_slot('slot_secondary')
-        engine:on_slot_wielded()
-
-        assert.is_false(engine:is_active())
-        assert.is_nil(engine.context_key)
-    end)
-
-    it('buffers a held primary pressed during a ranged weapon swap', function()
-        local profile = { automatic_fire_hip = 'standard' }
-        local engine = mock:load_sequence_engine(new_manager(profile))
-        mock:set_wielded_slot('slot_primary')
-
-        mock:set_wielded_slot('slot_secondary')
-        mock:set_action('action_wield', { kind = 'ranged_wield' }, 1)
-        engine:on_slot_wielded()
-        assert.is_true(engine:handle_input('action_one_hold', true))
-        assert.is_true(engine:handle_input('action_one_pressed', true))
-
-        mock:set_action('none')
-        assert.is_true(engine:handle_input('action_one_hold', true))
-        local buffered_press = engine:handle_input('action_one_pressed', false)
-
-        assert.is_true(engine.primary_down)
-        assert.is_true(buffered_press)
-    end)
-
-    it('uses available game inputs to detect charged special windups', function()
-        for _, input_name in ipairs({ 'special_action_heavy', 'heavy_attack' }) do
-            local engine = mock:load_sequence_engine(new_manager(nil))
-            local allowed_chain_actions = {
-                [input_name] = { chain_time = 0.4 },
-            }
-            mock:set_wielded_slot('slot_secondary')
-            engine.context = mock:load_weapon_context().read()
-            engine.context_key = 'mode_1:RANGED:test_ranged:hip'
-            engine.plan.commands = { 'special_heavy_execute' }
-            engine.profile = {}
-            mock:set_action('action_bash_start', {
-                kind = 'windup',
-                start_input = 'special_action_hold',
-                allowed_chain_actions = allowed_chain_actions,
-            }, 0)
-
-            mock.now = 0.39
-            local charging_action = engine:_current_action()
-            mock.now = 0.4
-            local charged_action = engine:_current_action()
-
-            assert.are.equal('special_start_attack', charging_action, input_name)
-            assert.are.equal('special_heavy_execute', charged_action, input_name)
-        end
-    end)
-
-    it('keeps ambiguous running actions stable after advancing', function()
-        local engine = mock:load_sequence_engine(new_manager(nil))
-        mock:set_wielded_slot('slot_primary')
-        engine.context = mock:load_weapon_context().read()
-        engine.plan.commands = { 'special_light_attack', 'light_attack' }
-        engine.profile = {}
-        mock:set_action('unnamed_sweep', { kind = 'sweep' }, 0)
-
-        local current_action, start_t, chain_ready, action_settings = engine:_current_action()
-        engine:_maybe_advance(current_action, start_t, chain_ready, action_settings)
-        local same_action = engine:_current_action()
-
-        assert.are.equal(2, engine.index)
-        assert.are.equal('special_light_attack', same_action)
-    end)
-
-    it('does not consume one running action for repeated commands', function()
-        local engine = mock:load_sequence_engine(new_manager(nil))
-        mock:set_wielded_slot('slot_primary')
-        engine.context = mock:load_weapon_context().read()
-        engine.plan.commands = { 'light_attack', 'light_attack' }
-        engine.profile = {}
-        mock:set_action('action_light', { kind = 'sweep' }, 0)
-
-        local current_action, start_t, chain_ready, action_settings = engine:_current_action()
-        engine:_maybe_advance(current_action, start_t, chain_ready, action_settings)
-        current_action, start_t, chain_ready, action_settings = engine:_current_action()
-        engine:_maybe_advance(current_action, start_t, chain_ready, action_settings)
-
-        assert.are.equal(2, engine.index)
-        assert.is_false(engine.completed)
-
-        mock:set_action('action_light', { kind = 'sweep' }, 1)
-        current_action, start_t, chain_ready, action_settings = engine:_current_action()
-        engine:_maybe_advance(current_action, start_t, chain_ready, action_settings)
-
-        assert.is_true(engine.completed)
-    end)
-
-    it('does not end a sweep before its next chain becomes available', function()
-        local engine = mock:load_sequence_engine(new_manager(nil))
-        mock:set_wielded_slot('slot_primary')
-        engine.context = mock:load_weapon_context().read()
-        engine.context_key = 'mode_1:MELEE:test_melee:hip'
-        engine.plan.commands = { 'light_attack', 'idle' }
-        engine.profile = {}
-        engine.sweep_state = 'after_damage_window'
-        mock:set_action('action_light', {
-            kind = 'sweep',
-            allowed_chain_actions = {
-                start_attack = { chain_time = 0.6 },
-            },
-        }, 0)
-        mock.now = 0.3
-
-        local _, _, early_chain_ready = engine:_current_action()
-
-        mock.now = 0.6
-        local _, _, chain_ready = engine:_current_action()
-
-        assert.is_false(early_chain_ready)
-        assert.is_true(chain_ready)
-    end)
-
-    it('uses the push chain boundary before the push action ends', function()
-        local engine = mock:load_sequence_engine(new_manager(nil))
-        mock:set_wielded_slot('slot_primary')
-        engine.context = mock:load_weapon_context().read()
-        engine.context_key = 'mode_1:MELEE:test_melee:hip'
-        engine.plan.commands = { 'push', 'idle', 'start_attack' }
-        engine.index = 2
-        engine.previous_command = 'push'
-        engine.profile = {}
-        mock:set_action('action_push', {
-            kind = 'push',
-            allowed_chain_actions = {
-                start_attack = { chain_time = 0.3 },
-            },
-        }, 0)
-        mock.now = 0.3
-
-        local current_action, _, chain_ready = engine:_current_action()
-        engine:_maybe_advance(current_action, 0, chain_ready)
-
-        assert.are.equal('push', current_action)
-        assert.is_true(chain_ready)
-        assert.are.equal('start_attack', engine:_command())
-    end)
-
-    it('waits for the weapon chain boundary before pulsing after a push follow-up', function()
-        local engine = mock:load_sequence_engine(new_manager(nil))
-        mock:set_weapon('slot_primary', 'combatsword_p3_m1', {
-            displayed_attacks = { primary = { type = 'melee' } },
-        })
-        mock:set_wielded_slot('slot_primary')
-        engine.context = mock:load_weapon_context().read()
-        engine.context_key = 'mode_1:MELEE:combatsword_p3_m1:hip'
-        engine.plan.commands = { 'start_attack', 'light_attack', 'idle' }
-        engine.index = 1
-        engine.plan.cycle_index = 1
-        engine.plan.repeating = true
-        engine.profile = {}
-        engine.primary_down = true
-        engine.secondary_down = true
-        mock:set_action('action_right_light_pushfollow', {
-            kind = 'sweep',
-            allowed_chain_actions = {
-                start_attack = { chain_time = 0.4 },
-            },
-        }, 0)
-        mock.now = 0
-        local pre_release_result = engine:handle_input('action_one_hold', true)
-        engine:handle_input('action_two_hold', false)
-        mock.now = 0.2
-        local early_result = engine:handle_input('action_one_hold', true)
-        mock.now = 0.399
-        local before_boundary_result = engine:handle_input('action_one_hold', true)
-        mock.now = 0.401
-        local boundary_result = engine:handle_input('action_one_hold', true)
-        local after_boundary_result = engine:handle_input('action_one_hold', true)
-        mock:set_action('action_melee_start_left', {
-            kind = 'windup',
-            start_input = 'start_attack',
-            allowed_chain_actions = {
-                light_attack = { chain_time = 0 },
-                heavy_attack = { chain_time = 0.5 },
-            },
-        }, 0.401)
-        local windup_result = engine:handle_input('action_one_hold', true)
-
-        assert.is_true(pre_release_result)
-        assert.is_false(early_result)
-        assert.is_false(before_boundary_result)
-        assert.is_true(boundary_result)
-        assert.is_false(after_boundary_result)
-        assert.is_false(windup_result)
-        assert.are.equal('light_attack', engine:_command())
-    end)
-
-    it('keeps a push follow-up held while secondary input is down', function()
-        local engine = mock:load_sequence_engine(new_manager(nil))
-        engine.context = mock:load_weapon_context().read()
-        engine.context_key = 'mode_1:MELEE:test_melee:hip'
-        engine.plan.commands = { 'start_attack', 'light_attack', 'idle' }
-        engine.index = 1
-        engine.plan.cycle_index = 1
-        engine.plan.repeating = true
-        engine.profile = {}
-        engine.primary_down = true
-        engine.secondary_down = false
-        mock:set_action('action_push', { kind = 'push' }, 1)
-
-        engine:handle_input('action_two_hold', true)
-        local result = engine:handle_input('action_one_hold', true)
-
-        assert.is_true(result)
-    end)
-
-    it('does not claim the primary press used by a manual push follow-up', function()
-        local engine = mock:load_sequence_engine(new_manager(nil))
-        mock:set_wielded_slot('slot_primary')
-        engine.context = mock:load_weapon_context().read()
-        engine.context_key = 'mode_1:MELEE:test_melee:hip'
-        engine.plan.commands = { 'start_attack' }
-        engine.profile = {}
-        engine.secondary_down = true
-        mock:set_action('none')
-        assert.is_true(engine:handle_input('action_one_pressed', true))
-        assert.is_false(engine.primary_down)
-    end)
-
-    it('does not re-arm a reset sequence from a held manual push input', function()
-        local engine = mock:load_sequence_engine(new_manager(nil))
-        mock:set_wielded_slot('slot_primary')
-        engine.context = mock:load_weapon_context().read()
-        engine.context_key = 'mode_1:MELEE:test_melee:hip'
-        engine.plan.commands = { 'start_attack', 'heavy_attack' }
-        engine.index = 2
-        engine.profile = {}
-        engine.primary_down = true
-        mock:set_action('none')
-
-        assert.is_true(engine:handle_input('action_two_hold', true))
-        assert.are.equal(1, engine.index)
-        assert.is_false(engine.primary_down)
-
-        mock:set_action('action_push_follow', { kind = 'sweep' }, 1)
-        engine:handle_input('action_one_hold', true)
-        engine:handle_input('action_two_hold', false)
-
-        assert.is_false(engine.primary_down)
-        assert.is_true(engine:handle_input('action_one_hold', true))
-        assert.is_false(engine.primary_down)
-
-        engine:handle_input('action_one_hold', false)
-        assert.is_false(engine.primary_release_required)
-        assert.is_true(engine:handle_input('action_one_pressed', true))
-        assert.is_true(engine.primary_down)
-    end)
-
-    it('pulses held ranged fire at the chain boundary', function()
-        mock:set_action('action_shoot', {
-            start_input = 'shoot_pressed',
-            allowed_chain_actions = {
-                shoot_pressed = { chain_time = 0.225 },
-            },
-        }, 0)
-        mock.now = 0.226
-
-        local engine = mock:load_sequence_engine(new_manager(nil))
-        engine.context = mock:load_weapon_context().read()
-        engine.context_key = 'mode_1:RANGED:test_ranged:hip'
-        engine.plan.commands = { 'shoot', 'idle' }
-        engine.index = 1
-        engine.plan.cycle_index = 1
-        engine.plan.repeating = true
-
-        local current_action, start_t, chain_ready = engine:_current_action()
-        assert.are.equal('shoot', current_action)
-        assert.is_true(chain_ready)
-        engine:_maybe_advance(current_action, start_t, chain_ready)
-
-        current_action, start_t, chain_ready = engine:_current_action()
-        engine:_maybe_advance(current_action, start_t, chain_ready)
-
-        assert.are.equal(1, engine.index)
-        assert.is_true(engine:_fire_pulse(current_action, false, chain_ready))
-    end)
-
-    it('preserves a held primary through automatic vent recovery', function()
-        local profile = {}
-        local engine = mock:load_sequence_engine(new_manager(profile))
-        engine.context = mock:load_weapon_context().read()
-        engine.context_key = 'mode_1:RANGED:test_ranged:hip'
-        engine.plan.commands = { 'shoot', 'idle' }
-        engine.index = 1
-        engine.plan.cycle_index = 1
-        engine.plan.repeating = true
-        engine.profile = profile
-
-        mock:set_action('action_charge_direct', { kind = 'overload_charge' }, 0)
-        assert.is_true(engine:handle_input('action_one_pressed', true))
-        assert.is_true(engine.primary_down)
-
-        mock:set_action('action_vent_override', { kind = 'vent_overheat' }, 1)
-        engine:handle_input('action_one_hold', false)
-        assert.is_true(engine.primary_down)
-
-        mock.now = 2
-        mock:set_action('none')
-        engine:handle_input('action_one_hold', true)
-        local result = engine:handle_input('action_one_pressed', false)
-
-        assert.is_true(result)
-        engine:handle_input('action_one_hold', false)
-        assert.is_false(engine.primary_down)
-    end)
-
-    it('restores a no-repeat sequence mode only once', function()
+    it('restores a no-repeat mode only once after native completion', function()
         local manager = new_manager(nil)
         local engine = mock:load_sequence_engine(manager)
 
-        engine.plan.commands = { 'light_attack' }
+        engine.plan.goals = { { command = 'light_attack', inputs = { 'start_attack' } } }
         engine.index = 1
         engine.plan.repeating = false
         engine:_advance()
@@ -570,5 +365,70 @@ describe('SimpleSequencer SequenceEngine', function()
         assert.are.equal(1, manager.toggles)
         assert.is_false(engine:_restore_after_no_repeat())
         assert.are.equal(1, manager.toggles)
+    end)
+
+    it('waits for a start attack chain instead of buffering it early', function()
+        mock:set_weapon('slot_primary', 'test_light_recovery', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            action_inputs = {
+                start_attack = {
+                    buffer_time = 0.3,
+                    input_sequence = { { input = 'action_one_hold', value = true } },
+                },
+                light_attack = {
+                    buffer_time = 0.3,
+                    input_sequence = { { input = 'action_one_hold', value = false } },
+                },
+            },
+            actions = {
+                action_light = {
+                    kind = 'sweep',
+                    start_input = 'light_attack',
+                    allowed_chain_actions = {
+                        start_attack = { action_name = 'action_melee_start', chain_time = 0.5 },
+                    },
+                },
+                action_melee_start = {
+                    kind = 'windup',
+                    start_input = 'start_attack',
+                    allowed_chain_actions = {
+                        light_attack = { action_name = 'action_light', chain_time = 0 },
+                    },
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_sequence_engine(new_manager(nil))
+        engine:_refresh_context()
+        engine.profile = {}
+        engine.plan = {
+            goals = {
+                { command = 'light_attack', inputs = { 'start_attack', 'light_attack' } },
+                { command = 'light_attack', inputs = { 'start_attack', 'light_attack' } },
+            },
+            goal_cycle_index = 0,
+            repeating = false,
+        }
+        engine.primary_down = true
+        mock:set_action('action_light', {
+            kind = 'sweep',
+            start_input = 'light_attack',
+            allowed_chain_actions = {
+                start_attack = { action_name = 'action_melee_start', chain_time = 0.5 },
+            },
+        }, 0)
+        engine.goal_terminal_token = 'action_light:0'
+
+        mock.now = 0.1
+        assert.is_false(engine:handle_input('action_one_hold', true))
+
+        mock.now = 0.2
+        assert.is_false(engine:handle_input('action_one_hold', true))
+
+        mock.now = 0.5
+        assert.is_true(engine:handle_input('action_one_hold', true))
+
+        mock.now = 0.52
+        assert.is_false(engine:handle_input('action_one_hold', true))
     end)
 end)
