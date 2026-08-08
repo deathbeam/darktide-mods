@@ -181,7 +181,7 @@ function ActionInputDriver:value(action_name, raw_value, t)
         return raw_value
     end
 
-    -- A submitted input stays forced off: the physical press must not leak into the parser while the queued entry waits for its chain.
+    -- Keep physical primary input out of the parser while a queued entry awaits its chain.
     if self.submitted then
         if action_name == 'action_one_pressed' or action_name == 'action_one_hold' then
             return false

@@ -71,7 +71,6 @@ function SequenceEngine:init(mod, mode_manager)
     self.secondary_down = false
     self.primary_release_required = false
     self.ranged_mode = 'hip'
-    self.toggle_ads = false
     self.input_settings = { toggle_ads = false }
     self.no_repeat_restored = false
     self.goal_terminal_token = nil
@@ -505,8 +504,7 @@ end
 
 function SequenceEngine:handle_input(action_name, raw_value)
     if action_name == 'toggle_ads' then
-        self.toggle_ads = not not raw_value
-        self.input_settings.toggle_ads = self.toggle_ads
+        self.input_settings.toggle_ads = not not raw_value
 
         return raw_value
     end
@@ -521,12 +519,13 @@ function SequenceEngine:handle_input(action_name, raw_value)
     end
 
     local context = self:_refresh_context()
+    local toggle_ads = self.input_settings.toggle_ads
     local ranged_mode
 
     if context.kind == 'RANGED' then
-        if action_name == 'action_two_hold' and not self.toggle_ads then
+        if action_name == 'action_two_hold' and not toggle_ads then
             ranged_mode = raw_value and 'ads' or 'hip'
-        elseif action_name == 'action_two_pressed' and self.toggle_ads and raw_value then
+        elseif action_name == 'action_two_pressed' and toggle_ads and raw_value then
             ranged_mode = self.ranged_mode == 'ads' and 'hip' or 'ads'
         end
     end
@@ -541,7 +540,7 @@ function SequenceEngine:handle_input(action_name, raw_value)
 
     if action_name == 'action_two_hold' then
         self.secondary_down = not not raw_value
-    elseif action_name == 'action_two_pressed' and self.toggle_ads and raw_value then
+    elseif action_name == 'action_two_pressed' and toggle_ads and raw_value then
         self.secondary_down = self.ranged_mode == 'ads'
     end
 
@@ -621,7 +620,7 @@ function SequenceEngine:handle_input(action_name, raw_value)
             self.secondary_down = not not raw_value
             self.primary_release_required = is_block
         else
-            -- Movement interrupts must keep the held primary from re-arming an attack, so sprint/slide can sustain until the player releases.
+            -- Keep sprint/slide active until the held primary is released.
             self.interrupt_halt = true
         end
 
