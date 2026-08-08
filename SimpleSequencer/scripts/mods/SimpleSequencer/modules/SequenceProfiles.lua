@@ -1,9 +1,54 @@
 local mod = get_mod('SimpleSequencer')
-local ProfileSchema = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ProfileSchema')
-local Profiles = {}
+local Profiles = {
+    sequence_step_count = 6,
+    sequence_step_prefix = 'sequence_step_',
+    kinds = { 'MELEE', 'RANGED' },
+    defaults = {
+        MELEE = {
+            sequence_cycle_point = 'sequence_step_1',
+            sequence_step_1 = 'none',
+            sequence_step_2 = 'none',
+            sequence_step_3 = 'none',
+            sequence_step_4 = 'none',
+            sequence_step_5 = 'none',
+            sequence_step_6 = 'none',
+        },
+        RANGED = {
+            automatic_fire_hip = 'none',
+            automatic_fire_ads = 'none',
+            auto_charge_threshold = 100,
+        },
+    },
+}
+
+function Profiles.clone(value)
+    if type(value) ~= 'table' then
+        return value
+    end
+
+    local result = {}
+
+    for key, child in pairs(value) do
+        result[key] = Profiles.clone(child)
+    end
+
+    return result
+end
+
+function Profiles.keys(kind)
+    local keys = {}
+
+    for key in pairs(Profiles.defaults[kind] or {}) do
+        keys[#keys + 1] = key
+    end
+
+    table.sort(keys)
+
+    return keys
+end
 
 local function _new_profile(kind)
-    return ProfileSchema.clone(ProfileSchema.defaults[kind])
+    return Profiles.clone(Profiles.defaults[kind])
 end
 
 local function _merge_defaults(profile, defaults)
@@ -46,14 +91,14 @@ function Profiles.ensure(data)
         local mode_data = data[mode] or {}
         data[mode] = mode_data
 
-        for _, kind in ipairs(ProfileSchema.kinds) do
+        for _, kind in ipairs(Profiles.kinds) do
             local profiles = mode_data[kind] or {}
             mode_data[kind] = profiles
 
             local global_key = kind == 'MELEE' and 'global_melee' or 'global_ranged'
             _ensure_profile(data, mode, kind, global_key)
 
-            local defaults = ProfileSchema.defaults[kind]
+            local defaults = Profiles.defaults[kind]
             for _, profile in pairs(profiles) do
                 _merge_defaults(profile, defaults)
             end
@@ -87,18 +132,18 @@ function Profiles.build_sequence(profile, kind, ranged_mode)
     local repeating = false
 
     if profile and kind == 'MELEE' then
-        local cycle_point = profile.sequence_cycle_point or ProfileSchema.defaults.MELEE.sequence_cycle_point
+        local cycle_point = profile.sequence_cycle_point or Profiles.defaults.MELEE.sequence_cycle_point
         local no_repeat = cycle_point == 'no_repeat'
 
         repeating = not no_repeat
         local selected_step = tonumber(string.match(cycle_point, '%d+')) or 1
 
-        for i = 1, ProfileSchema.sequence_step_count do
+        for i = 1, Profiles.sequence_step_count do
             if not no_repeat and selected_step == i then
                 cycle_step = #steps + 1
             end
 
-            local action = profile[ProfileSchema.sequence_step_prefix .. i]
+            local action = profile[Profiles.sequence_step_prefix .. i]
 
             if action and action ~= 'none' then
                 steps[#steps + 1] = action
