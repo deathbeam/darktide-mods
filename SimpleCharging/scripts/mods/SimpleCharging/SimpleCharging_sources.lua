@@ -1,3 +1,4 @@
+local mod = get_mod('SimpleCharging')
 local ChargeSources = {}
 
 local MAX_SOURCES = 12
@@ -21,6 +22,8 @@ local PROGRESS_SOURCE_RULES = {
             'continuous_fire',
             'heat',
             'overheat',
+            'warp_charge',
+            'warpcharge',
             'charge_level',
             'stamina',
             'ammo',
@@ -34,6 +37,16 @@ local PROGRESS_SOURCE_RULES = {
         excluded_patterns = { '_parent', 'reduces_damage_taken', 'is_uninterruptible' },
     },
 }
+
+local function _setting_enabled(setting_id, default_value)
+    local value = mod and mod:get(setting_id)
+
+    if value == nil then
+        return default_value
+    end
+
+    return value == true
+end
 
 local function _clamp(value, minimum, maximum)
     if value < minimum then
@@ -486,10 +499,10 @@ local function _collect_buff_sources(sources, context)
             local maximum = _step_maximum(buff, template, buff_entries)
             local is_progress_buff = is_stepped or is_parent or has_step_function or has_stack_limit and not is_child
 
+            local is_aim_time_crit = string.find(name, 'crit', 1, true) and string.find(name, AIM_TIME_PATTERN, 1, true)
+
             if is_progress_buff and maximum and maximum > 0 then
                 local value = _visual_stack_count(buff)
-                local is_aim_time_crit = string.find(name, 'crit', 1, true)
-                    and string.find(name, AIM_TIME_PATTERN, 1, true)
 
                 if is_aim_time_crit and value > 0 then
                     local critical_chance = _weapon_critical_chance(context)
@@ -505,6 +518,7 @@ local function _collect_buff_sources(sources, context)
                     order = 10,
                     label = _trait_label(name),
                     kind = is_aim_time_crit and 'crit' or source_rule.kind,
+                    charge_progress = not is_aim_time_crit,
                     value = value,
                     maximum = maximum,
                 })
@@ -514,12 +528,41 @@ local function _collect_buff_sources(sources, context)
     end
 end
 
+local function _filter_longest_charge_sources(sources)
+    if not _setting_enabled('show_only_longest_charge', false) then
+        return sources
+    end
+
+    local longest_maximum
+
+    for _, source in ipairs(sources) do
+        if source.charge_progress and (not longest_maximum or source.maximum > longest_maximum) then
+            longest_maximum = source.maximum
+        end
+    end
+
+    if not longest_maximum then
+        return sources
+    end
+
+    local filtered = {}
+
+    for _, source in ipairs(sources) do
+        if not source.charge_progress or source.maximum == longest_maximum then
+            filtered[#filtered + 1] = source
+        end
+    end
+
+    return filtered
+end
+
 function ChargeSources.collect(context)
     context = context or _player_context()
     local sources = {}
 
     _collect_weapon_sources(sources, context)
     _collect_buff_sources(sources, context)
+    sources = _filter_longest_charge_sources(sources)
 
     table.sort(sources, function(left, right)
         if left.order ~= right.order then

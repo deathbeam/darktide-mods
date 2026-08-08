@@ -423,6 +423,68 @@ describe('SimpleCharging ChargeSources', function()
         assert.are.equal(1, sources[1].fraction)
     end)
 
+    it('can show only the source with the highest maximum charge', function()
+        local mock = DarktideMock.new()
+        mock.settings.show_only_longest_charge = true
+        local ChargeSources = _load_sources(mock)
+        local thrust = {
+            _template = {
+                name = 'weapon_trait_bespoke_power_bonus_based_on_charge_time',
+                class_name = 'proc_buff',
+                max_stacks = 3,
+            },
+            visual_stack_count = function()
+                return 3
+            end,
+        }
+        local ogryn = {
+            _template = {
+                name = 'ogryn_windup_increases_power_child',
+                class_name = 'proc_buff',
+                max_stacks = 4,
+            },
+            visual_stack_count = function()
+                return 4
+            end,
+        }
+        local context = {
+            buff_extension = { _buffs = { thrust, ogryn } },
+            wielded_slot = 'slot_secondary',
+        }
+
+        local sources = ChargeSources.collect(context)
+
+        assert.are.equal(1, #sources)
+        assert.are.equal('ogryn_windup_increases_power_child', sources[1].id)
+        assert.are.equal(4, sources[1].maximum)
+    end)
+
+    it('ignores force staff peril-based critical blessings', function()
+        local mock = DarktideMock.new()
+        local ChargeSources = _load_sources(mock)
+        local buff = {
+            _template = {
+                name = 'weapon_trait_bespoke_forcestaff_p1_warp_charge_critical_strike_chance_bonus',
+                class_name = 'stepped_stat_buff',
+                min_max_step_func = function()
+                    return 0, 4
+                end,
+            },
+            visual_stack_count = function()
+                return 2
+            end,
+        }
+        local context = {
+            buff_extension = { _buffs = { buff } },
+            weapon_template = { keywords = { 'ranged', 'force_staff' } },
+            wielded_slot = 'slot_secondary',
+        }
+
+        local sources = ChargeSources.collect(context)
+
+        assert.are.equal(0, #sources)
+    end)
+
     it('ignores non-progress windup buffs', function()
         local mock = DarktideMock.new()
         local ChargeSources = _load_sources(mock)

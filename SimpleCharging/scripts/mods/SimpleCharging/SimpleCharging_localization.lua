@@ -5,4 +5,11 @@ return {
     mod_description = {
         en = 'Show weapon, talent and blessing charge state as charge bar around cursor for melee and ranged weapons (Plasma/Pinpointing/Surgical/Thrust etc).',
     },
+
+    show_only_longest_charge = {
+        en = 'Only Show the Longest Charge',
+    },
+    show_only_longest_charge_description = {
+        en = 'When multiple blessing or talent charge bars are active, show only the one with the highest maximum charge.',
+    },
 }
