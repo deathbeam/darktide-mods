@@ -185,9 +185,7 @@ end
 function DarktideMock.new()
     local mock = {
         now = 0,
-        settings = {
-            reset_on_interrupt = true,
-        },
+        settings = {},
         unit = {},
         mod = {},
         extension = nil,

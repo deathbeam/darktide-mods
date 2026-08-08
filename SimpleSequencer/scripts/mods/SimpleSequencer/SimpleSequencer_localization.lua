@@ -28,9 +28,6 @@ local localizations = {
     hud_display_icon_and_name = {
         en = 'Icon + Name',
     },
-    reset_on_interrupt = {
-        en = 'Reset On Manual Interrupt',
-    },
     editing_mode = {
         en = 'Mode to Configure',
     },

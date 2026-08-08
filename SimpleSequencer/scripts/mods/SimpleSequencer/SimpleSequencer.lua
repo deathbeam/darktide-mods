@@ -80,10 +80,6 @@ function mod.on_setting_changed(setting_name)
     if mod.mode_manager:on_setting_changed(setting_name) then
         return
     end
-
-    if setting_name == 'reset_on_interrupt' then
-        mod.controller:reset()
-    end
 end
 
 function mod.on_game_state_changed()

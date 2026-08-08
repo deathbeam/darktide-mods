@@ -549,4 +549,45 @@ describe('SimpleSequencer action chains', function()
         mock:run_input_frame(engine, held_inputs)
         assert.are.equal('action_light', mock:current_action_name())
     end)
+
+    it('allows a manual push while a sequence is active', function()
+        mock:set_weapon('slot_primary', 'test_manual_push', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            actions = {
+                action_block = {
+                    kind = 'block',
+                    start_input = 'block',
+                    allowed_chain_actions = {
+                        push = { action_name = 'action_push' },
+                    },
+                },
+                action_push = {
+                    kind = 'push',
+                    start_input = 'push',
+                },
+                action_light = {
+                    kind = 'sweep',
+                    start_input = 'light_attack',
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'light_attack',
+        }))
+        local blocked_inputs = { action_two_hold = true }
+
+        mock:run_input_frame(engine, blocked_inputs)
+        assert.are.equal('action_block', mock:current_action_name())
+
+        local inputs, input = mock:run_input_frame(engine, {
+            action_one_pressed = true,
+            action_one_hold = true,
+            action_two_hold = true,
+        })
+
+        assert.are.equal('push', input)
+        assert.are.equal('action_push', mock:current_action_name())
+    end)
 end)

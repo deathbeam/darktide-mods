@@ -5,13 +5,15 @@ local ActionSemantics = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequen
 local SequenceInterpreter = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceInterpreter')
 local SequenceController = class('SimpleSequencerSequenceController')
 
-local INPUT_INTERRUPTS = {
+local SEQUENCE_INPUTS = {
+    action_one_pressed = true,
+    action_one_hold = true,
+    action_two_pressed = true,
     action_two_hold = true,
     weapon_extra_pressed = true,
     weapon_extra_hold = true,
     weapon_reload_hold = true,
     quick_wield = true,
-    sprint = true,
 }
 
 local PRIMARY_INPUTS = {
@@ -77,7 +79,6 @@ function SequenceController:init(mod, mode_manager)
     self.chain_origin_token = nil
     self.chain_origin_input = nil
     self.chain_origin_followup = nil
-    self.interrupt_halt = false
     self.input_override_blocked = false
     self.action_event_token = nil
     self.action_event_input = nil
@@ -188,7 +189,6 @@ function SequenceController:reset()
     self.chain_origin_token = nil
     self.chain_origin_input = nil
     self.chain_origin_followup = nil
-    self.interrupt_halt = false
     self.input_override_blocked = false
     self.action_event_token = nil
     self.action_event_input = nil
@@ -456,7 +456,7 @@ function SequenceController:_override_input(action_name, raw_value)
         PRIMARY_INPUTS[action_name]
         and (
             self.goal_terminal_token
-            or not target
+            or not target and not self.secondary_down
             or SPECIAL_INPUTS[target] and not self.interpreter:controls(action_name)
         )
     then
@@ -489,20 +489,6 @@ function SequenceController:_restore_after_no_repeat()
     return true
 end
 
-function SequenceController:_should_reset_for_interrupt(action_name, value)
-    if not value or not self.mod:get('reset_on_interrupt') or not INPUT_INTERRUPTS[action_name] then
-        return false
-    end
-
-    if action_name == 'action_two_hold' and self.context.kind == 'RANGED' then
-        return false
-    end
-
-    self:_sync_interpreter()
-
-    return not self.interpreter:controls(action_name)
-end
-
 function SequenceController:handle_input(action_name, raw_value)
     if action_name == 'toggle_ads' then
         self.input_settings.toggle_ads = not not raw_value
@@ -510,12 +496,7 @@ function SequenceController:handle_input(action_name, raw_value)
         return raw_value
     end
 
-    if
-        action_name ~= 'action_one_pressed'
-        and action_name ~= 'action_one_hold'
-        and action_name ~= 'action_two_pressed'
-        and not INPUT_INTERRUPTS[action_name]
-    then
+    if not SEQUENCE_INPUTS[action_name] then
         return raw_value
     end
 
@@ -549,16 +530,6 @@ function SequenceController:handle_input(action_name, raw_value)
 
     if not has_goals then
         return raw_value
-    end
-
-    if self.interrupt_halt and PRIMARY_INPUTS[action_name] then
-        self.primary_down = false
-
-        if not raw_value then
-            self.interrupt_halt = false
-        end
-
-        return false
     end
 
     self:_maybe_advance_goal()
@@ -609,22 +580,6 @@ function SequenceController:handle_input(action_name, raw_value)
     local auto_active = self:_input_override_active()
 
     if not self.primary_down and not auto_active then
-        return raw_value
-    end
-
-    if self:_should_reset_for_interrupt(action_name, raw_value) then
-        local is_block = action_name == 'action_two_hold' and context.kind == 'MELEE'
-
-        self:reset()
-
-        if action_name == 'action_two_hold' then
-            self.secondary_down = not not raw_value
-            self.primary_release_required = is_block
-        else
-            -- Keep sprint/slide active until the held primary is released.
-            self.interrupt_halt = true
-        end
-
         return raw_value
     end
 

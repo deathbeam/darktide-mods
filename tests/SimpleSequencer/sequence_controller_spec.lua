@@ -333,7 +333,7 @@ describe('SimpleSequencer SequenceController', function()
         assert.is_false(engine:is_active())
     end)
 
-    it('resets a sequence on an unexpected manual interrupt', function()
+    it('passes through manual input without resetting the sequence', function()
         local profile = {
             sequence_cycle_point = 'no_repeat',
             sequence_step_1 = 'light_attack',
@@ -343,11 +343,11 @@ describe('SimpleSequencer SequenceController', function()
         mock:set_wielded_slot('slot_primary')
         engine:_refresh_context()
         engine.index = 2
-        engine.secondary_down = true
+        engine.secondary_down = false
         mock:set_action('none')
 
         assert.is_true(engine:handle_input('action_two_hold', true))
-        assert.are.equal(1, engine.index)
+        assert.are.equal(2, engine.index)
         assert.is_true(engine.secondary_down)
     end)
 
