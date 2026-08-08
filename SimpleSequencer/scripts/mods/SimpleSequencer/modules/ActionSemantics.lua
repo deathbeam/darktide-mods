@@ -33,11 +33,6 @@ local COMMAND_TARGETS = {
 }
 
 -- Runtime plan derivation
-local function _append(values, additions)
-    for i = 1, #additions do
-        values[#values + 1] = additions[i]
-    end
-end
 
 local function _path_to_input(entries, target, path, visited)
     if type(entries) ~= 'table' then
@@ -49,7 +44,9 @@ local function _path_to_input(entries, target, path, visited)
 
         if input and not visited[input] then
             local next_path = {}
-            _append(next_path, path)
+            for index = 1, #path do
+                next_path[index] = path[index]
+            end
             next_path[#next_path + 1] = input
 
             if input == target then

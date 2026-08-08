@@ -21,6 +21,28 @@ local Profiles = {
     },
 }
 
+local function _new_profile(kind)
+    return Profiles.clone(Profiles.defaults[kind])
+end
+
+local function _merge_defaults(profile, defaults)
+    for key, value in pairs(defaults) do
+        if profile[key] == nil then
+            profile[key] = value
+        end
+    end
+end
+
+local function _ensure_profile(data, mode, kind, weapon_key)
+    local mode_data = data[mode] or {}
+    local profiles = mode_data[kind] or {}
+    mode_data[kind] = profiles
+    data[mode] = mode_data
+    profiles[weapon_key] = profiles[weapon_key] or _new_profile(kind)
+
+    return profiles[weapon_key]
+end
+
 function Profiles.clone(value)
     if type(value) ~= 'table' then
         return value
@@ -45,28 +67,6 @@ function Profiles.keys(kind)
     table.sort(keys)
 
     return keys
-end
-
-local function _new_profile(kind)
-    return Profiles.clone(Profiles.defaults[kind])
-end
-
-local function _merge_defaults(profile, defaults)
-    for key, value in pairs(defaults) do
-        if profile[key] == nil then
-            profile[key] = value
-        end
-    end
-end
-
-local function _ensure_profile(data, mode, kind, weapon_key)
-    local mode_data = data[mode] or {}
-    local profiles = mode_data[kind] or {}
-    mode_data[kind] = profiles
-    data[mode] = mode_data
-    profiles[weapon_key] = profiles[weapon_key] or _new_profile(kind)
-
-    return profiles[weapon_key]
 end
 
 function Profiles.new_data()
