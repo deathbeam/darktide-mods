@@ -64,6 +64,28 @@ describe('SimpleSequencer SequenceInterpreter', function()
         assert.is_false(interpreter:value('action_one_hold', true, 0.26))
     end)
 
+    it('records a submission only after its final input element', function()
+        local interpreter = Interpreter:new()
+        local template = {
+            action_inputs = {
+                heavy_attack = {
+                    input_sequence = {
+                        { duration = 0.25, input = 'action_one_hold', value = true },
+                        { input = 'action_one_hold', value = false },
+                    },
+                },
+            },
+        }
+
+        interpreter:set_target(template, 'heavy_attack', 0)
+        interpreter:value('action_one_hold', false, 0)
+        interpreter:update(0.25)
+        assert.same({}, interpreter.submitted_inputs)
+        interpreter:value('action_one_hold', true, 0.26)
+        interpreter:update(0.27)
+        assert.same({ 'heavy_attack' }, interpreter.submitted_inputs)
+    end)
+
     it('drives duration requirements before completing an elapsed input', function()
         local interpreter = Interpreter:new()
         local template = {
@@ -107,6 +129,31 @@ describe('SimpleSequencer SequenceInterpreter', function()
 
         assert.is_true(interpreter:value('action_two_hold', false, 0))
         assert.is_true(interpreter:value('action_one_pressed', false, 0))
+    end)
+
+    it('advances an armed follow-up before parser inputs are read', function()
+        local interpreter = Interpreter:new()
+        local template = {
+            action_inputs = {
+                block = { input_sequence = { { input = 'action_two_hold', value = true } } },
+                push = {
+                    input_sequence = {
+                        {
+                            hold_input = 'action_two_hold',
+                            input = 'action_one_pressed',
+                            value = true,
+                        },
+                    },
+                },
+            },
+        }
+
+        interpreter:set_target(template, 'block', 0, nil, nil, { 'push' })
+        assert.is_true(interpreter:value('action_two_hold', false, 0))
+        interpreter:update(0.02)
+        assert.are.equal('push', interpreter:active_input_name())
+        assert.is_true(interpreter:value('action_one_pressed', false, 0.02))
+        assert.is_true(interpreter:value('action_two_hold', false, 0.02))
     end)
 
     it('uses one candidate for an any-input sequence', function()

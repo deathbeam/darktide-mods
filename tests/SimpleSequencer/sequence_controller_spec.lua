@@ -242,6 +242,31 @@ describe('SimpleSequencer SequenceController', function()
         assert.is_true(input(engine, 'action_two_pressed', false))
     end)
 
+    it('returns all remaining inputs when arming a Push path', function()
+        mock:set_weapon('slot_primary', 'test_push_program', {
+            actions = { action_push = { kind = 'push' } },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager(nil))
+        engine:_refresh_context()
+        engine.sequence.plan.goals = {
+            { command = 'push_attack', inputs = { 'block', 'push', 'push_follow_up' } },
+        }
+        engine.sequence.index = 1
+        engine.activation.primary = true
+        mock:set_action('action_block', {
+            kind = 'block',
+            start_input = 'block',
+            allowed_chain_actions = {
+                push = { action_name = 'action_push' },
+            },
+        }, 0)
+
+        local input_name, followup_inputs = engine:_goal_input()
+        assert.are.equal('push', input_name)
+        assert.same({ 'push_follow_up' }, followup_inputs)
+    end)
+
     it('continues from a push into its follow-up chain', function()
         local profile = {
             sequence_cycle_point = 'no_repeat',
@@ -514,5 +539,52 @@ describe('SimpleSequencer SequenceController', function()
 
         mock.now = 0.52
         assert.is_false(input(engine, 'action_one_hold', true))
+    end)
+
+    it('restarts a released light sequence before the current action becomes idle', function()
+        mock:set_weapon('slot_primary', 'test_released_light', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            actions = {
+                action_light = {
+                    kind = 'sweep',
+                    start_input = 'light_attack',
+                    allowed_chain_actions = {
+                        start_attack = { action_name = 'action_melee_start', chain_time = 0 },
+                    },
+                },
+                action_melee_start = {
+                    kind = 'windup',
+                    start_input = 'start_attack',
+                    allowed_chain_actions = {
+                        light_attack = { action_name = 'action_light', chain_time = 0 },
+                    },
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager(nil))
+        engine:_refresh_context()
+        engine.profile = {}
+        engine.sequence.plan = {
+            goals = { { command = 'light_attack', inputs = { 'start_attack', 'light_attack' } } },
+            goal_cycle_index = 0,
+        }
+        engine.activation.primary = true
+        engine.sequence.transition = { kind = 'terminal', token = 'action_light:0' }
+        mock:set_action('action_light', engine.context.template.actions.action_light, 0)
+
+        assert.is_false(input(engine, 'action_one_hold', false))
+        assert.is_false(engine.activation.primary)
+        assert.is_nil(engine.sequence.transition)
+        assert.is_nil(engine.interpreter.input_name)
+
+        mock.now = 0.1
+        local _, action_input = mock:run_input_frame(engine, {
+            action_one_pressed = true,
+            action_one_hold = true,
+        })
+
+        assert.are.equal('start_attack', action_input)
+        assert.are.equal('action_melee_start', mock:current_action_name())
     end)
 end)

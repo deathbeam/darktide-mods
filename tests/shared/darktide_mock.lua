@@ -185,6 +185,7 @@ end
 function DarktideMock.new()
     local mock = {
         now = 0,
+        frame = 0,
         settings = {},
         unit = {},
         mod = {},
@@ -314,6 +315,10 @@ function DarktideMock.new()
 
     function mock:set_wielded_slot(slot)
         inventory.wielded_slot = slot
+    end
+
+    function mock:set_input_delay(frames)
+        mock.input_delay_frames = frames or 0
     end
 
     local function _wielded_template()
@@ -458,6 +463,7 @@ function DarktideMock.new()
         queue[#queue + 1] = {
             input_name = input_name,
             expires_t = mock.now + buffer_time,
+            ready_frame = mock.frame + (mock.input_delay_frames or 0),
         }
     end
 
@@ -468,7 +474,9 @@ function DarktideMock.new()
         while queue[index] do
             local entry = queue[index]
 
-            if mock.now > entry.expires_t then
+            if mock.frame < entry.ready_frame then
+                index = index + 1
+            elseif mock.now > entry.expires_t then
                 table.remove(queue, index)
             elseif _apply_input(template, entry.input_name) then
                 table.remove(queue, index)
@@ -509,23 +517,26 @@ function DarktideMock.new()
         end
 
         local template = _wielded_template()
-        if not template then
-            return inputs, nil
+        local input_name
+        local applied_input
+
+        if template then
+            if mock._input_template ~= template then
+                mock._input_queue = {}
+                _set_input_hierarchy(template, template.action_input_hierarchy)
+            end
+
+            input_name = _completed_input(template, inputs)
+            if input_name then
+                _transition_input_hierarchy(template, input_name)
+                _queue_input(template, input_name)
+            end
+
+            applied_input = _apply_queued_input(template)
         end
 
-        if mock._input_template ~= template then
-            mock._input_queue = {}
-            _set_input_hierarchy(template, template.action_input_hierarchy)
-        end
-
-        local input_name = _completed_input(template, inputs)
-        if input_name then
-            _transition_input_hierarchy(template, input_name)
-            _queue_input(template, input_name)
-        end
-
-        local applied_input = _apply_queued_input(template)
-
+        mock.frame = mock.frame + 1
+        mock.extension._last_fixed_frame = mock.frame
         return inputs, input_name or applied_input
     end
 

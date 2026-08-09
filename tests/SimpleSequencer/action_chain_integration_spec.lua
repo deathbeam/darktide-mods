@@ -300,6 +300,75 @@ describe('SimpleSequencer action chains', function()
         run('push', 'finish_push')
     end)
 
+    it('keeps the Push Follow-up path armed while Push waits to be consumed', function()
+        mock:set_weapon('slot_primary', 'test_delayed_push', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            action_inputs = {
+                push_follow_up = {
+                    input_sequence = {
+                        {
+                            hold_input = 'action_two_hold',
+                            input = 'action_one_hold',
+                            value = true,
+                        },
+                    },
+                },
+            },
+            action_input_hierarchy = {
+                {
+                    input = 'block',
+                    transition = {
+                        {
+                            input = 'push',
+                            transition = { { input = 'push_follow_up', transition = 'base' } },
+                        },
+                    },
+                },
+            },
+            actions = {
+                action_block = {
+                    kind = 'block',
+                    start_input = 'block',
+                    allowed_chain_actions = { push = { action_name = 'action_push', chain_time = 0 } },
+                },
+                action_push = {
+                    kind = 'push',
+                    start_input = 'push',
+                    allowed_chain_actions = {
+                        push_follow_up = { action_name = 'action_push_follow', chain_time = 0 },
+                    },
+                },
+                action_push_follow = { kind = 'sweep' },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        mock:set_input_delay(1)
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'push_attack',
+        }))
+        local held_inputs = { action_one_hold = true }
+
+        local _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('block', input)
+        _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('action_block', mock:current_action_name())
+        _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('push', input)
+
+        local inputs
+        inputs, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('push_follow_up', input)
+        assert.is_true(inputs.action_one_hold)
+        assert.is_true(inputs.action_two_hold)
+        assert.are.equal('action_push', mock:current_action_name())
+        assert.are.equal('push', engine.action.started.input)
+        _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('push_follow_up', input)
+        assert.are.equal('action_push_follow', mock:current_action_name())
+        assert.are.equal('push_follow_up', engine.action.started.input)
+    end)
+
     it('keeps a push follow-up held until its game chain opens', function()
         mock:set_weapon('slot_primary', 'test_push', {
             displayed_attacks = { primary = { type = 'melee' } },
