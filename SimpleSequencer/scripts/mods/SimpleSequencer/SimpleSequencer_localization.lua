@@ -1,5 +1,6 @@
-local SEQUENCE_STEP_COUNT = 6
-local SEQUENCE_STEP_PREFIX = 'sequence_step_'
+local mod = get_mod('SimpleSequencer')
+local Profiles = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceProfiles')
+
 local localizations = {
     mod_name = {
         en = ' {#color(80,200,255)}Simple{#reset()} Sequencer',
@@ -141,8 +142,8 @@ local localizations = {
     },
 }
 
-for i = 1, SEQUENCE_STEP_COUNT do
-    localizations[SEQUENCE_STEP_PREFIX .. i] = { en = 'Sequence Step ' .. i }
+for i = 1, Profiles.sequence_step_count do
+    localizations[Profiles.sequence_step_prefix .. i] = { en = 'Sequence Step ' .. i }
 end
 
 for i = 1, 4 do

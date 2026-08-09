@@ -1,4 +1,3 @@
-local mod = get_mod('SimpleSequencer')
 local Profiles = {
     sequence_step_count = 6,
     sequence_step_prefix = 'sequence_step_',
