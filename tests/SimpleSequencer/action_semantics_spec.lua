@@ -1,7 +1,7 @@
 local root = debug.getinfo(1, 'S').source:sub(2):match('^(.*)/tests/SimpleSequencer/') or '.'
 local ActionSemantics = dofile(root .. '/SimpleSequencer/scripts/mods/SimpleSequencer/modules/ActionSemantics.lua')
 
-local function _template(actions, action_inputs, ranged_mode)
+local function _template(actions, action_inputs, aim_mode)
     return {
         action_input_hierarchy = {
             {
@@ -32,7 +32,7 @@ local function _template(actions, action_inputs, ranged_mode)
         },
         action_inputs = action_inputs,
         actions = actions or {},
-        ranged_mode = ranged_mode,
+        aim_mode = aim_mode,
     }
 end
 
@@ -41,7 +41,7 @@ local function _plan(template, steps, cycle_step, repeating)
         steps = steps,
         cycle_step = cycle_step,
         repeating = repeating,
-    }, { template = template, ranged_mode = template.ranged_mode })
+    }, { template = template, aim_mode = template.aim_mode })
 end
 
 describe('SimpleSequencer ActionSemantics', function()

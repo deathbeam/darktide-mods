@@ -249,14 +249,9 @@ function ModeManager:sync_settings()
     self:_sync_kind('RANGED')
 end
 
-function ModeManager:_on_display_setting_changed(setting_name)
-    local mode, key = string.match(setting_name or '', '^(mode_[1-4])_display_(.+)$')
-
-    return mode ~= nil and DISPLAY_KEY_SET[key] == true
-end
-
 function ModeManager:on_setting_changed(setting_name)
-    if self:_on_display_setting_changed(setting_name) then
+    local mode, key = string.match(setting_name or '', '^(mode_[1-4])_display_(.+)$')
+    if mode and DISPLAY_KEY_SET[key] then
         return true
     end
 

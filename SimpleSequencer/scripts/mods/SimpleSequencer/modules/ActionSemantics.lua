@@ -100,7 +100,7 @@ local function _resolve_command(context, command)
     local candidates = COMMAND_TARGETS[command]
     local default_candidates = candidates
 
-    if context.ranged_mode == 'ads' and (command == 'standard' or command == 'charged') then
+    if context.aim_mode == 'ads' and (command == 'standard' or command == 'charged') then
         candidates = { 'shoot_braced' }
     end
 
@@ -200,7 +200,6 @@ function ActionSemantics.compile(sequence, context)
     local plan = {
         goals = {},
         goal_cycle_index = 0,
-        repeating = false,
         unresolved_steps = {},
     }
 
@@ -252,9 +251,6 @@ function ActionSemantics.compile(sequence, context)
             plan.goal_cycle_index = 1
         end
     end
-
-    plan.repeating = sequence.repeating
-
     return plan
 end
 

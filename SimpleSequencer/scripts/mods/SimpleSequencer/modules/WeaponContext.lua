@@ -167,13 +167,10 @@ function WeaponContext.read()
     end
 
     return {
-        unit = unit,
         extension = extension,
-        inventory = inventory,
         weapon = weapon,
         template = template,
         name = name or 'none',
-        slot = slot,
         kind = kind or 'none',
     }
 end

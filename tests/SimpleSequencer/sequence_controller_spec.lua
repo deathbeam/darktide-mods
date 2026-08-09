@@ -32,7 +32,6 @@ describe('SimpleSequencer SequenceController', function()
 
         engine.index = 2
         engine.plan.goals = { { command = 'light_attack', inputs = { 'start_attack' } } }
-        engine.completed = true
         engine.primary_down = true
         engine.secondary_down = true
         engine.primary_release_required = true
@@ -43,7 +42,6 @@ describe('SimpleSequencer SequenceController', function()
         engine:reset()
 
         assert.are.equal(1, engine.index)
-        assert.is_false(engine.completed)
         assert.is_false(engine.primary_down)
         assert.is_false(engine.secondary_down)
         assert.is_false(engine.primary_release_required)
@@ -74,7 +72,6 @@ describe('SimpleSequencer SequenceController', function()
         mock:set_action('none')
         engine:handle_input('action_one_hold', true)
 
-        assert.is_true(engine.completed)
         assert.is_nil(engine.index)
     end)
 
@@ -355,7 +352,7 @@ describe('SimpleSequencer SequenceController', function()
 
         assert.is_true(engine:is_active())
 
-        engine.completed = true
+        engine.index = nil
         assert.is_false(engine:is_active())
     end)
 
@@ -383,10 +380,9 @@ describe('SimpleSequencer SequenceController', function()
 
         engine.plan.goals = { { command = 'light_attack', inputs = { 'start_attack' } } }
         engine.index = 1
-        engine.plan.repeating = false
         engine:_advance()
 
-        assert.is_true(engine.completed)
+        assert.is_nil(engine.index)
         assert.is_true(engine:_restore_after_no_repeat())
         assert.are.equal(1, manager.toggles)
         assert.is_false(engine:_restore_after_no_repeat())
@@ -433,7 +429,6 @@ describe('SimpleSequencer SequenceController', function()
                 { command = 'light_attack', inputs = { 'start_attack', 'light_attack' } },
             },
             goal_cycle_index = 0,
-            repeating = false,
         }
         engine.primary_down = true
         mock:set_action('action_light', {

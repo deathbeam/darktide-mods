@@ -56,7 +56,6 @@ local function _empty_plan()
     return {
         goals = {},
         goal_cycle_index = 0,
-        repeating = false,
         unresolved_steps = {},
     }
 end
@@ -66,13 +65,12 @@ function SequenceController:init(mod, mode_manager)
     self.mode_manager = mode_manager
     self.index = 1
     self.plan = _empty_plan()
-    self.completed = false
     self.context = nil
     self.context_key = nil
     self.primary_down = false
     self.secondary_down = false
     self.primary_release_required = false
-    self.ranged_mode = 'hip'
+    self.aim_mode = 'hip'
     self.input_settings = { toggle_ads = false }
     self.no_repeat_restored = false
     self.goal_terminal_token = nil
@@ -91,7 +89,7 @@ function SequenceController:invalidate()
 end
 
 function SequenceController:is_active()
-    return self:_input_override_active() and not self.completed and self.profile ~= nil
+    return self:_goal() ~= nil and not self.input_override_blocked and (self.primary_down or self.secondary_down)
 end
 
 function SequenceController:can_switch_mode()
@@ -127,7 +125,7 @@ function SequenceController:_next_goal()
     end
 
     if next_index > #goals then
-        next_index = self.plan.goal_cycle_index > 0 and self.plan.goal_cycle_index or self.plan.repeating and 1
+        next_index = self.plan.goal_cycle_index > 0 and self.plan.goal_cycle_index or nil
     end
 
     return next_index and goals[next_index]
@@ -183,7 +181,6 @@ function SequenceController:reset()
     self.secondary_down = false
     self.primary_release_required = false
     self.index = 1
-    self.completed = false
     self.no_repeat_restored = false
     self.goal_terminal_token = nil
     self.chain_origin_token = nil
@@ -226,9 +223,11 @@ end
 
 function SequenceController:_refresh_context()
     local context = WeaponContext.read()
+
+    context.aim_mode = self.aim_mode
     self.context = context
 
-    local key = self.mode_manager:active() .. ':' .. context.kind .. ':' .. context.name .. ':' .. self.ranged_mode
+    local key = self.mode_manager:active() .. ':' .. context.kind .. ':' .. context.name .. ':' .. self.aim_mode
 
     if self.context_key == key then
         return context
@@ -240,8 +239,7 @@ function SequenceController:_refresh_context()
     local profile = context.kind ~= 'none' and self.mode_manager:profile(context.kind, context.name)
 
     if profile then
-        context.ranged_mode = self.ranged_mode
-        local sequence = Profiles.build_sequence(profile, context.kind, self.ranged_mode)
+        local sequence = Profiles.build_sequence(profile, context.kind, self.aim_mode)
         self.plan = ActionSemantics.compile(sequence, context)
 
         if #self.plan.unresolved_steps > 0 and self.mod.info then
@@ -271,12 +269,10 @@ function SequenceController:_advance()
     end
 
     if self.index >= #goals then
-        if self.plan.goal_cycle_index > 0 or self.plan.repeating then
-            self.index = self.plan.goal_cycle_index > 0 and self.plan.goal_cycle_index or 1
-            self.completed = false
+        if self.plan.goal_cycle_index > 0 then
+            self.index = self.plan.goal_cycle_index
         else
             self.index = nil
-            self.completed = true
         end
     else
         self.index = self.index + 1
@@ -442,10 +438,6 @@ function SequenceController:_sync_interpreter()
     return target, t
 end
 
-function SequenceController:_input_override_active()
-    return self:_goal() ~= nil and not self.input_override_blocked and (self.primary_down or self.secondary_down)
-end
-
 function SequenceController:_override_input(action_name, raw_value)
     if self.input_override_blocked then
         return raw_value
@@ -480,7 +472,7 @@ function SequenceController:_override_input(action_name, raw_value)
 end
 
 function SequenceController:_restore_after_no_repeat()
-    if not self.completed or self.plan.repeating or self.no_repeat_restored then
+    if self.index or self.plan.goal_cycle_index > 0 or self.no_repeat_restored then
         return false
     end
 
@@ -503,19 +495,19 @@ function SequenceController:handle_input(action_name, raw_value)
 
     local context = self:_refresh_context()
     local toggle_ads = self.input_settings.toggle_ads
-    local ranged_mode
+    local aim_mode
 
     if context.kind == 'RANGED' then
         if action_name == 'action_two_hold' and not toggle_ads then
-            ranged_mode = raw_value and 'ads' or 'hip'
+            aim_mode = raw_value and 'ads' or 'hip'
         elseif action_name == 'action_two_pressed' and toggle_ads and raw_value then
-            ranged_mode = self.ranged_mode == 'ads' and 'hip' or 'ads'
+            aim_mode = self.aim_mode == 'ads' and 'hip' or 'ads'
         end
     end
 
-    if ranged_mode and self.ranged_mode ~= ranged_mode then
+    if aim_mode and self.aim_mode ~= aim_mode then
         local primary_down = self.primary_down
-        self.ranged_mode = ranged_mode
+        self.aim_mode = aim_mode
         self.context_key = nil
         context = self:_refresh_context()
         self.primary_down = primary_down
@@ -524,7 +516,7 @@ function SequenceController:handle_input(action_name, raw_value)
     if action_name == 'action_two_hold' then
         self.secondary_down = not not raw_value
     elseif action_name == 'action_two_pressed' and toggle_ads and raw_value then
-        self.secondary_down = self.ranged_mode == 'ads'
+        self.secondary_down = self.aim_mode == 'ads'
     end
 
     local has_goals = self.plan.goals and #self.plan.goals > 0
@@ -570,7 +562,7 @@ function SequenceController:handle_input(action_name, raw_value)
         return raw_value
     end
 
-    if self.completed then
+    if not self.index then
         if PRIMARY_INPUTS[action_name] then
             return false
         end
@@ -578,9 +570,7 @@ function SequenceController:handle_input(action_name, raw_value)
         return raw_value
     end
 
-    local auto_active = self:_input_override_active()
-
-    if not self.primary_down and not auto_active then
+    if not self.primary_down and not self:is_active() then
         return raw_value
     end
 
@@ -596,7 +586,7 @@ function SequenceController:update()
         self:_maybe_advance_goal()
     end
 
-    if self:_input_override_active() then
+    if self:is_active() then
         self:_sync_interpreter()
     else
         self:_restore_after_no_repeat()
