@@ -288,7 +288,7 @@ function DarktideMock.new()
         return dofile(root .. filename)
     end
 
-    function mock:set_action(action_name, settings, start_t, used_input)
+    function mock:set_action(action_name, settings, start_t)
         action_component.current_action_name = action_name or 'none'
         action_component.start_t = start_t
         mock.extension._running_action_settings = settings
@@ -296,7 +296,7 @@ function DarktideMock.new()
         local controller = mock._controller
 
         if controller and action_name and action_name ~= 'none' then
-            controller:on_action_started(action_name, used_input, start_t)
+            controller:on_action_started(action_name, start_t)
         end
     end
 
@@ -330,6 +330,7 @@ function DarktideMock.new()
             mock._input_sequences[entry.input] = {
                 index = 1,
                 start_t = mock.now,
+                running = true,
             }
         end
     end
@@ -357,7 +358,7 @@ function DarktideMock.new()
             local elements = config and config.input_sequence
             local sequence = mock._input_sequences[input_name]
 
-            if elements and sequence then
+            if elements and sequence and sequence.running then
                 local element = elements[sequence.index]
                 local active_element = element and _active_input_element(element, inputs)
                 local held = not active_element or not active_element.hold_input or inputs[active_element.hold_input]
@@ -366,10 +367,10 @@ function DarktideMock.new()
                 local complete = false
 
                 if active_element and active_element.duration then
-                    if not matched or not held then
-                        sequence.start_t = mock.now
-                    elseif elapsed >= active_element.duration then
+                    if elapsed >= active_element.duration then
                         complete = true
+                    elseif not matched then
+                        sequence.running = false
                     end
                 elseif active_element and active_element.time_window then
                     if matched and held and elapsed <= active_element.time_window then
@@ -396,8 +397,24 @@ function DarktideMock.new()
         end
     end
 
-    local function _chain_action(chain_actions)
-        return chain_actions and (chain_actions[1] or chain_actions) or nil
+    local function _chain_action(template, chain_actions, t)
+        for index = 1, chain_actions and (chain_actions[1] and #chain_actions or 1) or 0 do
+            local chain_action = chain_actions[1] and chain_actions[index] or chain_actions
+            local action_name = chain_action and chain_action.action_name
+            local action_settings = action_name and template.actions[action_name]
+            local condition = action_settings and action_settings.action_condition_func
+            local valid = true
+
+            if condition then
+                local elapsed = action_component.start_t and t - action_component.start_t or 0
+                local ok, result = pcall(condition, action_settings, nil, nil, t, elapsed)
+                valid = ok and result == true
+            end
+
+            if action_settings and valid then
+                return chain_action
+            end
+        end
     end
 
     local function _apply_input(template, input_name)
@@ -407,7 +424,7 @@ function DarktideMock.new()
         if not action_name or action_name == 'none' then
             for next_action_name, settings in pairs(template.actions or {}) do
                 if settings.start_input == input_name then
-                    mock:set_action(next_action_name, settings, mock.now, input_name)
+                    mock:set_action(next_action_name, settings, mock.now)
 
                     return true
                 end
@@ -417,7 +434,7 @@ function DarktideMock.new()
         end
 
         local chain_actions = action_settings and action_settings.allowed_chain_actions
-        local chain_action = _chain_action(chain_actions and chain_actions[input_name])
+        local chain_action = _chain_action(template, chain_actions and chain_actions[input_name], mock.now)
         local next_action_name = chain_action and chain_action.action_name
         local next_settings = next_action_name and template.actions[next_action_name]
         local valid = chain_action
@@ -426,7 +443,7 @@ function DarktideMock.new()
             return false
         end
 
-        mock:set_action(next_action_name, next_settings, mock.now, input_name)
+        mock:set_action(next_action_name, next_settings, mock.now)
 
         return true
     end

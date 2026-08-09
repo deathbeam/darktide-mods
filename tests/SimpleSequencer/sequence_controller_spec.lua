@@ -50,6 +50,29 @@ describe('SimpleSequencer SequenceController', function()
         assert.is_false(engine.input_override_blocked)
     end)
 
+    it('records the interpreter input when an action starts', function()
+        mock:set_weapon('slot_primary', 'test_action_start_input', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            actions = {
+                action_push = {
+                    kind = 'push',
+                    allowed_chain_actions = {
+                        push_follow_up = { action_name = 'action_push_follow' },
+                    },
+                },
+                action_push_follow = { kind = 'sweep' },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager(nil))
+        engine:_refresh_context()
+        engine.interpreter.input_name = 'push_follow_up'
+
+        engine:on_action_started('action_push_follow', 1)
+
+        assert.are.equal('push_follow_up', engine.action_event_input)
+    end)
+
     it('advances goals from action-input metadata', function()
         local profile = {
             sequence_cycle_point = 'no_repeat',
@@ -285,7 +308,8 @@ describe('SimpleSequencer SequenceController', function()
         engine:_refresh_context()
         engine.primary_down = true
 
-        mock:set_action('action_light_1_special', { kind = 'sweep' }, 1, 'light_attack')
+        engine.interpreter.input_name = 'light_attack'
+        mock:set_action('action_light_1_special', { kind = 'sweep' }, 1)
         engine:handle_input('action_one_hold', true)
 
         assert.is_not_nil(engine.goal_terminal_token)

@@ -5,6 +5,8 @@ local ActionSemantics = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequen
 local SequenceInterpreter = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceInterpreter')
 local SequenceController = class('SimpleSequencerSequenceController')
 
+local BLOCK_INPUT = 'block'
+
 local SEQUENCE_INPUTS = {
     action_one_pressed = true,
     action_one_hold = true,
@@ -52,6 +54,69 @@ local function _game_time(context)
     return Managers and Managers.time and Managers.time:time('gameplay') or 0
 end
 
+local function _terminal_release_input(goal, template)
+    local inputs = goal and goal.inputs
+    local action_inputs = template and template.action_inputs
+    local entries = template and template.action_input_hierarchy
+
+    if not inputs or type(entries) ~= 'table' then
+        return nil
+    end
+
+    for _, input in ipairs(inputs) do
+        local transition
+        for _, entry in ipairs(entries) do
+            if entry.input == input then
+                transition = entry.transition
+                break
+            end
+        end
+
+        if type(transition) ~= 'table' then
+            return nil
+        end
+
+        entries = transition
+    end
+
+    for _, entry in ipairs(entries) do
+        local input = entry.input
+        local config = input and action_inputs and action_inputs[input]
+
+        if config and config.dont_queue and entry.transition == 'base' then
+            return input
+        end
+    end
+end
+
+local function _requires_held_primary(template, input_name, input_settings)
+    local action_inputs = template and template.action_inputs
+    local config = action_inputs and action_inputs[input_name]
+    local element = config and config.input_sequence and config.input_sequence[1]
+    local input_setting = element and element.input_setting
+    local active_element = element
+
+    if input_setting and input_settings and input_settings[input_setting.setting] == input_setting.setting_value then
+        active_element = input_setting
+    end
+
+    if not active_element then
+        return false
+    end
+
+    if active_element.input == 'action_one_hold' and active_element.value == true then
+        return true
+    end
+
+    for _, input in ipairs(active_element.inputs or {}) do
+        if input.input == 'action_one_hold' and input.value == true then
+            return true
+        end
+    end
+
+    return false
+end
+
 local function _empty_plan()
     return {
         goals = {},
@@ -74,6 +139,7 @@ function SequenceController:init(mod, mode_manager)
     self.input_settings = { toggle_ads = false }
     self.no_repeat_restored = false
     self.goal_terminal_token = nil
+    self.terminal_release_input = nil
     self.chain_origin_token = nil
     self.chain_origin_input = nil
     self.chain_origin_followup = nil
@@ -114,6 +180,28 @@ end
 
 function SequenceController:_goal()
     return self.index and self.plan.goals and self.plan.goals[self.index]
+end
+
+function SequenceController:_pending_goal_input()
+    local goal = self:_goal()
+    if not goal or self.goal_terminal_token then
+        return nil
+    end
+
+    local action_name, start_t, action_settings = WeaponContext.action(self.context)
+    if action_name == 'idle' then
+        return goal.inputs and goal.inputs[1] or nil
+    end
+
+    local progress = ActionSemantics.matched_input_index(
+        goal,
+        action_settings and action_settings.start_input,
+        action_name,
+        self.context and self.context.template,
+        self:_event_input(_action_token(action_name, start_t))
+    )
+
+    return progress and goal.inputs and goal.inputs[progress + 1] or nil
 end
 
 function SequenceController:_next_goal()
@@ -183,6 +271,7 @@ function SequenceController:reset()
     self.index = 1
     self.no_repeat_restored = false
     self.goal_terminal_token = nil
+    self.terminal_release_input = nil
     self.chain_origin_token = nil
     self.chain_origin_input = nil
     self.chain_origin_followup = nil
@@ -198,13 +287,13 @@ function SequenceController:_event_input(action_token)
 end
 
 -- Action start events are the authoritative progress signal; polling only fills gaps.
-function SequenceController:on_action_started(action_name, used_input, t)
+function SequenceController:on_action_started(action_name, t)
     if not action_name or action_name == 'none' then
         return
     end
 
     self.action_event_token = _action_token(action_name, t)
-    self.action_event_input = used_input
+    self.action_event_input = self.interpreter:active_input_name()
 end
 
 function SequenceController:on_damage_window_exited()
@@ -279,6 +368,7 @@ function SequenceController:_advance()
     end
 
     self.goal_terminal_token = nil
+    self.terminal_release_input = nil
     self.input_override_blocked = false
     self.interpreter:reset()
     self.chain_origin_token = nil
@@ -330,6 +420,10 @@ function SequenceController:_maybe_advance_goal()
     if self.goal_terminal_token then
         if action_token ~= self.goal_terminal_token then
             self:_advance()
+        elseif self.terminal_release_input then
+            if self.interpreter.submitted then
+                self:_advance_if_chain_ready(start_t, action_settings)
+            end
         else
             self:_advance_if_chain_ready(start_t, action_settings)
         end
@@ -339,7 +433,12 @@ function SequenceController:_maybe_advance_goal()
 
     if progress == #(goal.inputs or {}) then
         self.goal_terminal_token = action_token
-        self:_advance_if_chain_ready(start_t, action_settings)
+        self.terminal_release_input = self:_next_goal()
+            and _terminal_release_input(goal, self.context and self.context.template)
+
+        if not self.terminal_release_input then
+            self:_advance_if_chain_ready(start_t, action_settings)
+        end
     end
 
     return true
@@ -368,8 +467,12 @@ end
 function SequenceController:_goal_input()
     local goal = self:_goal()
 
-    if not goal or self.goal_terminal_token then
+    if not goal then
         return nil
+    end
+
+    if self.goal_terminal_token then
+        return self.terminal_release_input or goal.command == BLOCK_INPUT and BLOCK_INPUT or nil
     end
 
     local action_name, start_t, action_settings = WeaponContext.action(self.context)
@@ -444,12 +547,21 @@ function SequenceController:_override_input(action_name, raw_value)
     end
 
     local target, t = self:_sync_interpreter()
+    local preserve_primary_hold = not target
+        and action_name == 'action_one_hold'
+        and raw_value
+        and _requires_held_primary(
+            self.context and self.context.template,
+            self:_pending_goal_input(),
+            self.input_settings
+        )
 
     if
         PRIMARY_INPUTS[action_name]
         and (
-            self.goal_terminal_token
-            or not target and not self.secondary_down
+            self.goal_terminal_token and not self.terminal_release_input
+            or not target and not self.secondary_down and not preserve_primary_hold
+            or target == BLOCK_INPUT
             or SPECIAL_INPUTS[target] and not self.interpreter:controls(action_name)
         )
     then

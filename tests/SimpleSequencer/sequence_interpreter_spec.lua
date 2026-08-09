@@ -52,6 +52,29 @@ describe('SimpleSequencer SequenceInterpreter', function()
         assert.is_false(interpreter:value('action_one_hold', true, 0.26))
     end)
 
+    it('drives duration requirements before completing an elapsed input', function()
+        local interpreter = Interpreter:new()
+        local template = {
+            action_inputs = {
+                push_follow_up = {
+                    input_sequence = {
+                        {
+                            duration = 0.25,
+                            hold_input = 'action_two_hold',
+                            input = 'action_one_hold',
+                            value = true,
+                        },
+                    },
+                },
+            },
+        }
+        interpreter:set_target(template, 'push_follow_up', 0.25, nil, 0)
+
+        assert.is_true(interpreter:value('action_one_hold', false, 0.25))
+        assert.is_true(interpreter:value('action_two_hold', false, 0.25))
+        assert.is_false(interpreter.submitted)
+    end)
+
     it('preserves required hold inputs for compound actions', function()
         local interpreter = Interpreter:new()
         local template = {

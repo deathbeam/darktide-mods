@@ -70,6 +70,236 @@ describe('SimpleSequencer action chains', function()
         assert.are.equal('action_shoot_charged', mock:current_action_name())
     end)
 
+    it('prioritizes block over the primary start attack for secondary sequences', function()
+        local function run(command)
+            mock = DarktideMock.new()
+            mock:set_weapon('slot_primary', 'test_secondary_sequence', {
+                displayed_attacks = { primary = { type = 'melee' } },
+                actions = {
+                    action_melee_start = { kind = 'windup', start_input = 'start_attack' },
+                    action_block = {
+                        kind = 'block',
+                        start_input = 'block',
+                        allowed_chain_actions = { push = { action_name = 'action_push' } },
+                    },
+                    action_push = {
+                        kind = 'push',
+                        allowed_chain_actions = { push_follow_up = { action_name = 'action_push_follow' } },
+                    },
+                    action_push_follow = { kind = 'sweep' },
+                },
+            })
+            mock:set_wielded_slot('slot_primary')
+            local engine = mock:load_controller(new_manager({
+                sequence_cycle_point = 'no_repeat',
+                sequence_step_1 = command,
+            }))
+            local held_inputs = { action_one_hold = true }
+            local inputs, input = mock:run_input_frame(engine, held_inputs)
+
+            assert.are.equal('block', input)
+            assert.are.equal('action_block', mock:current_action_name())
+
+            if command == 'block' then
+                inputs, input = mock:run_input_frame(engine, held_inputs)
+                assert.is_true(inputs.action_two_hold)
+                assert.is_false(inputs.action_one_hold)
+                return
+            end
+
+            _, input = mock:run_input_frame(engine, held_inputs)
+            assert.are.equal('push', input)
+            assert.are.equal('action_push', mock:current_action_name())
+
+            if command == 'push' then
+                return
+            end
+
+            mock.now = 0.25
+            _, input = mock:run_input_frame(engine, held_inputs)
+            assert.are.equal('push_follow_up', input)
+            assert.are.equal('action_push_follow', mock:current_action_name())
+        end
+
+        run('block')
+        run('push')
+        run('push_attack')
+    end)
+
+    it('returns a push follow-up to base before starting a following heavy attack', function()
+        mock:set_weapon('slot_primary', 'test_push_follow_up_heavy', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            action_inputs = {
+                finish_push_follow_up = {
+                    dont_queue = true,
+                    input_sequence = { { input = 'action_one_hold', value = false } },
+                },
+            },
+            action_input_hierarchy = {
+                {
+                    input = 'start_attack',
+                    transition = { { input = 'heavy_attack', transition = 'base' } },
+                },
+                {
+                    input = 'block',
+                    transition = {
+                        {
+                            input = 'push',
+                            transition = {
+                                {
+                                    input = 'push_follow_up',
+                                    transition = { { input = 'finish_push_follow_up', transition = 'base' } },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            actions = {
+                action_melee_start = {
+                    kind = 'windup',
+                    start_input = 'start_attack',
+                    allowed_chain_actions = { heavy_attack = { action_name = 'action_heavy' } },
+                },
+                action_block = {
+                    kind = 'block',
+                    start_input = 'block',
+                    allowed_chain_actions = { push = { action_name = 'action_push' } },
+                },
+                action_push = {
+                    kind = 'push',
+                    allowed_chain_actions = { push_follow_up = { action_name = 'action_push_follow' } },
+                },
+                action_push_follow = {
+                    kind = 'sweep',
+                    allowed_chain_actions = { start_attack = { action_name = 'action_melee_start' } },
+                },
+                action_heavy = { kind = 'sweep', start_input = 'heavy_attack' },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'push_attack',
+            sequence_step_2 = 'heavy_attack',
+        }))
+        local held_inputs = { action_one_hold = true }
+        local _, input = mock:run_input_frame(engine, held_inputs)
+
+        assert.are.equal('block', input)
+        _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('push', input)
+        mock.now = 0.25
+        _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('push_follow_up', input)
+
+        mock.now = 0.26
+        local inputs
+        inputs, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('finish_push_follow_up', input)
+        assert.is_false(inputs.action_one_hold)
+
+        mock.now = 0.27
+        _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('start_attack', input)
+        assert.are.equal('action_melee_start', mock:current_action_name())
+        mock.now = 0.28
+        mock:run_input_frame(engine, held_inputs)
+        mock.now = 0.53
+        mock:run_input_frame(engine, held_inputs)
+        mock.now = 0.54
+        _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('heavy_attack', input)
+        assert.are.equal('action_heavy', mock:current_action_name())
+    end)
+
+    it('uses terminal return-to-base inputs before chaining from block and push', function()
+        local function run(command, release_input)
+            mock = DarktideMock.new()
+            local block_transition
+            local actions = {
+                action_melee_start = {
+                    kind = 'windup',
+                    start_input = 'start_attack',
+                    allowed_chain_actions = { heavy_attack = { action_name = 'action_heavy' } },
+                },
+                action_heavy = { kind = 'sweep', start_input = 'heavy_attack' },
+            }
+
+            if command == 'block' then
+                block_transition = { { input = release_input, transition = 'base' } }
+                actions.action_block = {
+                    kind = 'block',
+                    start_input = 'block',
+                    allowed_chain_actions = { start_attack = { action_name = 'action_melee_start' } },
+                }
+            else
+                block_transition = {
+                    {
+                        input = 'push',
+                        transition = { { input = release_input, transition = 'base' } },
+                    },
+                }
+                actions.action_block = {
+                    kind = 'block',
+                    start_input = 'block',
+                    allowed_chain_actions = { push = { action_name = 'action_push' } },
+                }
+                actions.action_push = {
+                    kind = 'push',
+                    allowed_chain_actions = { start_attack = { action_name = 'action_melee_start' } },
+                }
+            end
+
+            mock:set_weapon('slot_primary', 'test_terminal_release_' .. command, {
+                displayed_attacks = { primary = { type = 'melee' } },
+                action_inputs = {
+                    [release_input] = {
+                        dont_queue = true,
+                        input_sequence = { { input = 'action_one_hold', value = false } },
+                    },
+                },
+                action_input_hierarchy = {
+                    {
+                        input = 'start_attack',
+                        transition = { { input = 'heavy_attack', transition = 'base' } },
+                    },
+                    { input = 'block', transition = block_transition },
+                },
+                actions = actions,
+            })
+            mock:set_wielded_slot('slot_primary')
+            local engine = mock:load_controller(new_manager({
+                sequence_cycle_point = 'no_repeat',
+                sequence_step_1 = command,
+                sequence_step_2 = 'heavy_attack',
+            }))
+            local held_inputs = { action_one_hold = true }
+            local _, input = mock:run_input_frame(engine, held_inputs)
+
+            assert.are.equal('block', input)
+
+            local release_t = 0.01
+            if command == 'push' then
+                mock.now = release_t
+                _, input = mock:run_input_frame(engine, held_inputs)
+                assert.are.equal('push', input)
+                release_t = 0.02
+            end
+
+            mock.now = release_t
+            _, input = mock:run_input_frame(engine, held_inputs)
+            assert.are.equal(release_input, input)
+            mock.now = release_t + 0.01
+            _, input = mock:run_input_frame(engine, held_inputs)
+            assert.are.equal('start_attack', input)
+            assert.are.equal('action_melee_start', mock:current_action_name())
+        end
+
+        run('block', 'finish_block')
+        run('push', 'finish_push')
+    end)
+
     it('keeps a push follow-up held until its game chain opens', function()
         mock:set_weapon('slot_primary', 'test_push', {
             displayed_attacks = { primary = { type = 'melee' } },
@@ -123,6 +353,80 @@ describe('SimpleSequencer action chains', function()
 
         mock.now = 0.25
         local _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('push_follow_up', input)
+        assert.are.equal('action_push_follow', mock:current_action_name())
+    end)
+
+    it('keeps primary held while a delayed push follow-up sequence arms', function()
+        mock:set_weapon('slot_primary', 'test_delayed_push_follow_up', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            action_inputs = {
+                push_follow_up = {
+                    buffer_time = 0.1,
+                    input_sequence = {
+                        {
+                            duration = 0.3,
+                            hold_input = 'action_two_hold',
+                            input = 'action_one_hold',
+                            value = true,
+                        },
+                    },
+                },
+            },
+            action_input_hierarchy = {
+                {
+                    input = 'block',
+                    transition = {
+                        {
+                            input = 'push',
+                            transition = { { input = 'push_follow_up', transition = 'base' } },
+                        },
+                    },
+                },
+            },
+            actions = {
+                action_block = {
+                    kind = 'block',
+                    start_input = 'block',
+                    allowed_chain_actions = { push = { action_name = 'action_push' } },
+                },
+                action_push = {
+                    kind = 'push',
+                    allowed_chain_actions = {
+                        push_follow_up = {
+                            { action_name = 'action_push_follow_special', chain_time = 0.3 },
+                            { action_name = 'action_push_follow', chain_time = 0.3 },
+                        },
+                    },
+                },
+                action_push_follow_special = {
+                    kind = 'sweep',
+                    action_condition_func = function()
+                        return false
+                    end,
+                },
+                action_push_follow = { kind = 'sweep' },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'push_attack',
+        }))
+        local held_inputs = { action_one_hold = true }
+        local _, input = mock:run_input_frame(engine, held_inputs)
+
+        assert.are.equal('block', input)
+        mock.now = 0.01
+        _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('push', input)
+        for _, t in ipairs({ 0.02, 0.1, 0.19 }) do
+            mock.now = t
+            mock:run_input_frame(engine, held_inputs)
+        end
+        mock.now = 0.31
+        _, input = mock:run_input_frame(engine, held_inputs)
+
         assert.are.equal('push_follow_up', input)
         assert.are.equal('action_push_follow', mock:current_action_name())
     end)

@@ -109,6 +109,10 @@ function SequenceInterpreter:can_interpret()
     return self.input_name ~= nil and type(self.elements) == 'table' and #self.elements > 0
 end
 
+function SequenceInterpreter:active_input_name()
+    return self.input_name
+end
+
 function SequenceInterpreter:_advance_frame(t)
     if self.frame_t == t then
         return
@@ -137,7 +141,7 @@ function SequenceInterpreter:_advance_frame(t)
 
     local elapsed = t - self.element_start_t
     local duration_complete = element.duration and elapsed >= element.duration
-    local complete = duration_complete or self.matched and not element.duration
+    local complete = self.matched and (duration_complete or not element.duration)
 
     if complete then
         self.element_index = self.element_index + 1

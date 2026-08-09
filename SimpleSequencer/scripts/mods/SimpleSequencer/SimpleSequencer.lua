@@ -144,9 +144,9 @@ mod:hook_safe(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(self)
     end
 end)
 
-mod:hook_safe(CLASS.ActionHandler, 'start_action', function(self, id, _, action_name, _, _, used_input, t)
+mod:hook_safe(CLASS.ActionHandler, 'start_action', function(self, id, _, action_name, _, _, _, t)
     if id == 'weapon_action' and _is_local_player_unit(self._unit) then
-        mod.controller:on_action_started(action_name, used_input, t)
+        mod.controller:on_action_started(action_name, t)
     end
 end)
 
