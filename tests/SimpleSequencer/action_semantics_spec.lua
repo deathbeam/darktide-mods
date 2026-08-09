@@ -60,6 +60,23 @@ describe('SimpleSequencer ActionSemantics', function()
         assert.same({ 'block', 'push', 'push_follow_up' }, plan.goals[1].inputs)
     end)
 
+    it('compiles parser subprograms for nested Push paths', function()
+        local plan = _plan(_template(), { 'push_attack' })
+        local programs = plan.goals[1].programs
+
+        assert.same({ 'block' }, programs[1])
+        assert.same({ 'push', 'push_follow_up' }, programs[2])
+        assert.same({ 'push_follow_up' }, programs[3])
+    end)
+
+    it('keeps the immediate Start Attack follow-up in its compiled program', function()
+        local plan = _plan(_template(), { 'heavy_attack' })
+        local programs = plan.goals[1].programs
+
+        assert.same({ 'start_attack', 'heavy_attack' }, programs[1])
+        assert.same({ 'heavy_attack' }, programs[2])
+    end)
+
     it('selects special variants from the runtime hierarchy', function()
         local template = _template()
         local plan = _plan(template, { 'special' })
@@ -139,5 +156,17 @@ describe('SimpleSequencer ActionSemantics', function()
         local goal = { inputs = { 'block', 'push' } }
 
         assert.are.equal(1, ActionSemantics.matched_input_index(goal, 'block', 'action_block', template))
+    end)
+    it('selects the zoom firing path for standard ADS goals', function()
+        local template = _template(nil, nil, 'ads')
+        template.action_input_hierarchy = {
+            { input = 'shoot_pressed', transition = 'stay' },
+            { input = 'zoom', transition = { { input = 'zoom_shoot', transition = 'stay' } } },
+        }
+
+        local plan = _plan(template, { 'standard' })
+
+        assert.same({ 'zoom', 'zoom_shoot' }, plan.goals[1].inputs)
+        assert.same({ 'zoom_shoot' }, plan.goals[1].repeat_program)
     end)
 end)

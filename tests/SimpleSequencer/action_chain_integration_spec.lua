@@ -138,7 +138,10 @@ describe('SimpleSequencer action chains', function()
             action_input_hierarchy = {
                 {
                     input = 'start_attack',
-                    transition = { { input = 'heavy_attack', transition = 'base' } },
+                    transition = {
+                        { input = 'heavy_attack', transition = 'base' },
+                        { input = 'light_attack', transition = 'base' },
+                    },
                 },
                 {
                     input = 'block',
@@ -159,7 +162,10 @@ describe('SimpleSequencer action chains', function()
                 action_melee_start = {
                     kind = 'windup',
                     start_input = 'start_attack',
-                    allowed_chain_actions = { heavy_attack = { action_name = 'action_heavy' } },
+                    allowed_chain_actions = {
+                        heavy_attack = { action_name = 'action_heavy' },
+                        light_attack = { action_name = 'action_light' },
+                    },
                 },
                 action_block = {
                     kind = 'block',
@@ -174,7 +180,12 @@ describe('SimpleSequencer action chains', function()
                     kind = 'sweep',
                     allowed_chain_actions = { start_attack = { action_name = 'action_melee_start' } },
                 },
-                action_heavy = { kind = 'sweep', start_input = 'heavy_attack' },
+                action_heavy = {
+                    kind = 'sweep',
+                    start_input = 'heavy_attack',
+                    allowed_chain_actions = { start_attack = { action_name = 'action_melee_start' } },
+                },
+                action_light = { kind = 'sweep', start_input = 'light_attack' },
             },
         })
         mock:set_wielded_slot('slot_primary')
@@ -182,6 +193,7 @@ describe('SimpleSequencer action chains', function()
             sequence_cycle_point = 'no_repeat',
             sequence_step_1 = 'push_attack',
             sequence_step_2 = 'heavy_attack',
+            sequence_step_3 = 'light_attack',
         }))
         local held_inputs = { action_one_hold = true }
         local _, input = mock:run_input_frame(engine, held_inputs)
@@ -211,6 +223,14 @@ describe('SimpleSequencer action chains', function()
         _, input = mock:run_input_frame(engine, held_inputs)
         assert.are.equal('heavy_attack', input)
         assert.are.equal('action_heavy', mock:current_action_name())
+
+        mock.now = 0.55
+        _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('start_attack', input)
+        assert.are.equal('action_melee_start', mock:current_action_name())
+        mock.now = 0.56
+        _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('light_attack', input)
     end)
 
     it('uses terminal return-to-base inputs before chaining from block and push', function()
@@ -343,6 +363,18 @@ describe('SimpleSequencer action chains', function()
         })
         mock:set_wielded_slot('slot_primary')
         mock:set_input_delay(1)
+        mock:set_input_order({
+            'toggle_ads',
+            'sprint',
+            'quick_wield',
+            'weapon_reload_hold',
+            'weapon_extra_hold',
+            'weapon_extra_pressed',
+            'action_two_hold',
+            'action_two_pressed',
+            'action_one_hold',
+            'action_one_pressed',
+        })
         local engine = mock:load_controller(new_manager({
             sequence_cycle_point = 'no_repeat',
             sequence_step_1 = 'push_attack',
@@ -495,6 +527,84 @@ describe('SimpleSequencer action chains', function()
 
         assert.are.equal('push_follow_up', input)
         assert.are.equal('action_push_follow', mock:current_action_name())
+    end)
+
+    it('does not queue a second standard shot after a physical click releases', function()
+        mock:set_weapon('slot_secondary', 'test_standard_click', {
+            action_inputs = {
+                shoot_pressed = {
+                    buffer_time = 0.2,
+                    max_queue = 2,
+                    input_sequence = { { input = 'action_one_pressed', value = true } },
+                },
+            },
+            action_input_hierarchy = { { input = 'shoot_pressed', transition = 'stay' } },
+            actions = {
+                action_shoot = {
+                    kind = 'shoot_hit_scan',
+                    start_input = 'shoot_pressed',
+                    allowed_chain_actions = {
+                        shoot_pressed = { action_name = 'action_shoot', chain_time = 0 },
+                    },
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_secondary')
+        local engine = mock:load_controller(new_manager({ automatic_fire_hip = 'standard' }))
+
+        local _, input = mock:run_input_frame(engine, { action_one_pressed = true, action_one_hold = true })
+        assert.are.equal('shoot_pressed', input)
+        mock.now = 0.01
+        _, input = mock:run_input_frame(engine, {})
+        assert.is_nil(input)
+    end)
+
+    it('waits for primary input before firing an ADS standard program', function()
+        mock:set_weapon('slot_secondary', 'test_ads_standard', {
+            action_inputs = {
+                zoom = { input_sequence = { { input = 'action_two_hold', value = true } } },
+                zoom_shoot = { input_sequence = { { input = 'action_one_pressed', value = true } } },
+            },
+            action_input_hierarchy = {
+                { input = 'shoot_pressed', transition = 'stay' },
+                { input = 'zoom', transition = { { input = 'zoom_shoot', transition = 'stay' } } },
+            },
+            actions = {
+                action_zoom = {
+                    kind = 'aim',
+                    start_input = 'zoom',
+                    allowed_chain_actions = {
+                        zoom_shoot = { action_name = 'action_shoot_zoomed', chain_time = 0 },
+                    },
+                },
+                action_shoot_zoomed = {
+                    kind = 'shoot_hit_scan',
+                    start_input = 'zoom_shoot',
+                    allowed_chain_actions = {
+                        zoom_shoot = { action_name = 'action_shoot_zoomed', chain_time = 0 },
+                    },
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_secondary')
+        local engine = mock:load_controller(new_manager({ automatic_fire_ads = 'standard' }))
+        local ads_inputs = { action_two_hold = true }
+        local _, input = mock:run_input_frame(engine, ads_inputs)
+        assert.are.equal('zoom', input)
+        assert.are.equal('action_zoom', mock:current_action_name())
+        mock.now = 0.01
+        _, input = mock:run_input_frame(engine, ads_inputs)
+        assert.is_nil(input)
+        mock.now = 0.02
+        _, input = mock:run_input_frame(engine, {
+            action_one_pressed = true,
+            action_one_hold = true,
+            action_two_hold = true,
+        })
+        assert.are.equal('zoom_shoot', input)
+        mock.now = 0.03
+        _, input = mock:run_input_frame(engine, { action_one_hold = true, action_two_hold = true })
+        assert.are.equal('zoom_shoot', input)
     end)
 
     it('pulses held standard fire at each game chain boundary', function()

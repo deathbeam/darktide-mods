@@ -35,13 +35,15 @@ describe('SimpleSequencer SequenceController', function()
         local engine = mock:load_controller(new_manager(nil))
 
         engine.sequence.index = 2
-        engine.sequence.plan.goals = { { command = 'light_attack', inputs = { 'start_attack' } } }
+        engine.sequence.plan.goals = {
+            { command = 'light_attack', inputs = { 'start_attack' }, programs = { { 'start_attack' } } },
+        }
         engine.sequence.no_repeat_restored = true
         engine.action.started = { token = 'light_attack:1', input = 'light_attack' }
         engine.action.window_token = 'light_attack:1'
         engine.activation.primary = true
         engine.activation.secondary = true
-        engine.sequence.transition = { kind = 'terminal', token = 'light_attack:1' }
+        engine.sequence.program = { kind = 'terminal', token = 'light_attack:1' }
         engine.interpreter.input_name = 'start_attack'
 
         engine:reset()
@@ -50,7 +52,7 @@ describe('SimpleSequencer SequenceController', function()
         assert.is_false(engine.activation.primary)
         assert.is_false(engine.activation.secondary)
         assert.is_false(engine.sequence.no_repeat_restored)
-        assert.is_nil(engine.sequence.transition)
+        assert.is_nil(engine.sequence.program)
         assert.is_nil(engine.action.started)
         assert.is_nil(engine.action.window_token)
         assert.is_nil(engine.interpreter.input_name)
@@ -96,7 +98,7 @@ describe('SimpleSequencer SequenceController', function()
 
         mock:set_action('action_light', { kind = 'sweep', start_input = 'light_attack' }, 1)
         input(engine, 'action_one_hold', true)
-        assert.is_not_nil(engine.sequence.transition)
+        assert.are.equal('terminal', engine.sequence.program.kind)
 
         mock:set_action('none')
         input(engine, 'action_one_hold', true)
@@ -163,7 +165,9 @@ describe('SimpleSequencer SequenceController', function()
         mock:set_wielded_slot('slot_secondary')
         local engine = mock:load_controller(new_manager(profile))
         engine:_refresh_context()
-        engine.sequence.plan = { goals = { { command = 'charged', inputs = { 'brace' } } } }
+        engine.sequence.plan = {
+            goals = { { command = 'charged', inputs = { 'brace' }, programs = { { 'brace' } } } },
+        }
         mock:set_charge(0.2625, 0.525, 0)
         mock:set_action('action_charge', engine.context.template.actions.action_charge, 0)
 
@@ -250,7 +254,11 @@ describe('SimpleSequencer SequenceController', function()
         local engine = mock:load_controller(new_manager(nil))
         engine:_refresh_context()
         engine.sequence.plan.goals = {
-            { command = 'push_attack', inputs = { 'block', 'push', 'push_follow_up' } },
+            {
+                command = 'push_attack',
+                inputs = { 'block', 'push', 'push_follow_up' },
+                programs = { { 'block' }, { 'push', 'push_follow_up' }, { 'push_follow_up' } },
+            },
         }
         engine.sequence.index = 1
         engine.activation.primary = true
@@ -320,7 +328,7 @@ describe('SimpleSequencer SequenceController', function()
         mock:set_action('action_left_light', { kind = 'sweep' }, 1)
         input(engine, 'action_one_hold', true)
 
-        assert.is_not_nil(engine.sequence.transition)
+        assert.are.equal('terminal', engine.sequence.program.kind)
     end)
 
     it('uses the action-start event input when chain metadata cannot resolve progress', function()
@@ -343,7 +351,7 @@ describe('SimpleSequencer SequenceController', function()
         mock:set_action('action_light_1_special', { kind = 'sweep' }, 1)
         input(engine, 'action_one_hold', true)
 
-        assert.is_not_nil(engine.sequence.transition)
+        assert.are.equal('terminal', engine.sequence.program.kind)
     end)
 
     it('advances to the next goal at an action chain boundary', function()
@@ -402,7 +410,9 @@ describe('SimpleSequencer SequenceController', function()
     it('reports activity only for a running goal', function()
         local engine = mock:load_controller(new_manager(nil))
         engine.profile = {}
-        engine.sequence.plan.goals = { { command = 'light_attack', inputs = { 'start_attack' } } }
+        engine.sequence.plan.goals = {
+            { command = 'light_attack', inputs = { 'start_attack' }, programs = { { 'start_attack' } } },
+        }
         engine.activation.primary = true
 
         assert.is_true(engine:is_active())
@@ -421,7 +431,7 @@ describe('SimpleSequencer SequenceController', function()
         engine:_refresh_context()
         engine.activation.primary = true
         engine.interpreter.submitted = true
-        engine.sequence.transition = { kind = 'terminal', token = 'action_light:0' }
+        engine.sequence.program = { kind = 'terminal', token = 'action_light:0' }
         mock:set_action('action_light', {
             kind = 'sweep',
             start_input = 'light_attack',
@@ -434,7 +444,7 @@ describe('SimpleSequencer SequenceController', function()
         assert.is_true(input(engine, 'action_one_pressed', true, { action_two_hold = true }))
         assert.is_false(engine.activation.primary)
         assert.is_false(engine.interpreter.submitted)
-        assert.is_nil(engine.sequence.transition)
+        assert.is_nil(engine.sequence.program)
         assert.is_true(mock.input.secondary_held)
         assert.is_true(input(engine, 'action_two_hold', true))
     end)
@@ -466,7 +476,9 @@ describe('SimpleSequencer SequenceController', function()
         local manager = new_manager(nil)
         local engine = mock:load_controller(manager)
 
-        engine.sequence.plan.goals = { { command = 'light_attack', inputs = { 'start_attack' } } }
+        engine.sequence.plan.goals = {
+            { command = 'light_attack', inputs = { 'start_attack' }, programs = { { 'start_attack' } } },
+        }
         engine.sequence.index = 1
         engine:_advance()
 
@@ -513,8 +525,16 @@ describe('SimpleSequencer SequenceController', function()
         engine.profile = {}
         engine.sequence.plan = {
             goals = {
-                { command = 'light_attack', inputs = { 'start_attack', 'light_attack' } },
-                { command = 'light_attack', inputs = { 'start_attack', 'light_attack' } },
+                {
+                    command = 'light_attack',
+                    inputs = { 'start_attack', 'light_attack' },
+                    programs = { { 'start_attack', 'light_attack' }, { 'light_attack' } },
+                },
+                {
+                    command = 'light_attack',
+                    inputs = { 'start_attack', 'light_attack' },
+                    programs = { { 'start_attack', 'light_attack' }, { 'light_attack' } },
+                },
             },
             goal_cycle_index = 0,
         }
@@ -526,7 +546,7 @@ describe('SimpleSequencer SequenceController', function()
                 start_attack = { action_name = 'action_melee_start', chain_time = 0.5 },
             },
         }, 0)
-        engine.sequence.transition = { kind = 'terminal', token = 'action_light:0' }
+        engine.sequence.program = { kind = 'terminal', token = 'action_light:0' }
 
         mock.now = 0.1
         assert.is_false(input(engine, 'action_one_hold', true))
@@ -566,16 +586,22 @@ describe('SimpleSequencer SequenceController', function()
         engine:_refresh_context()
         engine.profile = {}
         engine.sequence.plan = {
-            goals = { { command = 'light_attack', inputs = { 'start_attack', 'light_attack' } } },
+            goals = {
+                {
+                    command = 'light_attack',
+                    inputs = { 'start_attack', 'light_attack' },
+                    programs = { { 'start_attack', 'light_attack' }, { 'light_attack' } },
+                },
+            },
             goal_cycle_index = 0,
         }
         engine.activation.primary = true
-        engine.sequence.transition = { kind = 'terminal', token = 'action_light:0' }
+        engine.sequence.program = { kind = 'terminal', token = 'action_light:0' }
         mock:set_action('action_light', engine.context.template.actions.action_light, 0)
 
         assert.is_false(input(engine, 'action_one_hold', false))
         assert.is_false(engine.activation.primary)
-        assert.is_nil(engine.sequence.transition)
+        assert.is_nil(engine.sequence.program)
         assert.is_nil(engine.interpreter.input_name)
 
         mock.now = 0.1

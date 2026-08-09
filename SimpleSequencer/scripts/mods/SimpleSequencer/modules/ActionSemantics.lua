@@ -95,13 +95,82 @@ local function _find_path(template, candidates)
     return nil
 end
 
+local function _transition_after(template, inputs, input_index)
+    local entries = template and template.action_input_hierarchy
+    if not entries then
+        return nil
+    end
+
+    for index = 1, input_index do
+        local transition
+        for _, entry in ipairs(entries) do
+            if entry.input == inputs[index] then
+                transition = entry.transition
+                break
+            end
+        end
+
+        if not transition then
+            return nil
+        elseif index == input_index then
+            return transition
+        elseif type(transition) ~= 'table' then
+            return nil
+        end
+
+        entries = transition
+    end
+end
+
+local function _programs(template, inputs)
+    local programs = {}
+
+    for input_index, input_name in ipairs(inputs) do
+        local program = { input_name }
+        programs[input_index] = program
+
+        if input_name == 'start_attack' and inputs[input_index + 1] then
+            program[#program + 1] = inputs[input_index + 1]
+        elseif input_index > 1 then
+            local next_input_index = input_index + 1
+            local entries = _transition_after(template, inputs, input_index)
+
+            while type(entries) == 'table' and inputs[next_input_index] do
+                local next_input = inputs[next_input_index]
+                local transition
+                for _, entry in ipairs(entries) do
+                    if entry.input == next_input then
+                        transition = entry.transition
+                        break
+                    end
+                end
+
+                if not transition then
+                    break
+                end
+
+                program[#program + 1] = next_input
+                entries = transition
+                next_input_index = next_input_index + 1
+            end
+        end
+    end
+
+    return programs
+end
+
+local function _repeat_program(template, inputs, programs)
+    local transition = _transition_after(template, inputs, #inputs)
+    return transition == 'stay' and programs[#programs] or programs[1]
+end
+
 local function _resolve_command(context, command)
     local template = context.template
     local candidates = COMMAND_TARGETS[command]
     local default_candidates = candidates
 
     if context.aim_mode == 'ads' and (command == 'standard' or command == 'charged') then
-        candidates = { 'shoot_braced' }
+        candidates = { 'shoot_braced', 'zoom_shoot' }
     end
 
     if not candidates then
@@ -122,7 +191,12 @@ local function _resolve_command(context, command)
         end
     end
 
-    return path and { inputs = path } or nil
+    if not path then
+        return nil
+    end
+
+    local programs = _programs(template, path)
+    return { inputs = path, programs = programs, repeat_program = _repeat_program(template, path, programs) }
 end
 
 local function _chain_matches_action(chain_actions, action_name)
@@ -195,6 +269,11 @@ function ActionSemantics.matched_input_index(goal, start_input, action_name, tem
     return nil
 end
 
+function ActionSemantics.program_after(goal, progress)
+    local programs = goal and goal.programs
+    return programs and programs[(progress or 0) + 1] or nil
+end
+
 -- Compile profile steps into template-derived goals.
 function ActionSemantics.compile(sequence, context)
     local plan = {
@@ -220,6 +299,8 @@ function ActionSemantics.compile(sequence, context)
             plan.goals[#plan.goals + 1] = {
                 command = command,
                 inputs = resolved.inputs,
+                programs = resolved.programs,
+                repeat_program = resolved.repeat_program,
                 step = i,
             }
         else
