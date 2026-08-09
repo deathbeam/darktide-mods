@@ -377,6 +377,8 @@ function DarktideMock.new()
                         complete = true
                     elseif elapsed > active_element.time_window and active_element.auto_complete then
                         complete = true
+                    elseif elapsed > active_element.time_window then
+                        sequence.running = false
                     end
                 elseif matched and held then
                     complete = true
@@ -478,13 +480,32 @@ function DarktideMock.new()
         end
     end
 
+    function mock:handle_input(engine, action_name, value, raw_inputs)
+        raw_inputs = raw_inputs or {}
+        if raw_inputs[action_name] == nil then
+            raw_inputs[action_name] = value
+        end
+
+        local input_state = mock.input
+        local input = input_state:observe(action_name, value, function(physical_action_name)
+            local physical_value = raw_inputs[physical_action_name]
+            if physical_value ~= nil then
+                return physical_value
+            end
+
+            return physical_action_name == 'action_two_hold' and input_state.secondary_held or false
+        end)
+
+        return engine:handle_input(input)
+    end
+
     function mock:run_input_frame(engine, raw_inputs)
         raw_inputs = raw_inputs or {}
         local inputs = {}
 
         for _, input_name in ipairs(FRAME_INPUTS) do
             local raw_value = raw_inputs[input_name] or false
-            inputs[input_name] = engine:handle_input(input_name, raw_value)
+            inputs[input_name] = mock:handle_input(engine, input_name, raw_value, raw_inputs)
         end
 
         local template = _wielded_template()
@@ -543,8 +564,10 @@ function DarktideMock.new()
 
     function mock:load_controller(mode_manager)
         self:install()
+        local Input = dofile(root .. 'SimpleSequencer/scripts/mods/SimpleSequencer/modules/Input.lua')
         local Controller = dofile(root .. 'SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceController.lua')
         local controller = Controller:new(self.mod, mode_manager)
+        mock.input = Input:new()
         mock._controller = controller
         return controller
     end

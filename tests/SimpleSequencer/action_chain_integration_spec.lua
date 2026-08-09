@@ -338,10 +338,7 @@ describe('SimpleSequencer action chains', function()
             sequence_step_1 = 'push',
             sequence_step_2 = 'push_attack',
         }))
-        local held_inputs = {
-            action_one_hold = true,
-            action_two_hold = true,
-        }
+        local held_inputs = { action_one_hold = true }
 
         mock:run_input_frame(engine, held_inputs)
         mock:run_input_frame(engine, held_inputs)

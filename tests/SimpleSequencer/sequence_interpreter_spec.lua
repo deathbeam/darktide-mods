@@ -31,6 +31,18 @@ describe('SimpleSequencer SequenceInterpreter', function()
         assert.is_true(interpreter:controls('action_one_hold'))
     end)
 
+    it('reports a configured target with no input sequence as unavailable', function()
+        local interpreter = Interpreter:new()
+        local template = { action_inputs = {} }
+
+        interpreter:set_target(template, 'start_attack', 0)
+        assert.is_false(interpreter:can_interpret())
+        assert.is_true(interpreter:is_missing_sequence())
+
+        interpreter:set_target(template, nil, 0)
+        assert.is_false(interpreter:is_missing_sequence())
+    end)
+
     it('releases the next input on the frame after a duration completes', function()
         local interpreter = Interpreter:new()
         local template = {
@@ -194,5 +206,29 @@ describe('SimpleSequencer SequenceInterpreter', function()
         interpreter:set_target(template, 'test_input', 0)
 
         assert.is_false(interpreter:value('action_two_hold', true, 0))
+    end)
+
+    it('starts duration follow-ups when the preceding input matched', function()
+        local interpreter = Interpreter:new()
+        local template = {
+            action_inputs = {
+                start_attack = {
+                    input_sequence = { { input = 'action_one_hold', value = true } },
+                },
+                heavy_attack = {
+                    input_sequence = {
+                        { duration = 0.25, input = 'action_one_hold', value = true },
+                        { input = 'action_one_hold', value = false },
+                    },
+                },
+            },
+        }
+
+        interpreter:set_target(template, 'start_attack', 0, nil, nil, { 'heavy_attack' })
+
+        assert.is_true(interpreter:value('action_one_hold', true, 0))
+        assert.is_true(interpreter:value('action_one_hold', true, 0.24))
+        assert.is_true(interpreter:value('action_one_hold', true, 0.25))
+        assert.is_false(interpreter:value('action_one_hold', true, 0.26))
     end)
 end)

@@ -2,6 +2,7 @@ local mod = get_mod('SimpleSequencer')
 
 local ModeManager = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ModeManager')
 local SequenceController = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceController')
+local Input = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/Input')
 
 local RESET_STATE_CLASSES = {
     CLASS.PlayerCharacterStateStunned,
@@ -26,6 +27,7 @@ local initialized = false
 local enabled = true
 
 mod.mode_manager = ModeManager:new(mod)
+mod.input = Input:new()
 mod.controller = SequenceController:new(mod, mod.mode_manager)
 
 local function _ui_using_input()
@@ -48,12 +50,17 @@ local function _input_hook(func, self, action_name, ...)
         return value
     end
 
-    return mod.controller:handle_input(action_name, value)
+    local input = mod.input:observe(action_name, value, function(physical_action_name)
+        return func(self, physical_action_name)
+    end)
+
+    return mod.controller:handle_input(input)
 end
 
 local function _reset_for_disruptive_state(_, unit)
     if mod.ready() and _is_local_player_unit(unit) then
         mod.controller:reset()
+        mod.input:reset()
     end
 end
 
@@ -68,6 +75,7 @@ end
 function mod.on_disabled()
     enabled = false
     mod.controller:reset()
+    mod.input:reset()
 end
 
 function mod.on_all_mods_loaded()
@@ -84,6 +92,7 @@ end
 
 function mod.on_game_state_changed()
     mod.controller:reset()
+    mod.input:reset()
     mod.controller:invalidate()
 end
 
@@ -141,6 +150,7 @@ mod:hook(CLASS.InputService, '_get', _input_hook)
 mod:hook_safe(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(self)
     if _is_local_player_unit(self._unit) then
         mod.controller:on_slot_wielded()
+        mod.input:reset()
     end
 end)
 
