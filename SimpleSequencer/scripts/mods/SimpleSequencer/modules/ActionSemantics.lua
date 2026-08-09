@@ -161,7 +161,8 @@ end
 
 local function _repeat_program(template, inputs, programs)
     local transition = _transition_after(template, inputs, #inputs)
-    return transition == 'stay' and programs[#programs] or programs[1]
+    local repeat_at_chain_boundary = transition == 'stay'
+    return repeat_at_chain_boundary and programs[#programs] or programs[1], repeat_at_chain_boundary
 end
 
 local function _resolve_command(context, command)
@@ -196,7 +197,13 @@ local function _resolve_command(context, command)
     end
 
     local programs = _programs(template, path)
-    return { inputs = path, programs = programs, repeat_program = _repeat_program(template, path, programs) }
+    local repeat_program, repeat_at_chain_boundary = _repeat_program(template, path, programs)
+    return {
+        inputs = path,
+        programs = programs,
+        repeat_program = repeat_program,
+        repeat_at_chain_boundary = repeat_at_chain_boundary,
+    }
 end
 
 local function _chain_matches_action(chain_actions, action_name)
@@ -235,18 +242,20 @@ function ActionSemantics.matched_input_index(goal, start_input, action_name, tem
         return nil
     end
 
-    -- The action-start event input is exact; chain metadata below is only a fallback.
-    if used_input then
+    -- The action setting identifies the transition; interpreter submissions fill gaps only.
+    if start_input then
         for index, input_name in ipairs(goal.inputs or {}) do
-            if input_name == used_input then
+            if input_name == start_input then
                 return index
             end
         end
     end
 
-    for index, input_name in ipairs(goal.inputs or {}) do
-        if input_name == start_input then
-            return index
+    if used_input then
+        for index, input_name in ipairs(goal.inputs or {}) do
+            if input_name == used_input then
+                return index
+            end
         end
     end
 
@@ -301,6 +310,7 @@ function ActionSemantics.compile(sequence, context)
                 inputs = resolved.inputs,
                 programs = resolved.programs,
                 repeat_program = resolved.repeat_program,
+                repeat_at_chain_boundary = resolved.repeat_at_chain_boundary,
                 step = i,
             }
         else

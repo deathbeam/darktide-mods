@@ -563,7 +563,10 @@ describe('SimpleSequencer action chains', function()
         mock:set_weapon('slot_secondary', 'test_ads_standard', {
             action_inputs = {
                 zoom = { input_sequence = { { input = 'action_two_hold', value = true } } },
-                zoom_shoot = { input_sequence = { { input = 'action_one_pressed', value = true } } },
+                zoom_shoot = {
+                    buffer_time = 0.225,
+                    input_sequence = { { input = 'action_one_pressed', value = true } },
+                },
             },
             action_input_hierarchy = {
                 { input = 'shoot_pressed', transition = 'stay' },
@@ -581,7 +584,7 @@ describe('SimpleSequencer action chains', function()
                     kind = 'shoot_hit_scan',
                     start_input = 'zoom_shoot',
                     allowed_chain_actions = {
-                        zoom_shoot = { action_name = 'action_shoot_zoomed', chain_time = 0 },
+                        zoom_shoot = { action_name = 'action_shoot_zoomed', chain_time = 0.2 },
                     },
                 },
             },
@@ -603,6 +606,9 @@ describe('SimpleSequencer action chains', function()
         })
         assert.are.equal('zoom_shoot', input)
         mock.now = 0.03
+        _, input = mock:run_input_frame(engine, { action_one_hold = true, action_two_hold = true })
+        assert.is_nil(input)
+        mock.now = 0.22
         _, input = mock:run_input_frame(engine, { action_one_hold = true, action_two_hold = true })
         assert.are.equal('zoom_shoot', input)
     end)

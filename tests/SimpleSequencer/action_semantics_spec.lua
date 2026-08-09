@@ -157,6 +157,16 @@ describe('SimpleSequencer ActionSemantics', function()
 
         assert.are.equal(1, ActionSemantics.matched_input_index(goal, 'block', 'action_block', template))
     end)
+
+    it('prefers an action start input over a stale interpreter submission', function()
+        local template = _template({ action_shoot_zoomed = { start_input = 'zoom_shoot' } })
+        local goal = { inputs = { 'zoom', 'zoom_shoot' } }
+
+        assert.are.equal(
+            2,
+            ActionSemantics.matched_input_index(goal, 'zoom_shoot', 'action_shoot_zoomed', template, 'zoom')
+        )
+    end)
     it('selects the zoom firing path for standard ADS goals', function()
         local template = _template(nil, nil, 'ads')
         template.action_input_hierarchy = {
@@ -168,5 +178,6 @@ describe('SimpleSequencer ActionSemantics', function()
 
         assert.same({ 'zoom', 'zoom_shoot' }, plan.goals[1].inputs)
         assert.same({ 'zoom_shoot' }, plan.goals[1].repeat_program)
+        assert.is_true(plan.goals[1].repeat_at_chain_boundary)
     end)
 end)

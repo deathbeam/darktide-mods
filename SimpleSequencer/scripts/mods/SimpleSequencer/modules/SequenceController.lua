@@ -267,9 +267,13 @@ function SequenceController:_advance_if_chain_ready(start_t, action_settings)
         next_program = ActionSemantics.program_after(next_goal, next_progress or 0)
     end
     local next_input = next_program and next_program[1]
+    local repeat_at_chain_boundary = next_goal
+        and next_progress == #(next_goal.inputs or {})
+        and next_goal.repeat_at_chain_boundary
 
     local can_chain = next_input and WeaponContext.can_chain(action_settings, start_t, next_input, self.context)
-    local can_buffer = next_input
+    local can_buffer = not repeat_at_chain_boundary
+        and next_input
         and next_input ~= 'start_attack'
         and WeaponContext.can_buffer_input(action_settings, start_t, next_input, self.context)
 
