@@ -5,35 +5,9 @@ local ActionSemantics = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequen
 local SequenceInterpreter = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceInterpreter')
 local SequenceController = class('SimpleSequencerSequenceController')
 
-local BLOCK_INPUT = 'block'
-
-local SEQUENCE_INPUTS = {
-    action_one_pressed = true,
-    action_one_hold = true,
-    action_two_pressed = true,
-    action_two_hold = true,
-    weapon_extra_pressed = true,
-    weapon_extra_hold = true,
-    weapon_reload_hold = true,
-}
-
-local PRIMARY_INPUTS = {
-    action_one_pressed = true,
-    action_one_hold = true,
-}
-
-local SPECIAL_INPUTS = {
-    special_action = true,
-    start_attack_special = true,
-    special_action_hold = true,
-    special_action_light = true,
-    special_action_heavy = true,
-    special_action_execute = true,
-    special_action_pistol_whip = true,
-    special_action_push = true,
-    weapon_special = true,
-    zoom_weapon_special = true,
-}
+local function _is_primary_input(action_name)
+    return action_name == 'action_one_pressed' or action_name == 'action_one_hold'
+end
 
 local function _action_token(action, start_t)
     if not action or action == 'idle' then
@@ -517,7 +491,7 @@ function SequenceController:_maybe_advance_goal()
     if progress == #(goal.inputs or {}) then
         local release_input = self:_next_goal()
                 and _terminal_release_input(goal, self.context and self.context.template)
-            or goal.command == BLOCK_INPUT and BLOCK_INPUT
+            or goal.command == 'block' and 'block'
             or nil
         self.sequence.program = {
             kind = 'terminal',
@@ -692,12 +666,12 @@ function SequenceController:_override_input(action_name, raw_value)
         )
 
     if
-        PRIMARY_INPUTS[action_name]
+        _is_primary_input(action_name)
         and (
             terminal and not terminal.release_input
             or not target and not self.activation.secondary and not preserve_primary_hold
-            or target == BLOCK_INPUT
-            or SPECIAL_INPUTS[target] and not self.interpreter:controls(action_name)
+            or target == 'block'
+            or ActionSemantics.is_special_input(target) and not self.interpreter:controls(action_name)
         )
     then
         return false
@@ -733,10 +707,6 @@ function SequenceController:handle_input(input)
     if action_name == 'toggle_ads' then
         self.input_settings.toggle_ads = not not raw_value
 
-        return raw_value
-    end
-
-    if not SEQUENCE_INPUTS[action_name] then
         return raw_value
     end
 
@@ -830,7 +800,7 @@ function SequenceController:handle_input(input)
     end
 
     if not self.sequence.index then
-        if PRIMARY_INPUTS[action_name] then
+        if _is_primary_input(action_name) then
             return false
         end
 

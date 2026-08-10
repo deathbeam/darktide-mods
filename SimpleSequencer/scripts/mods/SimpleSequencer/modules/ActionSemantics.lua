@@ -37,6 +37,23 @@ local SPECIAL_ATTACK_TARGETS = {
     special_action_heavy = { 'heavy_attack_special' },
 }
 
+local SPECIAL_INPUTS = {
+    special_action = true,
+    start_attack_special = true,
+    special_action_hold = true,
+    special_action_light = true,
+    special_action_heavy = true,
+    special_action_execute = true,
+    special_action_pistol_whip = true,
+    special_action_push = true,
+    weapon_special = true,
+    zoom_weapon_special = true,
+}
+
+function ActionSemantics.is_special_input(input_name)
+    return SPECIAL_INPUTS[input_name] or false
+end
+
 -- Runtime plan derivation
 
 local function _path_to_input(entries, target, path, visited)
