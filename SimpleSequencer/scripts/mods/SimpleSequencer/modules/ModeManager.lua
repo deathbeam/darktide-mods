@@ -156,8 +156,8 @@ function ModeManager:select(mode)
     end
 
     local controller = self.mod.controller
-
-    if controller and not controller:can_switch_mode() then
+    if controller then
+        -- Resetting during input handling can discard the action transition in progress.
         self.pending_mode = mode
     else
         self:_activate(mode)

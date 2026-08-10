@@ -101,8 +101,9 @@ function mod.update()
         return
     end
 
-    mod.mode_manager:update()
+    -- Finish action transitions before a pending mode resets the controller.
     mod.controller:update()
+    mod.mode_manager:update()
 end
 
 local function _select_mode(index)

@@ -45,4 +45,32 @@ describe('SimpleSequencer ModeManager', function()
         assert.are.equal('none', manager.data.mode_1.MELEE.global_melee.sequence_step_1)
         assert.are.equal('Burst Mode', manager:display('mode_2').name)
     end)
+
+    it('defers controller reset until the next update', function()
+        local mock = DarktideMock.new()
+        function mock.mod:set(setting_id, value)
+            mock.settings[setting_id] = value
+        end
+        local ModeManager = dofile(root .. '/SimpleSequencer/scripts/mods/SimpleSequencer/modules/ModeManager.lua')
+        local manager = ModeManager:new(mock.mod)
+        local reset_count = 0
+        mock.mod.controller = {
+            can_switch_mode = function()
+                return true
+            end,
+            invalidate = function() end,
+            reset = function()
+                reset_count = reset_count + 1
+            end,
+        }
+
+        assert.is_true(manager:select('mode_2'))
+        assert.are.equal('mode_1', manager:active())
+        assert.are.equal(0, reset_count)
+
+        manager:update()
+
+        assert.are.equal('mode_2', manager:active())
+        assert.are.equal(1, reset_count)
+    end)
 end)

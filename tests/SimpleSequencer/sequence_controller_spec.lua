@@ -1834,6 +1834,33 @@ describe('SimpleSequencer SequenceController integration', function()
         assert.are.equal('action_special_uppercut', mock:current_action_name())
     end)
 
+    it('allows mode switching after a sweep damage window closes', function()
+        mock:set_weapon('slot_primary', 'test_mode_switch_damage_window', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            actions = {
+                action_light = {
+                    kind = 'sweep',
+                    start_input = 'light_attack',
+                    damage_window_end = 0.46,
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'light_attack',
+            sequence_step_2 = 'heavy_attack',
+        }))
+        engine:_refresh_context()
+        mock:set_action('action_light', engine.context.template.actions.action_light, 0)
+
+        assert.is_false(engine:can_switch_mode())
+
+        engine:on_damage_window_exited()
+
+        assert.is_true(engine:can_switch_mode())
+    end)
+
     it('keeps held primary out of an external action before the light release', function()
         mock:set_weapon('slot_primary', 'test_ability_interrupt', {
             displayed_attacks = { primary = { type = 'melee' } },

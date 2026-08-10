@@ -141,7 +141,11 @@ end
 
 function SequenceController:can_switch_mode()
     local action_name, start_t, action_settings = WeaponContext.action(self.context)
-
+    local has_damage_window = action_settings and action_settings.kind == 'sweep' and action_settings.damage_window_end
+    if has_damage_window then
+        -- Recovery no longer affects gameplay once the attack cannot deal damage.
+        return self.action.window_token == _action_token(action_name, start_t)
+    end
     if not action_name or action_name == 'idle' then
         return true
     end
