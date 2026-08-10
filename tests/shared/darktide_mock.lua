@@ -320,7 +320,11 @@ function DarktideMock.new()
 
     function mock:set_weapon(slot, name, template)
         weapons[slot] = {
-            inventory_slot_component = { __config = { special_active = true }, special_active = false },
+            inventory_slot_component = {
+                __config = { special_active = true, num_special_charges = true },
+                special_active = false,
+                num_special_charges = 0,
+            },
             weapon_template = _new_template(name, template),
         }
     end

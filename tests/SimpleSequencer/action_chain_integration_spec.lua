@@ -945,6 +945,124 @@ describe('SimpleSequencer action chains', function()
         assert.are.equal('action_light_left', mock:current_action_name())
     end)
 
+    it('suppresses primary while starting a power-sword special attack', function()
+        mock:set_weapon('slot_primary', 'test_power_sword_special', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            action_inputs = {
+                start_attack = { input_sequence = { { input = 'action_one_hold', value = true } } },
+                start_attack_special = { input_sequence = { { input = 'weapon_extra_hold', value = true } } },
+                light_attack_special = {
+                    input_sequence = { { input = 'weapon_extra_hold', time_window = 0.35, value = false } },
+                },
+            },
+            action_input_hierarchy = {
+                { input = 'start_attack', transition = 'base' },
+                {
+                    input = 'start_attack_special',
+                    transition = { { input = 'light_attack_special', transition = 'base' } },
+                },
+            },
+            actions = {
+                action_melee_start = { kind = 'windup', start_input = 'start_attack' },
+                action_melee_start_special = {
+                    kind = 'windup',
+                    start_input = 'start_attack_special',
+                    allowed_chain_actions = {
+                        light_attack_special = { action_name = 'action_light_special' },
+                    },
+                },
+                action_light_special = { kind = 'sweep' },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'special_action',
+        }))
+
+        local inputs, input = mock:run_input_frame(engine, { action_one_hold = true })
+
+        assert.is_false(inputs.action_one_hold)
+        assert.is_true(inputs.weapon_extra_hold)
+        assert.are.equal('start_attack_special', input)
+        assert.are.equal('action_melee_start_special', mock:current_action_name())
+
+        mock.now = 0.01
+        inputs, input = mock:run_input_frame(engine, { action_one_hold = true })
+        assert.is_false(inputs.weapon_extra_hold)
+        assert.are.equal('light_attack_special', input)
+        assert.are.equal('action_light_special', mock:current_action_name())
+    end)
+
+    it('holds the power-sword special input before releasing its heavy attack', function()
+        mock:set_weapon('slot_primary', 'test_power_sword_special_heavy', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            action_inputs = {
+                start_attack = { input_sequence = { { input = 'action_one_hold', value = true } } },
+                start_attack_special = { input_sequence = { { input = 'weapon_extra_hold', value = true } } },
+                light_attack_special = {
+                    input_sequence = { { input = 'weapon_extra_hold', time_window = 0.35, value = false } },
+                },
+                heavy_attack_special = {
+                    input_sequence = {
+                        { duration = 0.35, input = 'weapon_extra_hold', value = true },
+                        { auto_complete = true, input = 'weapon_extra_hold', time_window = 1.6, value = false },
+                    },
+                },
+            },
+            action_input_hierarchy = {
+                { input = 'start_attack', transition = 'base' },
+                {
+                    input = 'start_attack_special',
+                    transition = {
+                        { input = 'light_attack_special', transition = 'base' },
+                        { input = 'heavy_attack_special', transition = 'base' },
+                    },
+                },
+            },
+            actions = {
+                action_melee_start = { kind = 'windup', start_input = 'start_attack' },
+                action_melee_start_special = {
+                    kind = 'windup',
+                    start_input = 'start_attack_special',
+                    allowed_chain_actions = {
+                        light_attack_special = { action_name = 'action_light_special' },
+                        heavy_attack_special = { action_name = 'action_heavy_special' },
+                    },
+                },
+                action_light_special = { kind = 'sweep' },
+                action_heavy_special = { kind = 'sweep' },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'special_action_heavy',
+        }))
+
+        local _, input = mock:run_input_frame(engine, { action_one_hold = true })
+        assert.are.equal('start_attack_special', input)
+        assert.are.equal('action_melee_start_special', mock:current_action_name())
+
+        mock:set_special_active(true)
+
+        mock.now = 0.01
+        local inputs
+        inputs, input = mock:run_input_frame(engine, { action_one_hold = true })
+        assert.is_true(inputs.weapon_extra_hold)
+        assert.is_nil(input)
+
+        mock.now = 0.36
+        inputs, input = mock:run_input_frame(engine, { action_one_hold = true })
+        assert.is_false(inputs.weapon_extra_hold)
+        assert.is_nil(input)
+
+        mock.now = 0.37
+        _, input = mock:run_input_frame(engine, { action_one_hold = true })
+        assert.are.equal('heavy_attack_special', input)
+        assert.are.equal('action_heavy_special', mock:current_action_name())
+    end)
+
     it('does not interrupt a combat blade light before its damage window closes', function()
         mock:set_weapon('slot_primary', 'test_combat_blade_special_loop', {
             displayed_attacks = { primary = { type = 'melee' } },

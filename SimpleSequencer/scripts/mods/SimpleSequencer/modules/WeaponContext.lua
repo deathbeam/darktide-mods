@@ -170,6 +170,11 @@ function WeaponContext.read()
     local component_config = type(inventory_slot_component) == 'table' and rawget(inventory_slot_component, '__config')
     local has_special_active = component_config and rawget(component_config, 'special_active')
     local special_active = has_special_active and inventory_slot_component.special_active == true or false
+    local has_special_charges = component_config and rawget(component_config, 'num_special_charges')
+    local special_charges = has_special_charges and inventory_slot_component.num_special_charges or nil
+    local special_tweak_data = template and template.weapon_special_tweak_data
+    local special_charge_cost = special_tweak_data
+        and (special_tweak_data.num_charges_to_consume_on_activation or special_tweak_data.num_charges_to_activate)
 
     return {
         extension = extension,
@@ -178,6 +183,8 @@ function WeaponContext.read()
         name = name or 'none',
         kind = kind or 'none',
         special_active = special_active,
+        special_charges = special_charges,
+        special_charge_cost = special_charge_cost,
     }
 end
 

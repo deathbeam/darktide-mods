@@ -24,6 +24,7 @@ local PRIMARY_INPUTS = {
 
 local SPECIAL_INPUTS = {
     special_action = true,
+    start_attack_special = true,
     special_action_hold = true,
     special_action_light = true,
     special_action_heavy = true,

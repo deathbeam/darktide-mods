@@ -32,6 +32,11 @@ local COMMAND_TARGETS = {
     special_charged = { 'special_action_heavy', 'special_action_execute' },
 }
 
+local SPECIAL_ATTACK_TARGETS = {
+    special_action = { 'light_attack_special' },
+    special_action_heavy = { 'heavy_attack_special' },
+}
+
 -- Runtime plan derivation
 
 local function _path_to_input(entries, target, path, visited)
@@ -178,8 +183,20 @@ local function _resolve_command(context, command)
     if not candidates then
         return nil
     end
-
-    local path = _find_path(template, candidates)
+    local special_attack_candidates = context.kind == 'MELEE' and SPECIAL_ATTACK_TARGETS[command]
+    local special_attack_path = special_attack_candidates and _find_path(template, special_attack_candidates)
+    local special_attack_fallback = false
+    if
+        special_attack_path
+        and type(context.special_charges) == 'number'
+        and type(context.special_charge_cost) == 'number'
+        and context.special_charges < context.special_charge_cost
+    then
+        candidates = COMMAND_TARGETS[command == 'special_action_heavy' and 'heavy_attack' or 'light_attack']
+        special_attack_path = nil
+        special_attack_fallback = true
+    end
+    local path = special_attack_path or _find_path(template, candidates)
     if not path and candidates ~= default_candidates then
         path = _find_path(template, default_candidates)
     end
@@ -209,6 +226,8 @@ local function _resolve_command(context, command)
         programs = programs,
         repeat_program = repeat_program,
         repeat_at_chain_boundary = repeat_at_chain_boundary,
+        special_attack = special_attack_path ~= nil,
+        special_attack_fallback = special_attack_fallback,
     }
 end
 
@@ -306,10 +325,19 @@ function ActionSemantics.compile(sequence, context)
 
     for i = 1, #steps do
         local command = steps[i]
+        local resolved = _resolve_command(context, command)
+        local special_command = command == 'special_action' or command == 'special_action_heavy'
+        local special_attack = resolved and (resolved.special_attack or resolved.special_attack_fallback)
+        local insufficient_charges = type(context.special_charges) == 'number'
+            and type(context.special_charge_cost) == 'number'
+            and context.special_charges < context.special_charge_cost
         local skip_special_activation = context.kind == 'MELEE'
-            and context.special_active
-            and (command == 'special_action' or command == 'special_action_heavy')
-        local resolved = not skip_special_activation and _resolve_command(context, command)
+            and special_command
+            and not special_attack
+            and (context.special_active or insufficient_charges)
+        if skip_special_activation then
+            resolved = nil
+        end
 
         resolved_steps[i] = resolved ~= nil
         if resolved then

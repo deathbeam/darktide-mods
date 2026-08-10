@@ -126,6 +126,58 @@ describe('SimpleSequencer ActionSemantics', function()
         assert.same({}, plan.unresolved_steps)
     end)
 
+    it('uses power-sword special attacks while the charge state is active', function()
+        local template = _template()
+        template.action_input_hierarchy = {
+            {
+                input = 'start_attack_special',
+                transition = {
+                    { input = 'light_attack_special', transition = 'base' },
+                    { input = 'heavy_attack_special', transition = 'base' },
+                },
+            },
+        }
+
+        local plan = ActionSemantics.compile(
+            { steps = { 'special_action', 'special_action_heavy' }, cycle_step = 1, repeating = true },
+            { template = template, kind = 'MELEE', special_active = true }
+        )
+
+        assert.are.equal(2, #plan.goals)
+        assert.same({ 'start_attack_special', 'light_attack_special' }, plan.goals[1].inputs)
+        assert.same({ 'start_attack_special', 'heavy_attack_special' }, plan.goals[2].inputs)
+    end)
+
+    it('falls back to normal attacks when a special attack lacks charges', function()
+        local template = _template()
+        template.action_input_hierarchy[#template.action_input_hierarchy + 1] = {
+            input = 'start_attack_special',
+            transition = {
+                { input = 'light_attack_special', transition = 'base' },
+                { input = 'heavy_attack_special', transition = 'base' },
+            },
+        }
+
+        local plan = ActionSemantics.compile(
+            { steps = { 'special_action', 'special_action_heavy' }, cycle_step = 1, repeating = true },
+            { template = template, kind = 'MELEE', special_charges = 0, special_charge_cost = 1 }
+        )
+
+        assert.same({ 'start_attack', 'light_attack' }, plan.goals[1].inputs)
+        assert.same({ 'start_attack', 'heavy_attack' }, plan.goals[2].inputs)
+    end)
+
+    it('skips charge-gated special activations and continues the sequence', function()
+        local plan = ActionSemantics.compile(
+            { steps = { 'special_action', 'special_action_heavy', 'light_attack' }, cycle_step = 1, repeating = true },
+            { template = _template(), kind = 'MELEE', special_charges = 0, special_charge_cost = 1 }
+        )
+
+        assert.are.equal(1, #plan.goals)
+        assert.same({ 'start_attack', 'light_attack' }, plan.goals[1].inputs)
+        assert.same({}, plan.unresolved_steps)
+    end)
+
     it('selects the brace release path for charged ADS goals', function()
         local template = _template({
             action_charge = {

@@ -50,6 +50,31 @@ describe('SimpleSequencer WeaponContext', function()
         assert.is_false(context.special_active)
     end)
 
+    it('reads the special-charge state for charge-gated weapons', function()
+        mock:set_weapon('slot_secondary', 'test_special_charges', {
+            weapon_special_tweak_data = { num_charges_to_consume_on_activation = 1 },
+        })
+        local component = mock.extension._weapons.slot_secondary.inventory_slot_component
+        component.__config.num_special_charges = true
+        component.num_special_charges = 0
+
+        local context = WeaponContext.read()
+        assert.are.equal(0, context.special_charges)
+        assert.are.equal(1, context.special_charge_cost)
+    end)
+
+    it('reads the charge cost used by hit-charge special activations', function()
+        mock:set_weapon('slot_secondary', 'test_hit_charges', {
+            weapon_special_tweak_data = { num_charges_to_activate = 5 },
+        })
+        local component = mock.extension._weapons.slot_secondary.inventory_slot_component
+        component.num_special_charges = 4
+
+        local context = WeaponContext.read()
+        assert.are.equal(4, context.special_charges)
+        assert.are.equal(5, context.special_charge_cost)
+    end)
+
     it('matches game chain timing at the boundary and inside a chain window', function()
         local settings = {
             start_input = 'shoot_pressed',
