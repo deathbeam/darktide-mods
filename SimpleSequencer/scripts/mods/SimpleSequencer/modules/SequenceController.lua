@@ -159,6 +159,7 @@ function SequenceController:init(mod, mode_manager)
     }
     self.context = nil
     self.context_key = nil
+    self.pending_transition = nil
     self.activation = { primary = false, secondary = false }
     self.aim_mode = 'hip'
     self.input_settings = { toggle_ads = false }
@@ -168,6 +169,7 @@ end
 
 function SequenceController:invalidate()
     self.context_key = nil
+    self.pending_transition = nil
 end
 
 function SequenceController:is_active()
@@ -301,6 +303,7 @@ function SequenceController:reset()
     sequence.program = nil
     self.action.started = nil
     self.action.window_token = nil
+    self.pending_transition = nil
     self.interpreter:reset()
     self.frame.token = nil
     self.frame.values = nil
@@ -342,7 +345,6 @@ function SequenceController:_refresh_context()
     local previous_context = self.context
     local context = WeaponContext.read()
     context.aim_mode = self.aim_mode
-    self.context = context
 
     local key = self.mode_manager:active()
         .. ':'
@@ -353,44 +355,82 @@ function SequenceController:_refresh_context()
         .. self.aim_mode
         .. ':'
         .. tostring(context.special_active)
+        .. ':'
+        .. tostring(context.special_charges)
     if self.context_key == key then
+        self.context = context
+        self.pending_transition = nil
         return context
     end
 
-    local preserve_activation = previous_context
+    local same_weapon = previous_context
         and previous_context.kind == context.kind
         and previous_context.name == context.name
         and previous_context.aim_mode == context.aim_mode
-        and previous_context.special_active ~= context.special_active
+    local special_active_changed = same_weapon and previous_context.special_active ~= context.special_active
+    local special_charges_changed = same_weapon and previous_context.special_charges ~= context.special_charges
+    local context_state_changed = special_active_changed or special_charges_changed
+    local profile = context.kind ~= 'none' and self.mode_manager:profile(context.kind, context.name)
+    local sequence = profile and Profiles.build_sequence(profile, context.kind, self.aim_mode)
+    local plan = sequence and ActionSemantics.compile(sequence, context) or _empty_plan()
+
+    if context_state_changed and ActionSemantics.same_plan(self.sequence.plan, plan) then
+        self.context = context
+        self.context_key = key
+        self.profile = profile
+        self.pending_transition = nil
+        return context
+    end
+
+    local transition = {
+        context = context,
+        key = key,
+        plan = plan,
+        profile = profile,
+        preserve_activation = context_state_changed,
+    }
+    local current_action = WeaponContext.action(context)
+    local goal = self:_goal()
+    local active_input = self.interpreter:active_input_name()
+    local started_input = self.action.started and self.action.started.input
+    local special_attack_program_in_progress = goal
+        and goal.special_attack
+        and (not self.interpreter.submitted or started_input ~= active_input)
+    if
+        context.kind == 'MELEE'
+        and context_state_changed
+        and special_attack_program_in_progress
+        and self.activation.primary
+        and current_action ~= 'idle'
+    then
+        self.pending_transition = transition
+        return context
+    end
+
+    local preserve_activation = transition.preserve_activation
     local primary_active = preserve_activation and self.activation.primary
     local secondary_active = preserve_activation and self.activation.secondary
 
-    self.context_key = key
-    self.sequence.plan = _empty_plan()
+    self:reset()
+    self.context = transition.context
+    self.context_key = transition.key
+    self.sequence.plan = transition.plan
+    self.profile = transition.profile
 
-    local profile = context.kind ~= 'none' and self.mode_manager:profile(context.kind, context.name)
-    if profile then
-        local sequence = Profiles.build_sequence(profile, context.kind, self.aim_mode)
-        local plan = ActionSemantics.compile(sequence, context)
-        self.sequence.plan = plan
-        if #plan.unresolved_steps > 0 and self.mod.info then
-            local unresolved = {}
-            for _, step in ipairs(plan.unresolved_steps) do
-                unresolved[#unresolved + 1] = step.command
-            end
-            self.mod:info('[planner] unresolved steps for ' .. context.name .. ': ' .. table.concat(unresolved, ', '))
+    if #transition.plan.unresolved_steps > 0 and self.mod.info then
+        local unresolved = {}
+        for _, step in ipairs(transition.plan.unresolved_steps) do
+            unresolved[#unresolved + 1] = step.command
         end
-        self.profile = profile
-    else
-        self.profile = nil
+        self.mod:info(
+            '[planner] unresolved steps for ' .. transition.context.name .. ': ' .. table.concat(unresolved, ', ')
+        )
     end
 
-    self:reset()
     if preserve_activation then
         self.activation.primary = primary_active
         self.activation.secondary = secondary_active
     end
-
     return context
 end
 
@@ -583,8 +623,14 @@ function SequenceController:_sync_interpreter()
     local frame = self.frame.token or t
     local sequence = self.sequence
     local program = sequence.program
+    if self.pending_transition and self.interpreter.submitted then
+        return nil, t
+    end
     if program and program.inputs then
         self.interpreter:update(t, frame)
+    end
+    if self.pending_transition and self.interpreter.submitted then
+        return nil, t
     end
 
     if self:_terminal_program() then

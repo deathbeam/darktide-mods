@@ -334,6 +334,11 @@ function DarktideMock.new()
         weapon.inventory_slot_component.special_active = not not active
     end
 
+    function mock:set_special_charges(charges)
+        local weapon = weapons[inventory.wielded_slot]
+        weapon.inventory_slot_component.num_special_charges = charges
+    end
+
     function mock:set_wielded_slot(slot)
         inventory.wielded_slot = slot
     end

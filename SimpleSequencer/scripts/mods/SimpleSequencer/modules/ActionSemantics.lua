@@ -134,7 +134,7 @@ local function _programs(template, inputs)
         local program = { input_name }
         programs[input_index] = program
 
-        if input_name == 'start_attack' and inputs[input_index + 1] then
+        if (input_name == 'start_attack' or input_name == 'start_attack_special') and inputs[input_index + 1] then
             program[#program + 1] = inputs[input_index + 1]
         elseif input_index > 1 then
             local next_input_index = input_index + 1
@@ -308,6 +308,63 @@ function ActionSemantics.program_after(goal, progress)
     return programs and programs[(progress or 0) + 1] or nil
 end
 
+local function _same_list(first, second)
+    if first == second then
+        return true
+    end
+    if type(first) ~= 'table' or type(second) ~= 'table' or #first ~= #second then
+        return false
+    end
+    for index = 1, #first do
+        if first[index] ~= second[index] then
+            return false
+        end
+    end
+    return true
+end
+
+local function _same_programs(first, second)
+    if first == second then
+        return true
+    end
+    if type(first) ~= 'table' or type(second) ~= 'table' or #first ~= #second then
+        return false
+    end
+    for index = 1, #first do
+        if not _same_list(first[index], second[index]) then
+            return false
+        end
+    end
+    return true
+end
+
+function ActionSemantics.same_plan(first, second)
+    if first == second then
+        return true
+    end
+    if type(first) ~= 'table' or type(second) ~= 'table' then
+        return false
+    end
+    if first.goal_cycle_index ~= second.goal_cycle_index or #first.goals ~= #second.goals then
+        return false
+    end
+    for index = 1, #first.goals do
+        local first_goal = first.goals[index]
+        local second_goal = second.goals[index]
+        if
+            first_goal.command ~= second_goal.command
+            or first_goal.repeat_at_chain_boundary ~= second_goal.repeat_at_chain_boundary
+            or first_goal.special_attack ~= second_goal.special_attack
+            or not _same_list(first_goal.inputs, second_goal.inputs)
+            or not _same_programs(first_goal.programs, second_goal.programs)
+            or not _same_list(first_goal.repeat_program, second_goal.repeat_program)
+        then
+            return false
+        end
+    end
+    return true
+end
+
 -- Compile profile steps into template-derived goals.
 function ActionSemantics.compile(sequence, context)
     local plan = {
@@ -348,6 +405,7 @@ function ActionSemantics.compile(sequence, context)
                 repeat_program = resolved.repeat_program,
                 repeat_at_chain_boundary = resolved.repeat_at_chain_boundary,
                 step = i,
+                special_attack = resolved.special_attack,
             }
         elseif not skip_special_activation then
             plan.unresolved_steps[#plan.unresolved_steps + 1] = {

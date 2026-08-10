@@ -678,6 +678,36 @@ describe('SimpleSequencer action chains', function()
         assert.are.equal('action_shoot', mock:current_action_name())
     end)
 
+    it('leaves physical input unchanged while a charge-gated special activation is unavailable', function()
+        mock:set_weapon('slot_primary', 'test_charge_gated_special', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            action_inputs = {
+                start_attack = { input_sequence = { { input = 'action_one_hold', value = true } } },
+                special_action = { input_sequence = { { input = 'weapon_extra_pressed', value = true } } },
+            },
+            action_input_hierarchy = {
+                { input = 'start_attack', transition = 'base' },
+                { input = 'special_action', transition = 'base' },
+            },
+            actions = {
+                action_melee_start = { kind = 'windup', start_input = 'start_attack' },
+                action_special = { kind = 'toggle_special', start_input = 'special_action' },
+            },
+            weapon_special_tweak_data = { num_charges_to_activate = 1 },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'sequence_step_1',
+            sequence_step_1 = 'special_action',
+        }))
+        local held_inputs = { action_one_hold = true }
+
+        local inputs, input = mock:run_input_frame(engine, held_inputs)
+        assert.is_true(inputs.action_one_hold)
+        assert.are.equal('start_attack', input)
+        assert.are.equal('action_melee_start', mock:current_action_name())
+    end)
+
     it('releases a held heavy attack as soon as its game input duration completes', function()
         mock:set_weapon('slot_primary', 'test_heavy', {
             displayed_attacks = { primary = { type = 'melee' } },
@@ -1004,6 +1034,7 @@ describe('SimpleSequencer action chains', function()
                     input_sequence = { { input = 'weapon_extra_hold', time_window = 0.35, value = false } },
                 },
                 heavy_attack_special = {
+                    buffer_time = 0.5,
                     input_sequence = {
                         { duration = 0.35, input = 'weapon_extra_hold', value = true },
                         { auto_complete = true, input = 'weapon_extra_hold', time_window = 1.6, value = false },
@@ -1027,7 +1058,7 @@ describe('SimpleSequencer action chains', function()
                     start_input = 'start_attack_special',
                     allowed_chain_actions = {
                         light_attack_special = { action_name = 'action_light_special' },
-                        heavy_attack_special = { action_name = 'action_heavy_special' },
+                        heavy_attack_special = { action_name = 'action_heavy_special', chain_time = 0.8 },
                     },
                 },
                 action_light_special = { kind = 'sweep' },
@@ -1058,6 +1089,11 @@ describe('SimpleSequencer action chains', function()
         assert.is_nil(input)
 
         mock.now = 0.37
+        _, input = mock:run_input_frame(engine, { action_one_hold = true })
+        assert.are.equal('heavy_attack_special', input)
+        assert.are.equal('action_melee_start_special', mock:current_action_name())
+
+        mock.now = 0.8
         _, input = mock:run_input_frame(engine, { action_one_hold = true })
         assert.are.equal('heavy_attack_special', input)
         assert.are.equal('action_heavy_special', mock:current_action_name())

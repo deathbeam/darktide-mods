@@ -613,4 +613,76 @@ describe('SimpleSequencer SequenceController', function()
         assert.are.equal('start_attack', action_input)
         assert.are.equal('action_melee_start', mock:current_action_name())
     end)
+    it('replans special attacks after their parser program, not after the action becomes idle', function()
+        local profile = {
+            sequence_cycle_point = 'sequence_step_1',
+            sequence_step_1 = 'special_action_heavy',
+        }
+        mock:set_weapon('slot_primary', 'test_charge_aware_special_attack', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            weapon_special_tweak_data = { num_charges_to_consume_on_activation = 1 },
+            action_inputs = {
+                start_attack_special = { input_sequence = { { input = 'weapon_extra_hold', value = true } } },
+                heavy_attack_special = { input_sequence = { { input = 'weapon_extra_hold', value = false } } },
+            },
+            action_input_hierarchy = {
+                { input = 'start_attack', transition = { { input = 'heavy_attack', transition = 'base' } } },
+                {
+                    input = 'start_attack_special',
+                    transition = { { input = 'heavy_attack_special', transition = 'base' } },
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        mock:set_special_charges(0)
+        local engine = mock:load_controller(new_manager(profile))
+        engine:_refresh_context()
+        engine.activation.primary = true
+        mock:set_action('action_heavy', { kind = 'sweep' }, 0)
+        mock:set_special_charges(2)
+        engine:_refresh_context()
+        assert.same({ 'start_attack_special', 'heavy_attack_special' }, engine:_goal().inputs)
+        assert.is_true(engine.activation.primary)
+
+        engine.interpreter.input_name = 'heavy_attack_special'
+        engine.interpreter.submitted = false
+        engine.action.started = { input = 'start_attack_special' }
+        mock:set_action('action_special_start', { kind = 'windup' }, 1)
+        mock:set_special_active(true)
+        mock:set_special_charges(1)
+        engine:_refresh_context()
+        assert.same({ 'start_attack_special', 'heavy_attack_special' }, engine:_goal().inputs)
+        assert.are.equal(1, engine.context.special_charges)
+        assert.is_true(engine.context.special_active)
+        assert.is_nil(engine.pending_transition)
+        assert.are.equal('heavy_attack_special', engine.interpreter:active_input_name())
+
+        mock:set_special_charges(0)
+        engine:_refresh_context()
+        assert.same({ 'start_attack_special', 'heavy_attack_special' }, engine:_goal().inputs)
+
+        engine.interpreter.submitted = true
+        engine.action.started = { input = 'start_attack_special' }
+        engine.sequence.program = {
+            kind = 'normal',
+            inputs = { 'start_attack_special', 'heavy_attack_special' },
+        }
+        engine:_refresh_context()
+        assert.is_not_nil(engine.pending_transition)
+        assert.same({ 'start_attack_special', 'heavy_attack_special' }, engine:_goal().inputs)
+        engine.interpreter.template = engine.context.template
+        engine.interpreter.target_name = 'start_attack_special'
+        engine.interpreter.followup_inputs = { 'heavy_attack_special' }
+        engine.interpreter.restart_after = 0.1
+        engine.interpreter.submitted_t = 0
+        mock.now = 1
+        engine:_sync_interpreter()
+        assert.are.equal('heavy_attack_special', engine.interpreter:active_input_name())
+
+        mock:set_action('action_special_heavy', { kind = 'sweep' }, 1.8)
+        engine.action.started = { input = 'heavy_attack_special' }
+        engine:_refresh_context()
+        assert.same({ 'start_attack', 'heavy_attack' }, engine:_goal().inputs)
+        assert.is_true(engine.activation.primary)
+    end)
 end)

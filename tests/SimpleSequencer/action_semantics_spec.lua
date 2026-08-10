@@ -146,6 +146,7 @@ describe('SimpleSequencer ActionSemantics', function()
         assert.are.equal(2, #plan.goals)
         assert.same({ 'start_attack_special', 'light_attack_special' }, plan.goals[1].inputs)
         assert.same({ 'start_attack_special', 'heavy_attack_special' }, plan.goals[2].inputs)
+        assert.same({ 'start_attack_special', 'heavy_attack_special' }, plan.goals[2].programs[1])
     end)
 
     it('falls back to normal attacks when a special attack lacks charges', function()
