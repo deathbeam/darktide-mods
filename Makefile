@@ -23,7 +23,7 @@ check:
 
 # Run repository-level Lua tests with the same Lua version used by the game.
 test:
-	busted --lua=lua5.1 tests
+	busted --lua=lua5.1 -o gtest tests
 
 # Publish mods to Nexus Mods (see scripts/ci/publish_mods.py for options).
 # Syncs shared files first, then uploads, then cleans up.
