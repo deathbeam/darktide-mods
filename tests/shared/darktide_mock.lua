@@ -610,7 +610,7 @@ function DarktideMock.new()
         self:install()
         local Input = dofile(root .. 'SimpleSequencer/scripts/mods/SimpleSequencer/modules/Input.lua')
         local Controller = dofile(root .. 'SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceController.lua')
-        local controller = Controller:new(self.mod, mode_manager)
+        local controller = Controller:new(mode_manager)
         mock.input = Input:new()
         mock._controller = controller
         return controller

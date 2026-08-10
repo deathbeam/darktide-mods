@@ -99,7 +99,7 @@ local function _find_path(template, candidates)
     for i = 1, #candidates do
         local target = candidates[i]
 
-        for _, entry in ipairs(hierarchy or {}) do
+        for _, entry in ipairs(hierarchy) do
             if entry and entry.input == target then
                 return { target }
             end
@@ -248,33 +248,20 @@ local function _resolve_command(context, command)
     }
 end
 
-local function _chain_matches_action(chain_actions, action_name)
-    if type(chain_actions) ~= 'table' then
-        return false
-    end
-
-    if chain_actions.action_name == action_name then
-        return true
-    end
-
-    for _, chain_action in ipairs(chain_actions) do
-        if chain_action.action_name == action_name then
-            return true
-        end
-    end
-
-    return false
-end
-
 local function _action_chain_matches_input(template, input_name, action_name)
     for _, settings in pairs(template.actions or {}) do
         local chain_actions = settings.allowed_chain_actions and settings.allowed_chain_actions[input_name]
-
-        if _chain_matches_action(chain_actions, action_name) then
-            return true
+        if type(chain_actions) == 'table' then
+            if chain_actions.action_name == action_name then
+                return true
+            end
+            for _, chain_action in ipairs(chain_actions) do
+                if chain_action.action_name == action_name then
+                    return true
+                end
+            end
         end
     end
-
     return false
 end
 
@@ -387,7 +374,6 @@ function ActionSemantics.compile(sequence, context)
     local plan = {
         goals = {},
         goal_cycle_index = 0,
-        unresolved_steps = {},
     }
 
     if not sequence or not context or not context.template then
@@ -395,7 +381,6 @@ function ActionSemantics.compile(sequence, context)
     end
 
     local steps = sequence.steps or {}
-    local resolved_steps = {}
 
     for i = 1, #steps do
         local command = steps[i]
@@ -413,7 +398,6 @@ function ActionSemantics.compile(sequence, context)
             resolved = nil
         end
 
-        resolved_steps[i] = resolved ~= nil
         if resolved then
             plan.goals[#plan.goals + 1] = {
                 command = command,
@@ -424,11 +408,6 @@ function ActionSemantics.compile(sequence, context)
                 step = i,
                 special_attack = resolved.special_attack,
             }
-        elseif not skip_special_activation then
-            plan.unresolved_steps[#plan.unresolved_steps + 1] = {
-                command = command,
-                step = i,
-            }
         end
     end
 
@@ -437,15 +416,13 @@ function ActionSemantics.compile(sequence, context)
     end
 
     if sequence.cycle_step and sequence.cycle_step > 0 then
-        local goal_cycle_index = 0
-
-        for i = 1, sequence.cycle_step - 1 do
-            if resolved_steps[i] then
-                goal_cycle_index = goal_cycle_index + 1
+        for _, goal in ipairs(plan.goals) do
+            if goal.step < sequence.cycle_step then
+                plan.goal_cycle_index = plan.goal_cycle_index + 1
             end
         end
 
-        plan.goal_cycle_index = goal_cycle_index + 1
+        plan.goal_cycle_index = plan.goal_cycle_index + 1
     end
 
     if sequence.repeating then

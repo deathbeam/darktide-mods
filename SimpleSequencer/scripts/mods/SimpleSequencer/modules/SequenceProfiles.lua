@@ -32,16 +32,6 @@ local function _merge_defaults(profile, defaults)
     end
 end
 
-local function _ensure_profile(data, mode, kind, weapon_key)
-    local mode_data = data[mode] or {}
-    local profiles = mode_data[kind] or {}
-    mode_data[kind] = profiles
-    data[mode] = mode_data
-    profiles[weapon_key] = profiles[weapon_key] or _new_profile(kind)
-
-    return profiles[weapon_key]
-end
-
 function Profiles.clone(value)
     if type(value) ~= 'table' then
         return value
@@ -95,7 +85,7 @@ function Profiles.ensure(data)
             mode_data[kind] = profiles
 
             local global_key = kind == 'MELEE' and 'global_melee' or 'global_ranged'
-            _ensure_profile(data, mode, kind, global_key)
+            profiles[global_key] = profiles[global_key] or _new_profile(kind)
 
             local defaults = Profiles.defaults[kind]
             for _, profile in pairs(profiles) do

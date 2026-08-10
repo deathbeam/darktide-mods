@@ -28,7 +28,7 @@ local enabled = true
 
 mod.mode_manager = ModeManager:new(mod)
 mod.input = Input:new()
-mod.controller = SequenceController:new(mod, mod.mode_manager)
+mod.controller = SequenceController:new(mod.mode_manager)
 
 local function _ui_using_input()
     local ui_manager = Managers and Managers.ui

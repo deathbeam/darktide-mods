@@ -17,17 +17,6 @@ local function _action_token(action, start_t)
     return action .. ':' .. tostring(start_t or 0)
 end
 
-local function _game_time(context)
-    local extension = context and context.extension
-    local fixed_time = extension and extension._last_fixed_t
-
-    if fixed_time then
-        return fixed_time
-    end
-
-    return Managers and Managers.time and Managers.time:time('gameplay') or 0
-end
-
 local function _terminal_release_input(goal, template)
     local inputs = goal and goal.inputs
     local action_inputs = template and template.action_inputs
@@ -108,7 +97,6 @@ local function _empty_plan()
     return {
         goals = {},
         goal_cycle_index = 0,
-        unresolved_steps = {},
     }
 end
 
@@ -118,8 +106,7 @@ function SequenceController:_terminal_program()
     return program and program.kind == 'terminal' and program or nil
 end
 
-function SequenceController:init(mod, mode_manager)
-    self.mod = mod
+function SequenceController:init(mode_manager)
     self.mode_manager = mode_manager
     self.sequence = {
         index = 1,
@@ -214,18 +201,15 @@ function SequenceController:_next_goal()
     return next_index and goals[next_index]
 end
 
-function SequenceController:_damage_window_closed(action_name, start_t, action_settings)
-    if action_settings and action_settings.kind == 'sweep' and action_settings.damage_window_end then
-        return self.action.window_token == _action_token(action_name, start_t)
-    end
-
-    return true
-end
-
 function SequenceController:_advance_if_chain_ready(start_t, action_settings)
     local next_goal = self:_next_goal()
     local action_name = WeaponContext.action(self.context)
-    if not self:_damage_window_closed(action_name, start_t, action_settings) then
+    if
+        action_settings
+        and action_settings.kind == 'sweep'
+        and action_settings.damage_window_end
+        and self.action.window_token ~= _action_token(action_name, start_t)
+    then
         return false
     end
 
@@ -388,16 +372,6 @@ function SequenceController:_refresh_context()
     self.context_key = transition.key
     self.sequence.plan = transition.plan
     self.profile = transition.profile
-
-    if #transition.plan.unresolved_steps > 0 and self.mod.info then
-        local unresolved = {}
-        for _, step in ipairs(transition.plan.unresolved_steps) do
-            unresolved[#unresolved + 1] = step.command
-        end
-        self.mod:info(
-            '[planner] unresolved steps for ' .. transition.context.name .. ': ' .. table.concat(unresolved, ', ')
-        )
-    end
 
     if preserve_activation then
         self.activation.primary = primary_active
@@ -591,7 +565,10 @@ function SequenceController:_goal_input()
 end
 
 function SequenceController:_sync_interpreter()
-    local t = _game_time(self.context)
+    local extension = self.context and self.context.extension
+    local t = extension and extension._last_fixed_t
+        or Managers and Managers.time and Managers.time:time('gameplay')
+        or 0
     local frame = self.frame.token or t
     local sequence = self.sequence
     local program = sequence.program
@@ -677,10 +654,6 @@ function SequenceController:_override_input(action_name, raw_value)
 
     if target and self.interpreter:can_interpret() then
         return self.interpreter:value(action_name, raw_value, t, frame)
-    end
-
-    if target and self.interpreter:is_missing_sequence() and self.mod.info then
-        self.mod:info('[interpreter] missing input_sequence for ' .. tostring(target))
     end
 
     return raw_value

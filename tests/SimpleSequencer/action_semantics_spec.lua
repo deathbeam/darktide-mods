@@ -123,7 +123,6 @@ describe('SimpleSequencer ActionSemantics', function()
 
         assert.are.equal(1, #plan.goals)
         assert.same({ 'start_attack', 'light_attack' }, plan.goals[1].inputs)
-        assert.same({}, plan.unresolved_steps)
     end)
 
     it('uses power-sword special attacks while the charge state is active', function()
@@ -176,7 +175,6 @@ describe('SimpleSequencer ActionSemantics', function()
 
         assert.are.equal(1, #plan.goals)
         assert.same({ 'start_attack', 'light_attack' }, plan.goals[1].inputs)
-        assert.same({}, plan.unresolved_steps)
     end)
 
     it('selects the brace release path for charged ADS goals', function()
@@ -204,11 +202,10 @@ describe('SimpleSequencer ActionSemantics', function()
         assert.are.equal(2, ActionSemantics.matched_input_index(goal, nil, 'action_shoot_charged', template))
     end)
 
-    it('reports unresolved profile steps and counts only compiled goals', function()
+    it('ignores unsupported profile steps and counts only compiled goals', function()
         local plan = _plan(_template(), { 'light_attack', 'missing', 'block' }, 3, true)
 
         assert.are.equal(2, #plan.goals)
-        assert.same({ { command = 'missing', step = 2 } }, plan.unresolved_steps)
         assert.are.equal(2, plan.goal_cycle_index)
     end)
 
