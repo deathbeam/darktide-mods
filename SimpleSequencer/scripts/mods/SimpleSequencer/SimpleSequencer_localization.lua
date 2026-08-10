@@ -6,7 +6,7 @@ local localizations = {
         en = ' {#color(80,200,255)}Simple{#reset()} Sequencer',
     },
     mod_description = {
-        en = 'Attack sequencer, similar to Skitarius but works on active modes and switching between modes, always requires holding primary or secondary attack for executing sequences.',
+        en = 'Hold-driven attack sequencer for melee combos and ranged autofire, with four switchable modes, per-weapon profiles, and a customizable HUD indicator.',
     },
     global_melee = {
         en = 'All Melee Weapons',

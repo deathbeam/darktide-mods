@@ -19,7 +19,7 @@ Sprint by default, hold sprint to walk. Hold dodge to chain dodges and dodge-sli
 
 ### [SimpleSequencer](mods/SimpleSequencer)
 
-Attack sequencer, similar to Skitarius but works on active modes and switching between modes, always requires holding primary or secondary attack for executing sequences.
+Hold-driven attack sequencer for melee combos and ranged autofire, with four switchable modes, per-weapon profiles, and a customizable HUD indicator.
 
 ## Stat Mods
 Various stat related mods, with unified interface.
