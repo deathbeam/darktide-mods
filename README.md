@@ -17,7 +17,7 @@ Show weapon, talent and blessing charge state as charge bar around cursor for me
 
 Sprint by default, hold sprint to walk. Hold dodge to chain dodges and dodge-slide, supports sprint-dodge and auto-vault.
 
-### [SimpleSequencer](mods/SimpleSequencer)
+### [SimpleSequencer](https://www.nexusmods.com/warhammer40kdarktide/mods/1160)
 
 Hold-driven attack sequencer for melee combos and ranged autofire, with four switchable modes, per-weapon profiles, and a customizable HUD indicator.
 
