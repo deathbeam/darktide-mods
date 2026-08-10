@@ -269,12 +269,11 @@ function SequenceController:_advance_if_chain_ready(start_t, action_settings)
 end
 
 function SequenceController:reset()
-    local sequence = self.sequence
     self.activation.primary = false
     self.activation.secondary = false
-    sequence.index = 1
-    sequence.no_repeat_restored = false
-    sequence.program = nil
+    self.sequence.index = 1
+    self.sequence.no_repeat_restored = false
+    self.sequence.program = nil
     self.action.started = nil
     self.action.window_token = nil
     self.pending_transition = nil
@@ -285,7 +284,6 @@ end
 
 function SequenceController:_started_input(action_token)
     local started = self.action.started
-
     return started and started.token == action_token and started.input or nil
 end
 
