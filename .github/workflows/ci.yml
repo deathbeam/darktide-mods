@@ -1,21 +1,25 @@
-name: Release
+name: CI
 
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       mod:
-        description: 'Mod to release (leave empty to check all mods)'
+        description: 'Mod to release (leave empty to release all mods)'
         type: choice
         options:
           - ''
-          - SimpleActivate
-          - SimpleMovement
           - CharacterStats
           - CombatStats
           - EnemyStats
           - WeaponStats
+          - SimpleActivate
+          - SimpleCharging
+          - SimpleMovement
+          - SimpleSequencer
         default: ''
       dry_run:
         description: 'Dry run (check versions, no uploads)'
@@ -31,17 +35,44 @@ on:
         default: 'deathbeam-darktide-mods'
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Lua 5.1 and Busted
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1 luarocks
+          sudo luarocks --lua-version=5.1 install busted
+
+      - name: Sync shared modules
+        run: make sync-shared
+
+      - name: Run StyLua check
+        uses: JohnnyMorganz/stylua-action@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: 2.5.2
+          args: --check .
+
+      - name: Run tests
+        run: make test
+
   release:
     name: Upload changed mods to Nexus Mods
+    if: github.event_name != 'pull_request'
+    needs: check
     runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
-      # inputs.* are empty on push events, so fall back to the default name.
       COLLECTION_NAME: ${{ inputs.collection || 'deathbeam-darktide-mods' }}
     steps:
       - name: Checkout repository

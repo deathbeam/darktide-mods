@@ -13,7 +13,7 @@ make clean         # remove copied shared files from mod folders
 make publish       # sync-shared -> upload to NexusMods -> clean (see scripts/ci/publish_mods.js)
 ```
 
-Don't edit shared files inside a mod's `shared/` folder — those are generated copies (gitignored). Edit `scripts/shared/` then `make sync-shared`. CI (`.github/workflows/style-check.yml`, `release.yml`) runs the same sync + check before zipping; releases trigger via Actions > Release Mods > Run workflow.
+Don't edit shared files inside a mod's `shared/` folder — those are generated copies (gitignored). Edit `scripts/shared/` then `make sync-shared`. CI (`.github/workflows/ci.yml`) syncs shared files, checks formatting, runs tests, and gates releases; releases trigger via Actions > CI > Run workflow.
 
 ## Testing
 
