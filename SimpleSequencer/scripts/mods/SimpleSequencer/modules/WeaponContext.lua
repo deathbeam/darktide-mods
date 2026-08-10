@@ -1,31 +1,5 @@
 local WeaponContext = {}
 
--- The calibration data below is adapted from Skitarius (GPL-3.0-only).
--- See SimpleSequencer/NOTICE and SimpleSequencer/LICENSE.
-local CHAIN_TIME_OVERRIDES = {
-    ogryn_powermaul_slabshield_p1_m1 = {
-        action_right_heavy = { [0.35] = 0.5, [0.4] = 0.45 },
-    },
-    ogryn_club_p2_m3 = {
-        action_right_heavy = { [0.5] = 0.55 },
-    },
-    combataxe_p2_m3 = {
-        action_left_heavy = { [0.25] = 0.3 },
-    },
-    powermaul_2h_p1_m1 = {
-        action_right_heavy = { [0.35] = 0.45 },
-    },
-    combataxe_p2_m1 = {
-        action_left_heavy = { [0.25] = 0.3 },
-    },
-    combatknife_p1_m1 = {
-        action_left_heavy = { [0.3] = 0.35 },
-    },
-    combatknife_p1_m2 = {
-        action_left_heavy = { [0.3] = 0.35 },
-    },
-}
-
 local INVERTED_TIME_SCALE_KINDS = {
     overload_charge = true,
     overload_charge_position_finder = true,
@@ -84,45 +58,6 @@ local function _game_chain_ready(context, chain_name, current_time)
 
     return ok and valid == true
 end
-
-local function _calibration_allows(settings, start_t, chain_actions, context, current_time)
-    local weapon_overrides = context and CHAIN_TIME_OVERRIDES[context.name]
-
-    if not weapon_overrides then
-        return true
-    end
-
-    local action_component = context and context.extension and context.extension._weapon_action_component
-    local time_scale = action_component and action_component.time_scale or 1
-
-    if time_scale <= 0 then
-        return false
-    end
-
-    local time_in_action = current_time - start_t
-    local action_kind = settings and settings.kind
-    local has_override = false
-
-    for index = 1, chain_actions[1] and #chain_actions or 1 do
-        local chain_action = _chain_action_at(chain_actions, index)
-        local action_override = chain_action and weapon_overrides[chain_action.action_name]
-        local corrected_chain_time = action_override and action_override[chain_action.chain_time]
-
-        if corrected_chain_time then
-            has_override = true
-
-            local chain_time = _scaled_chain_time(corrected_chain_time, time_scale, action_kind)
-            local chain_until = _scaled_chain_time(chain_action.chain_until, time_scale, action_kind)
-
-            if chain_time <= time_in_action or chain_until and time_in_action <= chain_until then
-                return true
-            end
-        end
-    end
-
-    return not has_override
-end
-
 function WeaponContext.read()
     local player_manager = Managers and Managers.player
     local player = player_manager and player_manager:local_player_safe(1)
@@ -259,7 +194,7 @@ function WeaponContext.can_chain(settings, start_t, chain_name, context)
         return false
     end
 
-    return _calibration_allows(settings, start_t, chain_actions, context, current_time)
+    return true
 end
 
 function WeaponContext.charge_state(context)
@@ -300,14 +235,9 @@ function WeaponContext.can_buffer_input(settings, start_t, chain_name, context)
 
     local time_in_action = current_time - start_t
     local action_kind = settings and settings.kind
-    local weapon_overrides = context and CHAIN_TIME_OVERRIDES[context.name]
-
     for index = 1, chain_actions[1] and #chain_actions or 1 do
         local chain_action = _chain_action_at(chain_actions, index)
-        local action_override = weapon_overrides and chain_action and weapon_overrides[chain_action.action_name]
-        local configured_chain_time = action_override and action_override[chain_action.chain_time]
-            or chain_action and chain_action.chain_time
-        local chain_time = _scaled_chain_time(configured_chain_time or 0, time_scale, action_kind)
+        local chain_time = _scaled_chain_time(chain_action and chain_action.chain_time or 0, time_scale, action_kind)
         local queue_start_t = math.max(0, chain_time - buffer_time)
 
         if queue_start_t <= time_in_action then

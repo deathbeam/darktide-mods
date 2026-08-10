@@ -1,11 +1,8 @@
 SimpleSequencer
 Copyright (C) 2026 Tomas Slusny
 
-SimpleSequencer is a separate implementation with adapted portions from Skitarius.
-Adapted portions include:
-- related sequence/profile settings from scripts/mods/Skitarius/Skitarius_data.lua;
-- chain-timing calibration data from scripts/mods/Skitarius/modules/SkitariusArmoury.lua.
-These portions were modified for SimpleSequencer in 2026.
+SimpleSequencer is a separate implementation with adapted sequence/profile settings from Skitarius.
+These settings were modified for SimpleSequencer in 2026.
 
 Skitarius
 Copyright (C) catbirds

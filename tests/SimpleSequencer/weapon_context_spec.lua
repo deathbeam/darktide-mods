@@ -174,7 +174,7 @@ describe('SimpleSequencer WeaponContext', function()
         assert.are.equal(1, calls)
     end)
 
-    it('keeps calibrated heavy windups behind their corrected chain time', function()
+    it('uses the game chain time for heavy attacks', function()
         local settings = {
             kind = 'windup',
             allowed_chain_actions = {
@@ -184,15 +184,13 @@ describe('SimpleSequencer WeaponContext', function()
                 },
             },
         }
-        mock:set_weapon('slot_primary', 'combatknife_p1_m1')
         mock:set_wielded_slot('slot_primary')
         mock:set_action('action_melee_start', settings, 1)
         local context = WeaponContext.read()
 
-        mock.now = 1.3
+        mock.now = 1.29
         assert.is_false(WeaponContext.can_chain(settings, 1, 'heavy_attack', context))
-
-        mock.now = 1.35
+        mock.now = 1.3
         assert.is_true(WeaponContext.can_chain(settings, 1, 'heavy_attack', context))
     end)
 
