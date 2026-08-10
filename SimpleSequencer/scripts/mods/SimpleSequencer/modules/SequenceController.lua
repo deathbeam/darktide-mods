@@ -279,7 +279,7 @@ function SequenceController:on_action_started(action_name, t)
 
     self.action.started = {
         token = _action_token(action_name, t),
-        input = self.interpreter:action_input_name(),
+        input = self.interpreter:consume_action_input(),
     }
 end
 
@@ -351,7 +351,7 @@ function SequenceController:_refresh_context()
     local started_input = self.action.started and self.action.started.input
     local special_attack_program_in_progress = goal
         and goal.special_attack
-        and (not self.interpreter.submitted or started_input ~= active_input)
+        and (not self.interpreter:has_submitted() or started_input ~= active_input)
     if
         context.kind == 'MELEE'
         and context_state_changed
@@ -450,7 +450,7 @@ function SequenceController:_maybe_advance_goal()
         if action_token ~= terminal.token then
             self:_advance()
         elseif terminal.release_input then
-            if self.interpreter.submitted then
+            if self.interpreter:has_submitted() then
                 self:_advance_if_chain_ready(start_t, action_settings)
             end
         else
@@ -572,13 +572,13 @@ function SequenceController:_sync_interpreter()
     local frame = self.frame.token or t
     local sequence = self.sequence
     local program = sequence.program
-    if self.pending_transition and self.interpreter.submitted then
+    if self.pending_transition and self.interpreter:has_submitted() then
         return nil, t
     end
     if program and program.inputs then
         self.interpreter:update(t, frame)
     end
-    if self.pending_transition and self.interpreter.submitted then
+    if self.pending_transition and self.interpreter:has_submitted() then
         return nil, t
     end
 
@@ -591,7 +591,10 @@ function SequenceController:_sync_interpreter()
         local active_input = self.interpreter:active_input_name()
         if
             not program
-            or program.kind == 'normal' and self.interpreter.submitted and input_name and active_input ~= input_name
+            or program.kind == 'normal'
+                and self.interpreter:has_submitted()
+                and input_name
+                and active_input ~= input_name
         then
             if not input_name then
                 return nil, t

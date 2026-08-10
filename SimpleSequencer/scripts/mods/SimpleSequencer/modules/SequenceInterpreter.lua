@@ -134,6 +134,10 @@ function SequenceInterpreter:can_interpret()
     return self.input_name ~= nil and type(self.elements) == 'table' and #self.elements > 0
 end
 
+function SequenceInterpreter:has_submitted()
+    return self.submitted
+end
+
 function SequenceInterpreter:is_missing_sequence()
     return self.input_name ~= nil and not self:can_interpret()
 end
@@ -142,7 +146,7 @@ function SequenceInterpreter:active_input_name()
     return self.input_name
 end
 
-function SequenceInterpreter:action_input_name()
+function SequenceInterpreter:consume_action_input()
     local submitted_inputs = self.submitted_inputs
     local input_name = table.remove(submitted_inputs, 1)
     if input_name then

@@ -86,6 +86,29 @@ describe('SimpleSequencer SequenceInterpreter', function()
         assert.same({ 'heavy_attack' }, interpreter.submitted_inputs)
     end)
 
+    it('consumes queued input when the action event arrives after submission', function()
+        local interpreter = Interpreter:new()
+        interpreter.input_name = 'follow_up'
+        interpreter.submitted_inputs = { 'start_attack' }
+
+        assert.are.equal('start_attack', interpreter:consume_action_input())
+        assert.same({}, interpreter.submitted_inputs)
+    end)
+
+    it('marks the current input when the action event arrives first', function()
+        local interpreter = Interpreter:new()
+        local template = {
+            action_inputs = {
+                light_attack = { input_sequence = { { input = 'action_one_hold', value = true } } },
+            },
+        }
+
+        interpreter:set_target(template, 'light_attack', 0)
+
+        assert.are.equal('light_attack', interpreter:consume_action_input())
+        assert.are.equal('light_attack', interpreter.started_input)
+    end)
+
     it('drives duration requirements before completing an elapsed input', function()
         local interpreter = Interpreter:new()
         local template = {
