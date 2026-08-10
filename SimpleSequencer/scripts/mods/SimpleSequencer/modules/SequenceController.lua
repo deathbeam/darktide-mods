@@ -124,7 +124,6 @@ function SequenceController:init(mode_manager)
     self.activation = { primary = false, secondary = false }
     self.aim_mode = 'hip'
     self.input_settings = { toggle_ads = false }
-    self.frame = { token = nil, values = nil }
     self.interpreter = SequenceInterpreter:new()
 end
 
@@ -262,8 +261,6 @@ function SequenceController:reset()
     self.action.window_token = nil
     self.pending_transition = nil
     self.interpreter:reset()
-    self.frame.token = nil
-    self.frame.values = nil
 end
 
 function SequenceController:_started_input(action_token)
@@ -569,8 +566,10 @@ function SequenceController:_sync_interpreter()
     local t = extension and extension._last_fixed_t
         or Managers and Managers.time and Managers.time:time('gameplay')
         or 0
-    local frame = self.frame.token or t
+    local frame = extension and extension._last_fixed_frame or t
     local sequence = self.sequence
+    local action_name, start_t = WeaponContext.action(self.context)
+    local action_started = self.action.started and self.action.started.token == _action_token(action_name, start_t)
     local program = sequence.program
     if self.pending_transition and self.interpreter:has_submitted() then
         return nil, t
@@ -592,9 +591,9 @@ function SequenceController:_sync_interpreter()
         if
             not program
             or program.kind == 'normal'
-                and self.interpreter:has_submitted()
                 and input_name
                 and active_input ~= input_name
+                and (self.interpreter:has_submitted() or action_started)
         then
             if not input_name then
                 return nil, t
@@ -613,7 +612,6 @@ function SequenceController:_sync_interpreter()
         return nil, t
     end
 
-    local _, start_t = WeaponContext.action(self.context)
     self.interpreter:set_target(
         self.context and self.context.template,
         program.inputs[1],
@@ -786,43 +784,6 @@ function SequenceController:handle_input(input)
     end
 
     return self:_override_input(action_name, raw_value)
-end
-
-function SequenceController:handle_frame(input)
-    local frame = input.frame
-    if self.frame.token == frame and self.frame.values then
-        return self.frame.values
-    end
-
-    if self.activation.primary and not input.primary_held then
-        local _, _, action_settings = WeaponContext.action(self:_refresh_context())
-        local preserves_primary = action_settings and action_settings.kind == 'vent_overheat'
-        if not preserves_primary then
-            self:reset()
-            self.frame.token = frame
-            self.frame.values = input.values
-            return self.frame.values
-        end
-    end
-
-    local values = input.values
-    local outputs = {}
-    self.frame.token = frame
-    self.frame.values = nil
-
-    for _, action_name in ipairs(input.action_names) do
-        outputs[action_name] = self:handle_input({
-            action_name = action_name,
-            value = values[action_name] or false,
-            primary_pressed = action_name == 'action_one_pressed' and input.primary_pressed,
-            primary_held = input.primary_held,
-            secondary_held = input.secondary_held,
-            secondary_pressed = action_name == 'action_two_hold' and input.secondary_pressed,
-        })
-    end
-
-    self.frame.values = outputs
-    return outputs
 end
 
 function SequenceController:update()

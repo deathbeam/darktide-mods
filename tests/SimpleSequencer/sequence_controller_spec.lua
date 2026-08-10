@@ -1049,18 +1049,6 @@ describe('SimpleSequencer SequenceController integration', function()
         })
         mock:set_wielded_slot('slot_primary')
         mock:set_input_delay(1)
-        mock:set_input_order({
-            'toggle_ads',
-            'sprint',
-            'quick_wield',
-            'weapon_reload_hold',
-            'weapon_extra_hold',
-            'weapon_extra_pressed',
-            'action_two_hold',
-            'action_two_pressed',
-            'action_one_hold',
-            'action_one_pressed',
-        })
         local engine = mock:load_controller(new_manager({
             sequence_cycle_point = 'no_repeat',
             sequence_step_1 = 'push_attack',

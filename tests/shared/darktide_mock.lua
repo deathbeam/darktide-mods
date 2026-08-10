@@ -83,6 +83,19 @@ local DEFAULT_ACTION_INPUTS = {
     },
 }
 
+local FRAME_INPUTS = {
+    'action_one_pressed',
+    'action_one_hold',
+    'action_two_pressed',
+    'action_two_hold',
+    'weapon_extra_pressed',
+    'weapon_extra_hold',
+    'weapon_reload_hold',
+    'quick_wield',
+    'sprint',
+    'toggle_ads',
+}
+
 local function _active_input_element(element, inputs)
     local input_setting = element.input_setting
 
@@ -134,29 +147,6 @@ local function _clone(value)
     return result
 end
 
-local function _observed_input(input_state, action_name, value, raw_inputs)
-    local secondary_was_held = input_state.secondary_held
-    local primary_pressed = action_name == 'action_one_pressed' and value
-
-    if action_name == 'action_one_hold' then
-        input_state.primary_held = not not value
-    elseif action_name == 'action_two_hold' then
-        input_state.secondary_held = not not value
-    elseif primary_pressed then
-        local secondary_held = raw_inputs.action_two_hold
-        input_state.secondary_held = not not (secondary_held == nil and input_state.secondary_held or secondary_held)
-    end
-
-    return {
-        action_name = action_name,
-        value = value,
-        primary_pressed = not not primary_pressed,
-        primary_held = input_state.primary_held,
-        secondary_held = input_state.secondary_held,
-        secondary_pressed = input_state.secondary_held and not secondary_was_held,
-    }
-end
-
 local function _new_template(name, template)
     template = template or {}
     template.name = template.name or name
@@ -202,7 +192,6 @@ function DarktideMock.new()
         extension = nil,
         player = nil,
     }
-    mock.input_extension = { _human_unit_input = { _frame = mock.frame } }
 
     local inventory = {
         wielded_slot = 'slot_secondary',
@@ -345,10 +334,6 @@ function DarktideMock.new()
 
     function mock:set_input_delay(frames)
         mock.input_delay_frames = frames or 0
-    end
-
-    function mock:set_input_order(input_order)
-        mock.input_order = input_order
     end
 
     local function _wielded_template()
@@ -524,29 +509,31 @@ function DarktideMock.new()
             raw_inputs[action_name] = value
         end
 
-        local input = _observed_input(mock.input, action_name, value, raw_inputs)
+        local input_state = mock.input
+        local input = input_state:observe(action_name, value, function(physical_action_name)
+            local physical_value = raw_inputs[physical_action_name]
+            if physical_value ~= nil then
+                return physical_value
+            end
+
+            return physical_action_name == 'action_two_hold' and input_state.secondary_held or false
+        end)
 
         return engine:handle_input(input)
     end
 
     function mock:run_input_frame(engine, raw_inputs)
         raw_inputs = raw_inputs or {}
-        mock.input_extension._human_unit_input._frame = mock.frame
-        local input = mock.input:snapshot('action_one_pressed', function(action_name)
-            return raw_inputs[action_name] or false
-        end, mock.input_extension)
-        local outputs = engine:handle_frame(input)
         local inputs = {}
-        local input_order = mock.input_order or input.action_names
-        for _, input_name in ipairs(input_order) do
-            local output = outputs[input_name]
-            inputs[input_name] = output == nil and raw_inputs[input_name] or output
+        local primary_was_held = mock.input.primary_held
+
+        for _, input_name in ipairs(FRAME_INPUTS) do
+            local raw_value = raw_inputs[input_name] or false
+            inputs[input_name] = mock:handle_input(engine, input_name, raw_value, raw_inputs)
         end
-        for _, input_name in ipairs(input.action_names) do
-            if inputs[input_name] == nil then
-                local output = outputs[input_name]
-                inputs[input_name] = output == nil and raw_inputs[input_name] or output
-            end
+        -- The parser samples the pressed action before the same-frame hold release.
+        if primary_was_held and not raw_inputs.action_one_hold then
+            inputs.action_one_pressed = false
         end
 
         local template = _wielded_template()

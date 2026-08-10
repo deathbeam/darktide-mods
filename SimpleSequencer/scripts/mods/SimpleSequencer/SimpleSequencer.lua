@@ -43,29 +43,18 @@ local function _is_local_player_unit(unit)
     return player and player.player_unit == unit or false
 end
 
-local function _is_local_input_extension(input_extension)
-    local player_manager = Managers and Managers.player
-    local player = player_manager and player_manager:local_player_safe(1)
-
-    return player and input_extension._player == player or false
-end
-
-local function _raw_input_hook(func, self, action_name)
+local function _input_hook(func, self, action_name)
     local value = func(self, action_name)
 
-    if not mod.ready() or _ui_using_input() or not _is_local_input_extension(self) then
+    if self.type ~= 'Ingame' or not mod.ready() or _ui_using_input() then
         return value
     end
 
-    local input = mod.input:snapshot(action_name, function(physical_action_name)
-        return physical_action_name == action_name and value or func(self, physical_action_name)
-    end, self)
-    if not input then
-        return value
-    end
-    local values = mod.controller:handle_frame(input)
-    local output = values[action_name]
-    return output == nil and value or output
+    local input = mod.input:observe(action_name, value, function(physical_action_name)
+        return func(self, physical_action_name)
+    end)
+
+    return mod.controller:handle_input(input)
 end
 
 local function _reset_for_disruptive_state(_, unit)
@@ -156,7 +145,7 @@ function mod.select_mode_toggle()
     end
 end
 
-mod:hook(CLASS.PlayerUnitInputExtension, 'get', _raw_input_hook)
+mod:hook(CLASS.InputService, '_get', _input_hook)
 
 mod:hook_safe(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(self)
     if _is_local_player_unit(self._unit) then
