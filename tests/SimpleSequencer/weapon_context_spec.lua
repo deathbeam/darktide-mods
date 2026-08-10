@@ -38,6 +38,18 @@ describe('SimpleSequencer WeaponContext', function()
         assert.is_nil(action_settings)
     end)
 
+    it('treats a missing special-active component field as inactive', function()
+        local weapon = mock.extension._weapons.slot_secondary
+        weapon.inventory_slot_component = setmetatable({ __config = {} }, {
+            __index = function()
+                error('missing component field')
+            end,
+        })
+
+        local context = WeaponContext.read()
+        assert.is_false(context.special_active)
+    end)
+
     it('matches game chain timing at the boundary and inside a chain window', function()
         local settings = {
             start_input = 'shoot_pressed',

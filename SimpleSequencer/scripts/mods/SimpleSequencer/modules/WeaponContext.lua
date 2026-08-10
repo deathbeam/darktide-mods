@@ -167,6 +167,9 @@ function WeaponContext.read()
     end
 
     local inventory_slot_component = weapon and weapon.inventory_slot_component
+    local component_config = type(inventory_slot_component) == 'table' and rawget(inventory_slot_component, '__config')
+    local has_special_active = component_config and rawget(component_config, 'special_active')
+    local special_active = has_special_active and inventory_slot_component.special_active == true or false
 
     return {
         extension = extension,
@@ -174,7 +177,7 @@ function WeaponContext.read()
         template = template,
         name = name or 'none',
         kind = kind or 'none',
-        special_active = inventory_slot_component and inventory_slot_component.special_active == true or false,
+        special_active = special_active,
     }
 end
 
