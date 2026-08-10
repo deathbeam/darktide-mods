@@ -77,13 +77,29 @@ describe('SimpleSequencer ActionSemantics', function()
         assert.same({ 'heavy_attack' }, programs[2])
     end)
 
+    it('uses standard fire when a special state is active', function()
+        local template = _template()
+        template.action_input_hierarchy = {
+            { input = 'special_action', transition = 'base' },
+            { input = 'shoot_pressed', transition = 'stay' },
+        }
+        local sequence = { steps = { 'special' }, cycle_step = 1, repeating = true }
+        local inactive = ActionSemantics.compile(sequence, { template = template, special_active = false })
+        local active = ActionSemantics.compile(sequence, { template = template, special_active = true })
+
+        assert.same({ 'special_action' }, inactive.goals[1].inputs)
+        assert.same({ 'shoot_pressed' }, active.goals[1].inputs)
+    end)
+
     it('selects special variants from the runtime hierarchy', function()
         local template = _template()
         local plan = _plan(template, { 'special' })
         local charged = _plan(template, { 'special_charged' })
+        local special_action_heavy = _plan(template, { 'special_action_heavy' })
 
         assert.same({ 'special_action_hold', 'special_action_light' }, plan.goals[1].inputs)
         assert.same({ 'special_action_hold', 'special_action_heavy' }, charged.goals[1].inputs)
+        assert.same({ 'special_action_hold', 'special_action_heavy' }, special_action_heavy.goals[1].inputs)
     end)
 
     it('falls back to the generic special input when no variant exists', function()
@@ -91,9 +107,23 @@ describe('SimpleSequencer ActionSemantics', function()
         template.action_input_hierarchy[3].transition = nil
 
         local plan = _plan(template, { 'special_charged' })
+        local special_action_heavy = _plan(template, { 'special_action_heavy' })
 
         assert.same({ 'special_action' }, plan.goals[1].inputs)
         assert.are.equal('special_charged', plan.goals[1].command)
+        assert.same({ 'special_action' }, special_action_heavy.goals[1].inputs)
+        assert.are.equal('special_action_heavy', special_action_heavy.goals[1].command)
+    end)
+
+    it('skips melee special activations while the special state is active', function()
+        local plan = ActionSemantics.compile(
+            { steps = { 'special_action', 'special_action_heavy', 'light_attack' }, cycle_step = 1, repeating = true },
+            { template = _template(), kind = 'MELEE', special_active = true }
+        )
+
+        assert.are.equal(1, #plan.goals)
+        assert.same({ 'start_attack', 'light_attack' }, plan.goals[1].inputs)
+        assert.same({}, plan.unresolved_steps)
     end)
 
     it('selects the brace release path for charged ADS goals', function()

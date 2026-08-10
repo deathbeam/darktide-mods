@@ -322,6 +322,7 @@ local MELEE_OPTIONS = {
     { text = 'light_attack', value = 'light_attack' },
     { text = 'heavy_attack', value = 'heavy_attack' },
     { text = 'special_action', value = 'special_action' },
+    { text = 'special_action_heavy', value = 'special_action_heavy' },
     { text = 'block', value = 'block' },
     { text = 'push', value = 'push' },
     { text = 'push_attack', value = 'push_attack' },
@@ -333,7 +334,6 @@ local RANGED_FIRE_OPTIONS = {
     { text = 'charged', value = 'charged' },
     { text = 'special', value = 'special' },
     { text = 'special_charged', value = 'special_charged' },
-    { text = 'special_standard', value = 'special_standard' },
 }
 
 local CYCLE_OPTIONS = { { text = 'no_repeat', value = 'no_repeat' } }

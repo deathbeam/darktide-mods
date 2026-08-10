@@ -166,12 +166,15 @@ function WeaponContext.read()
         end
     end
 
+    local inventory_slot_component = weapon and weapon.inventory_slot_component
+
     return {
         extension = extension,
         weapon = weapon,
         template = template,
         name = name or 'none',
         kind = kind or 'none',
+        special_active = inventory_slot_component and inventory_slot_component.special_active == true or false,
     }
 end
 

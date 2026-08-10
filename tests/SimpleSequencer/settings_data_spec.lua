@@ -75,9 +75,12 @@ describe('SimpleSequencer settings data', function()
         assert.is_not_nil(find_widget(data.options.widgets, 'mode_4_display_color_b'))
 
         local melee_step = find_widget(data.options.widgets, 'melee_sequence_step_1')
+        local has_special_action_heavy = false
         for _, option in ipairs(melee_step.options) do
             assert.are_not_equal('wield', option.value)
             assert.are_not_equal('quick_swap_cancel', option.value)
+            has_special_action_heavy = has_special_action_heavy or option.value == 'special_action_heavy'
         end
+        assert.is_true(has_special_action_heavy)
     end)
 end)

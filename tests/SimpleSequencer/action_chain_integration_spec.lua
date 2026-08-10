@@ -644,6 +644,40 @@ describe('SimpleSequencer action chains', function()
         assert.are.equal('shoot_pressed', input)
     end)
 
+    it('fires standard shots after activating a ranged special state', function()
+        mock:set_weapon('slot_secondary', 'test_special_state', {
+            action_inputs = {
+                special_action = { input_sequence = { { input = 'weapon_extra_pressed', value = true } } },
+                shoot_pressed = { input_sequence = { { input = 'action_one_pressed', value = true } } },
+            },
+            action_input_hierarchy = {
+                { input = 'special_action', transition = 'base' },
+                { input = 'shoot_pressed', transition = 'stay' },
+            },
+            actions = {
+                action_special = {
+                    kind = 'activate_special',
+                    start_input = 'special_action',
+                    allowed_chain_actions = {
+                        shoot_pressed = { action_name = 'action_shoot', chain_time = 0 },
+                    },
+                },
+                action_shoot = { kind = 'shoot_hit_scan', start_input = 'shoot_pressed' },
+            },
+        })
+        mock:set_wielded_slot('slot_secondary')
+        local engine = mock:load_controller(new_manager({ automatic_fire_hip = 'special' }))
+        local held_inputs = { action_one_hold = true }
+        local _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('special_action', input)
+        assert.are.equal('action_special', mock:current_action_name())
+
+        mock:set_special_active(true)
+        _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('shoot_pressed', input)
+        assert.are.equal('action_shoot', mock:current_action_name())
+    end)
+
     it('releases a held heavy attack as soon as its game input duration completes', function()
         mock:set_weapon('slot_primary', 'test_heavy', {
             displayed_attacks = { primary = { type = 'melee' } },

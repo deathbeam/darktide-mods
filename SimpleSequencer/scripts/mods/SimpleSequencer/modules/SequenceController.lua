@@ -338,34 +338,45 @@ function SequenceController:on_slot_wielded()
 end
 
 function SequenceController:_refresh_context()
+    local previous_context = self.context
     local context = WeaponContext.read()
-
     context.aim_mode = self.aim_mode
     self.context = context
 
-    local key = self.mode_manager:active() .. ':' .. context.kind .. ':' .. context.name .. ':' .. self.aim_mode
-
+    local key = self.mode_manager:active()
+        .. ':'
+        .. context.kind
+        .. ':'
+        .. context.name
+        .. ':'
+        .. self.aim_mode
+        .. ':'
+        .. tostring(context.special_active)
     if self.context_key == key then
         return context
     end
+
+    local preserve_activation = previous_context
+        and previous_context.kind == context.kind
+        and previous_context.name == context.name
+        and previous_context.aim_mode == context.aim_mode
+        and previous_context.special_active ~= context.special_active
+    local primary_active = preserve_activation and self.activation.primary
+    local secondary_active = preserve_activation and self.activation.secondary
 
     self.context_key = key
     self.sequence.plan = _empty_plan()
 
     local profile = context.kind ~= 'none' and self.mode_manager:profile(context.kind, context.name)
-
     if profile then
         local sequence = Profiles.build_sequence(profile, context.kind, self.aim_mode)
         local plan = ActionSemantics.compile(sequence, context)
         self.sequence.plan = plan
-
         if #plan.unresolved_steps > 0 and self.mod.info then
             local unresolved = {}
-
             for _, step in ipairs(plan.unresolved_steps) do
                 unresolved[#unresolved + 1] = step.command
             end
-
             self.mod:info('[planner] unresolved steps for ' .. context.name .. ': ' .. table.concat(unresolved, ', '))
         end
         self.profile = profile
@@ -374,6 +385,10 @@ function SequenceController:_refresh_context()
     end
 
     self:reset()
+    if preserve_activation then
+        self.activation.primary = primary_active
+        self.activation.secondary = secondary_active
+    end
 
     return context
 end

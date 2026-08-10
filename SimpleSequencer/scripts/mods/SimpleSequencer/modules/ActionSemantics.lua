@@ -4,6 +4,7 @@ local COMMAND_TARGETS = {
     light_attack = { 'light_attack' },
     heavy_attack = { 'heavy_attack' },
     special_action = { 'special_action', 'weapon_special', 'zoom_weapon_special' },
+    special_action_heavy = { 'special_action_heavy', 'special_action_execute' },
     block = { 'block' },
     push = { 'push' },
     push_attack = { 'push_follow_up' },
@@ -29,7 +30,6 @@ local COMMAND_TARGETS = {
     },
     special = { 'special_action_light', 'special_action_pistol_whip', 'special_action_push' },
     special_charged = { 'special_action_heavy', 'special_action_execute' },
-    special_standard = { 'special_action', 'weapon_special', 'zoom_weapon_special' },
 }
 
 -- Runtime plan derivation
@@ -166,11 +166,12 @@ local function _repeat_program(template, inputs, programs)
 end
 
 local function _resolve_command(context, command)
+    local target_command = command == 'special' and context.special_active and 'standard' or command
     local template = context.template
-    local candidates = COMMAND_TARGETS[command]
+    local candidates = COMMAND_TARGETS[target_command]
     local default_candidates = candidates
 
-    if context.aim_mode == 'ads' and (command == 'standard' or command == 'charged') then
+    if context.aim_mode == 'ads' and (target_command == 'standard' or target_command == 'charged') then
         candidates = { 'shoot_braced', 'zoom_shoot' }
     end
 
@@ -179,14 +180,19 @@ local function _resolve_command(context, command)
     end
 
     local path = _find_path(template, candidates)
-
     if not path and candidates ~= default_candidates then
         path = _find_path(template, default_candidates)
     end
 
-    if not path and (command == 'special' or command == 'special_charged') then
+    if
+        not path
+        and (
+            target_command == 'special'
+            or target_command == 'special_charged'
+            or target_command == 'special_action_heavy'
+        )
+    then
         local fallback = _resolve_command(context, 'special_action')
-
         if fallback then
             return fallback
         end
@@ -300,10 +306,12 @@ function ActionSemantics.compile(sequence, context)
 
     for i = 1, #steps do
         local command = steps[i]
-        local resolved = _resolve_command(context, command)
+        local skip_special_activation = context.kind == 'MELEE'
+            and context.special_active
+            and (command == 'special_action' or command == 'special_action_heavy')
+        local resolved = not skip_special_activation and _resolve_command(context, command)
 
         resolved_steps[i] = resolved ~= nil
-
         if resolved then
             plan.goals[#plan.goals + 1] = {
                 command = command,
@@ -313,7 +321,7 @@ function ActionSemantics.compile(sequence, context)
                 repeat_at_chain_boundary = resolved.repeat_at_chain_boundary,
                 step = i,
             }
-        else
+        elseif not skip_special_activation then
             plan.unresolved_steps[#plan.unresolved_steps + 1] = {
                 command = command,
                 step = i,

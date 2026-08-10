@@ -113,6 +113,9 @@ local localizations = {
     special_action = {
         en = 'Special Action',
     },
+    special_action_heavy = {
+        en = 'Special Action Heavy',
+    },
     block = {
         en = 'Block',
     },
@@ -136,9 +139,6 @@ local localizations = {
     },
     special_charged = {
         en = 'Special Charged',
-    },
-    special_standard = {
-        en = 'Special + Standard',
     },
 }
 
