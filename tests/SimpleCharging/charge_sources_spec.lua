@@ -681,4 +681,40 @@ describe('SimpleCharging ChargeSources', function()
         assert.are.equal(1, #sources)
         assert.are.equal(0.5, sources[1].fraction)
     end)
+
+    it('shows special attack windup power as a charge source', function()
+        local mock = DarktideMock.new()
+        local ChargeSources = _load_sources(mock)
+        local parent = {
+            _template = {
+                name = 'windup_increases_special_power_default_parent',
+                class_name = 'weapon_trait_parent_proc_buff',
+                child_buff_template = 'windup_increases_special_power_default_child',
+                max_stacks = 4,
+            },
+            visual_stack_count = function()
+                return 3
+            end,
+        }
+        local child = {
+            _template = {
+                name = 'windup_increases_special_power_default_child',
+                class_name = 'buff',
+                max_stacks = 4,
+            },
+        }
+        local context = {
+            wielded_slot = 'slot_primary',
+            buff_extension = { _buffs = { parent, child } },
+        }
+
+        local sources = ChargeSources.collect(context)
+
+        assert.are.equal(1, #sources)
+        assert.are.equal('windup_increases_special_power_default_parent', sources[1].id)
+        assert.are.equal('weapon', sources[1].kind)
+        assert.are.equal(3, sources[1].value)
+        assert.are.equal(4, sources[1].maximum)
+        assert.are.equal(0.75, sources[1].fraction)
+    end)
 end)

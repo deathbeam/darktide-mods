@@ -31,6 +31,10 @@ local PROGRESS_SOURCE_RULES = {
         },
     },
     {
+        kind = 'weapon',
+        patterns = { 'windup_increases_special_power' },
+    },
+    {
         kind = 'talent',
         prefix = 'ogryn_',
         patterns = { 'windup' },
@@ -457,7 +461,6 @@ local function _collect_weapon_sources(sources, context)
     local uses_charge = charging or _action_uses_charge(action_settings, charge_template)
     local wielded_slot = context.wielded_slot
     local is_weapon_slot = wielded_slot == 'slot_primary' or wielded_slot == 'slot_secondary'
-
     if is_weapon_slot and not _has_native_charge_crosshair(context) and max_charge > 0 and uses_charge then
         _add_source(sources, {
             id = 'weapon_charge',
