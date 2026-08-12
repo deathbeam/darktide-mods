@@ -1,6 +1,5 @@
 local mod = get_mod('SimpleCharging')
 local ChargeSources = mod:io_dofile('SimpleCharging/scripts/mods/SimpleCharging/SimpleCharging_sources')
-local UIHudSettings = require('scripts/settings/ui/ui_hud_settings')
 local UIWidget = require('scripts/managers/ui/ui_widget')
 
 local BAR_WIDTH = 24
@@ -13,13 +12,17 @@ local FRAME_TEXTURE = 'content/ui/materials/hud/crosshairs/charge_up'
 local MASK_TEXTURE = 'content/ui/materials/hud/crosshairs/charge_up_mask'
 local NATIVE_LEFT = 'charge_left'
 local NATIVE_RIGHT = 'charge_right'
+local NATIVE_MASK_LEFT = 'charge_mask_left'
+local NATIVE_MASK_RIGHT = 'charge_mask_right'
+local NATIVE_BAR_STYLE_IDS = { NATIVE_LEFT, NATIVE_RIGHT, NATIVE_MASK_LEFT, NATIVE_MASK_RIGHT }
 local INJECTED_MARKER = 'simple_charging_frame_left_1'
-
-local SOURCE_COLORS = {
-    weapon = 'color_tint_main_1',
-    blessing = 'color_tint_main_2',
-    crit = 'color_tint_secondary_1',
+local BAR_COLOR_SETTING_IDS = {
+    bar_color_red = true,
+    bar_color_green = true,
+    bar_color_blue = true,
+    bar_color_alpha = true,
 }
+local DEFAULT_BAR_COLOR = { 255, 216, 229, 207 }
 
 local BAR_PARTS = {
     {
@@ -65,13 +68,50 @@ for index = 1, MAX_BARS do
     end
 end
 
+local INJECTED_STYLE_IDS = {}
+
+for index = 1, MAX_BARS do
+    for _, part in ipairs(BAR_PARTS) do
+        INJECTED_STYLE_IDS[#INJECTED_STYLE_IDS + 1] = BAR_IDS[index][part.id]
+    end
+end
+
 local current_element
 local hooked_element_class
 
-local function _hud_color(setting_name)
-    local color = UIHudSettings[setting_name] or UIHudSettings.color_tint_main_1
+local function _get_setting(setting_id)
+    return mod:get(setting_id)
+end
 
-    return { color[1], color[2], color[3], color[4] }
+local function _bar_color()
+    local red = math.max(0, math.min(tonumber(_get_setting('bar_color_red')) or DEFAULT_BAR_COLOR[2], 255))
+    local green = math.max(0, math.min(tonumber(_get_setting('bar_color_green')) or DEFAULT_BAR_COLOR[3], 255))
+    local blue = math.max(0, math.min(tonumber(_get_setting('bar_color_blue')) or DEFAULT_BAR_COLOR[4], 255))
+    local alpha = math.max(0, math.min(tonumber(_get_setting('bar_color_alpha')) or DEFAULT_BAR_COLOR[1], 255))
+
+    return { alpha, red, green, blue }
+end
+
+local function _apply_color(style, style_ids, color)
+    if not style then
+        return
+    end
+
+    for _, style_id in ipairs(style_ids) do
+        local pass_style = style[style_id]
+
+        if pass_style then
+            pass_style.color = { color[1], color[2], color[3], color[4] }
+        end
+    end
+end
+
+local function _apply_definition_colors(definition)
+    local styles = definition and definition.style
+    local color = _bar_color()
+
+    _apply_color(styles, NATIVE_BAR_STYLE_IDS, color)
+    _apply_color(styles, INJECTED_STYLE_IDS, color)
 end
 
 local function _native_bar_distance(style)
@@ -92,7 +132,7 @@ local function _part_style(part)
         visible = false,
         offset = { 0, 0, part.layer },
         size = { BAR_WIDTH, part.height },
-        color = _hud_color('color_tint_main_1'),
+        color = _bar_color(),
     }
 
     if part.uvs then
@@ -127,6 +167,7 @@ local function _attach_bars(element)
 
     for _, definition in pairs(definitions) do
         local styles = definition and definition.style
+        _apply_definition_colors(definition)
 
         if definition and not (styles and styles[INJECTED_MARKER]) then
             for index = 1, MAX_BARS do
@@ -185,7 +226,7 @@ local function _paint_bar(style, ids, source, distance)
     local fraction = source.fraction or 0
     local filled_height = MASK_HEIGHT * fraction
     local filled_offset = MASK_HEIGHT * (1 - fraction) * 0.5
-    local color = _hud_color(SOURCE_COLORS[source.kind] or 'color_tint_main_1')
+    local color = _bar_color()
 
     frame_left.color = color
     frame_right.color = color
@@ -210,6 +251,14 @@ local function _paint_bar(style, ids, source, distance)
     mask_right.uvs[1][2] = fraction
 end
 
+local function _paint_native_bars(style)
+    if not style or not style[NATIVE_LEFT] and not style[NATIVE_RIGHT] then
+        return
+    end
+
+    _apply_color(style, NATIVE_BAR_STYLE_IDS, _bar_color())
+end
+
 local function _render_bars(element)
     local widget = element._widget
     local style = widget and widget.style
@@ -218,6 +267,7 @@ local function _render_bars(element)
         return
     end
 
+    _paint_native_bars(style)
     local sources = ChargeSources.collect()
     local spacing = DEFAULT_BAR_SPACING
     local distance = DEFAULT_BAR_DISTANCE
@@ -237,6 +287,8 @@ local function _render_bars(element)
             _set_bar_visible(style, BAR_IDS[index], false)
         end
     end
+
+    widget.dirty = true
 end
 
 local function _discard_widget(element)
@@ -276,6 +328,15 @@ mod:hook_require('scripts/ui/hud/elements/crosshair/hud_element_crosshair', func
         _render_bars(self)
     end)
 end)
+
+mod.on_setting_changed = function(setting_id)
+    if not BAR_COLOR_SETTING_IDS[setting_id] then
+        return
+    end
+
+    _attach_bars(current_element)
+    _render_bars(current_element)
+end
 
 mod.on_disabled = function()
     _hide_bars(current_element)
