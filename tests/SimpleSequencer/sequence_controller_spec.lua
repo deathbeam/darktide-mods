@@ -1698,6 +1698,141 @@ describe('SimpleSequencer SequenceController integration', function()
         assert.are.equal('action_light_special', mock:current_action_name())
     end)
 
+    it('weaves a manual power-sword special into the normal combo', function()
+        mock:set_weapon('slot_primary', 'test_manual_power_sword_special', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            action_input_hierarchy = {
+                {
+                    input = 'start_attack',
+                    transition = {
+                        { input = 'light_attack', transition = 'base' },
+                        { input = 'heavy_attack', transition = 'base' },
+                    },
+                },
+                {
+                    input = 'start_attack_special',
+                    transition = {
+                        { input = 'light_attack_special', transition = 'base' },
+                        { input = 'heavy_attack_special', transition = 'base' },
+                    },
+                },
+            },
+            actions = {
+                action_melee_start = {
+                    kind = 'windup',
+                    start_input = 'start_attack',
+                    allowed_chain_actions = {
+                        light_attack = { action_name = 'action_light' },
+                        heavy_attack = { action_name = 'action_heavy' },
+                    },
+                },
+                action_light = { kind = 'sweep', start_input = 'light_attack' },
+                action_heavy = { kind = 'sweep', start_input = 'heavy_attack' },
+                action_light_special = {
+                    kind = 'sweep',
+                    allowed_chain_actions = {
+                        start_attack_special = { action_name = 'action_melee_start_special' },
+                    },
+                },
+                action_melee_start_special = {
+                    kind = 'windup',
+                    start_input = 'start_attack_special',
+                    allowed_chain_actions = {
+                        light_attack_special = { action_name = 'action_light_special' },
+                        heavy_attack_special = { action_name = 'action_heavy_special' },
+                    },
+                },
+                action_heavy_special = { kind = 'sweep' },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'sequence_step_1',
+            sequence_step_1 = 'light_attack',
+            sequence_step_2 = 'heavy_attack',
+        }))
+        engine:_refresh_context()
+        engine.activation.primary = true
+        engine.interpreter.input_name = 'light_attack_special'
+        mock:set_action('action_light_special', engine.context.template.actions.action_light_special, 1)
+        mock:set_special_active(true)
+        engine:_refresh_context()
+        engine:_maybe_advance_goal()
+        assert.are.equal(2, engine.sequence.index)
+        assert.are.equal('chain', engine.sequence.program.kind)
+        assert.same({ 'start_attack', 'heavy_attack' }, engine.sequence.program.inputs)
+    end)
+
+    it('preserves the combo after a manually started special heavy attack', function()
+        mock:set_weapon('slot_primary', 'test_manual_power_sword_heavy_special', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            action_input_hierarchy = {
+                {
+                    input = 'start_attack',
+                    transition = {
+                        { input = 'light_attack', transition = 'base' },
+                        { input = 'heavy_attack', transition = 'base' },
+                    },
+                },
+                {
+                    input = 'start_attack_special',
+                    transition = { { input = 'heavy_attack_special', transition = 'base' } },
+                },
+            },
+            actions = {
+                action_melee_start = {
+                    kind = 'windup',
+                    start_input = 'start_attack',
+                    allowed_chain_actions = {
+                        light_attack = { action_name = 'action_light' },
+                        heavy_attack = { action_name = 'action_heavy' },
+                    },
+                },
+                action_light = { kind = 'sweep', start_input = 'light_attack' },
+                action_heavy = { kind = 'sweep', start_input = 'heavy_attack' },
+                action_melee_start_special = {
+                    activate_special_during_windup = true,
+                    kind = 'windup',
+                    allowed_chain_actions = {
+                        heavy_attack_special = { action_name = 'action_heavy_special' },
+                    },
+                },
+                action_heavy_special = {
+                    activate_special_during_sweep = true,
+                    kind = 'sweep',
+                    allowed_chain_actions = {
+                        start_attack = { action_name = 'action_melee_start' },
+                    },
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'sequence_step_1',
+            sequence_step_1 = 'light_attack',
+            sequence_step_2 = 'heavy_attack',
+        }))
+        engine:_refresh_context()
+        engine.activation.primary = true
+        mock:set_action('action_light', engine.context.template.actions.action_light, 1)
+        engine.action.started = { token = 'action_light:1', input = 'light_attack' }
+        mock:set_special_active(true)
+        mock:set_action('action_melee_start_special', engine.context.template.actions.action_melee_start_special, 1.1)
+        mock:set_action('action_heavy_special', engine.context.template.actions.action_heavy_special, 1.5)
+        engine:_maybe_advance_goal()
+        assert.are.equal(2, engine.sequence.index)
+        assert.are.equal('chain', engine.sequence.program.kind)
+        assert.same({ 'start_attack', 'heavy_attack' }, engine.sequence.program.inputs)
+        assert.is_true(engine:handle_input({
+            action_name = 'action_one_hold',
+            value = true,
+            primary_held = true,
+            primary_pressed = false,
+            secondary_held = false,
+            secondary_pressed = false,
+        }))
+    end)
+
     it('holds the power-sword special input before releasing its heavy attack', function()
         mock:set_weapon('slot_primary', 'test_power_sword_special_heavy', {
             displayed_attacks = { primary = { type = 'melee' } },

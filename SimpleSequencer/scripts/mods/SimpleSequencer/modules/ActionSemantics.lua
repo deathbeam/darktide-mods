@@ -32,6 +32,10 @@ local COMMAND_TARGETS = {
     special_charged = { 'special_action_heavy', 'special_action_execute' },
 }
 
+local function _canonical_input(input_name)
+    return input_name and input_name:gsub('_special$', '')
+end
+
 local SPECIAL_ATTACK_TARGETS = {
     special_action = { 'light_attack_special' },
     special_action_heavy = { 'heavy_attack_special' },
@@ -249,8 +253,21 @@ local function _resolve_command(context, command)
 end
 
 local function _action_chain_matches_input(template, input_name, action_name)
+    local canonical_input = _canonical_input(input_name)
+
     for _, settings in pairs(template.actions or {}) do
-        local chain_actions = settings.allowed_chain_actions and settings.allowed_chain_actions[input_name]
+        local allowed_chain_actions = settings.allowed_chain_actions or {}
+        local chain_actions = allowed_chain_actions[input_name]
+
+        if not chain_actions then
+            for chain_input, candidate in pairs(allowed_chain_actions) do
+                if _canonical_input(chain_input) == canonical_input then
+                    chain_actions = candidate
+                    break
+                end
+            end
+        end
+
         if type(chain_actions) == 'table' then
             if chain_actions.action_name == action_name then
                 return true
@@ -262,6 +279,7 @@ local function _action_chain_matches_input(template, input_name, action_name)
             end
         end
     end
+
     return false
 end
 
@@ -274,7 +292,7 @@ function ActionSemantics.matched_input_index(goal, start_input, action_name, tem
     -- The action setting identifies the transition; interpreter submissions fill gaps only.
     if start_input then
         for index, input_name in ipairs(goal.inputs or {}) do
-            if input_name == start_input then
+            if _canonical_input(input_name) == _canonical_input(start_input) then
                 return index
             end
         end
@@ -282,7 +300,7 @@ function ActionSemantics.matched_input_index(goal, start_input, action_name, tem
 
     if used_input then
         for index, input_name in ipairs(goal.inputs or {}) do
-            if input_name == used_input then
+            if _canonical_input(input_name) == _canonical_input(used_input) then
                 return index
             end
         end
@@ -291,8 +309,24 @@ function ActionSemantics.matched_input_index(goal, start_input, action_name, tem
     if action_name and template then
         local action = template.actions and template.actions[action_name]
 
+        -- Special melee actions without start inputs replace the current combo step.
+        if
+            action
+            and not action.start_input
+            and (action.activate_special_during_sweep or action.activate_special_during_windup)
+        then
+            for index = #(goal.inputs or {}), 1, -1 do
+                if
+                    _canonical_input(goal.inputs[index]) == 'light_attack'
+                    or _canonical_input(goal.inputs[index]) == 'heavy_attack'
+                then
+                    return index
+                end
+            end
+        end
+
         for index, input_name in ipairs(goal.inputs or {}) do
-            if action and action.start_input == input_name then
+            if action and _canonical_input(action.start_input) == _canonical_input(input_name) then
                 return index
             end
         end

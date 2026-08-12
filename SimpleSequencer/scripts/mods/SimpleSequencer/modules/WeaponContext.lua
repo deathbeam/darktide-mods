@@ -8,6 +8,10 @@ local INVERTED_TIME_SCALE_KINDS = {
     overload_target_finder = true,
 }
 
+local function _canonical_input(input_name)
+    return input_name and input_name:gsub('_special$', '')
+end
+
 local function _chain_action_at(chain_actions, index)
     if chain_actions[1] then
         return chain_actions[index]
@@ -20,6 +24,18 @@ local function _chain_actions_for_input(settings, chain_name)
     local allowed_chain_actions = settings and settings.allowed_chain_actions
     local resolved_chain_name = chain_name
     local chain_actions = allowed_chain_actions and allowed_chain_actions[resolved_chain_name]
+
+    if not chain_actions and allowed_chain_actions then
+        local canonical_input = _canonical_input(chain_name)
+
+        for candidate_name, candidate_actions in pairs(allowed_chain_actions) do
+            if _canonical_input(candidate_name) == canonical_input then
+                resolved_chain_name = candidate_name
+                chain_actions = candidate_actions
+                break
+            end
+        end
+    end
 
     if not chain_actions and chain_name == 'heavy_attack' and allowed_chain_actions then
         if allowed_chain_actions.special_action_heavy then
@@ -209,9 +225,11 @@ end
 
 function WeaponContext.can_buffer_input(settings, start_t, chain_name, context)
     local template = context and context.template
-    local input = template and template.action_inputs and template.action_inputs[chain_name]
-    local buffer_time = input and input.buffer_time
     local resolved_chain_name, chain_actions = _chain_actions_for_input(settings, chain_name)
+    local input = template
+        and template.action_inputs
+        and (template.action_inputs[resolved_chain_name] or template.action_inputs[chain_name])
+    local buffer_time = input and input.buffer_time
     local extension = context and context.extension
     local current_time = extension and extension._last_fixed_t
         or Managers and Managers.time and Managers.time:time('gameplay')
