@@ -20,6 +20,13 @@ local CharacterStatsView = make_view(mod, {
     preserve_detail_scroll = true,
 })
 
+local base_on_enter = CharacterStatsView.on_enter
+
+function CharacterStatsView:on_enter(...)
+    self._detail_built = false
+    base_on_enter(self, ...)
+end
+
 function CharacterStatsView:_on_init(settings, context)
     self._detail_entry = { name = mod:localize('mod_name') }
     self._detail_built = false

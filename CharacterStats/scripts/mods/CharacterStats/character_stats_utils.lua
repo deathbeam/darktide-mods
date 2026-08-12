@@ -5,6 +5,8 @@ local WeaponTemplate = mod:original_require('scripts/utilities/weapon/weapon_tem
 local BuffSettings = mod:original_require('scripts/settings/buff/buff_settings')
 local PlayerDifficultySettings = mod:original_require('scripts/settings/difficulty/player_difficulty_settings')
 local BuffTemplates = mod:original_require('scripts/settings/buff/buff_templates')
+local PlayerAbilities = mod:original_require('scripts/settings/ability/player_abilities/player_abilities')
+local CharacterSheet = mod:original_require('scripts/utilities/character_sheet')
 local WeaponTraitTemplates = mod:original_require('scripts/settings/equipment/weapon_traits/weapon_trait_templates')
 local WeaponHandlingTemplates =
     mod:original_require('scripts/settings/equipment/weapon_handling_templates/weapon_handling_templates')
@@ -24,6 +26,11 @@ local SharedUtils = mod:io_dofile('CharacterStats/scripts/mods/CharacterStats/sh
 -- Constants -------------------------------------------------------------
 
 local EMPTY = {}
+local ABILITY_FIELD_BY_TYPE = {
+    combat_ability = 'combat_ability',
+    grenade_ability = 'grenade_ability',
+    pocketable_ability = 'pocketable_ability',
+}
 local stat_buff_types = BuffSettings.stat_buff_types
 local stat_buff_type_base = BuffSettings.stat_buff_type_base_values
 local LERP_MIDPOINT = 0.5
@@ -63,6 +70,69 @@ local M = {}
 
 local function _ext(unit, system)
     return unit and ScriptUnit.has_extension(unit, system) or nil
+end
+
+local function _assumed_ability_extension(profile)
+    local max_charges = {}
+    local function consider(ability_type, ability)
+        if not ability or not ability.max_charges then
+            return
+        end
+        max_charges[ability_type] = ability.max_charges
+    end
+    local function resolve(equipped)
+        if type(equipped) == 'string' then
+            return PlayerAbilities[equipped]
+        end
+        if type(equipped) ~= 'table' then
+            return nil
+        end
+        return equipped.max_charges and equipped or PlayerAbilities[equipped.name]
+    end
+    local function consider_loadout(loadout)
+        for ability_type, field_name in pairs(ABILITY_FIELD_BY_TYPE) do
+            consider(ability_type, loadout[field_name])
+        end
+    end
+    local function resolve_class_loadout()
+        if not profile or not profile.archetype or not CharacterSheet.class_loadout then
+            return nil
+        end
+        local loadout = {
+            ability = {},
+            blitz = {},
+            aura = {},
+            pocketable = {},
+            passives = {},
+            coherency = {},
+            special_rules = {},
+            buff_template_tiers = {},
+            iconics = {},
+            modifiers = {},
+        }
+        local ok = pcall(CharacterSheet.class_loadout, profile, loadout, false, profile.talents)
+        return ok and loadout or nil
+    end
+    local class_loadout = resolve_class_loadout()
+    if class_loadout then
+        consider_loadout(class_loadout)
+    end
+    local abilities = profile and profile.abilities
+    if type(abilities) == 'table' then
+        for ability_type, equipped in pairs(abilities) do
+            if not max_charges[ability_type] then
+                consider(ability_type, resolve(equipped))
+            end
+        end
+    end
+    return {
+        remaining_ability_charges = function(_, ability_type)
+            return max_charges[ability_type] or 0
+        end,
+        max_ability_charges = function(_, ability_type)
+            return max_charges[ability_type] or 0
+        end,
+    }
 end
 
 -- Use a stable maximum normal challenge for build stats; a configured Havoc rank selects its bracket.
@@ -281,11 +351,47 @@ local function _effective(template, tier)
     return stat, cond, proc
 end
 
-local function _fold(result, template, tier, stacks, source, lerp_t)
+local function _static_stat_buffs(template, stat, cond, proc, ability_extension, stacks, lerp_t)
+    local multiplier = template.stat_buff_multiplier
+    local multipliers = template.stat_buff_multipliers
+    if type(multiplier) ~= 'function' and type(multipliers) ~= 'table' then
+        return stat, cond, proc
+    end
+    local template_data = { ability_extension = ability_extension }
+    local template_context = {
+        is_local_unit = false,
+        is_player = false,
+        is_server = false,
+        stack_count = stacks or 1,
+        buff_lerp_value = lerp_t,
+        template = template,
+    }
+    local function resolve(stat_buffs)
+        if type(stat_buffs) ~= 'table' then
+            return stat_buffs
+        end
+        local resolved = {}
+        for name, value in pairs(stat_buffs) do
+            local value_multiplier = multipliers and multipliers[name] or multiplier
+            if type(value_multiplier) == 'function' and type(value) == 'number' then
+                local ok, result = pcall(value_multiplier, template_data, template_context)
+                if ok and type(result) == 'number' then
+                    value = value * result
+                end
+            end
+            resolved[name] = value
+        end
+        return resolved
+    end
+    return resolve(stat), resolve(cond), resolve(proc)
+end
+
+local function _fold(result, template, tier, stacks, source, lerp_t, ability_extension)
     if not template then
         return
     end
     local stat, cond, proc = _effective(template, tier)
+    stat, cond, proc = _static_stat_buffs(template, stat, cond, proc, ability_extension, stacks, lerp_t)
     _merge(result, stat, stacks, source, lerp_t)
     _merge(result, cond, stacks, source, lerp_t)
     _merge(result, proc, stacks, source, lerp_t)
@@ -648,6 +754,7 @@ end
 function M.folded_stat_buffs(unit, profile, player, toggles)
     toggles = toggles or {}
     local result = { values = {}, sources = {} }
+    local ability_extension = _assumed_ability_extension(profile)
     local related = _related_by_talent()
 
     local entries, coherency_templates = _talent_entries(unit, profile)
@@ -660,7 +767,7 @@ function M.folded_stat_buffs(unit, profile, player, toggles)
                 local bname = entry.buff_template_names[j]
                 local template = BuffTemplates[bname]
                 passive[bname] = true
-                _fold(result, template, entry.tier, _stacks_for(template, toggles), source)
+                _fold(result, template, entry.tier, _stacks_for(template, toggles), source, nil, ability_extension)
             end
             local rel = related[entry.talent_name]
             if rel then
@@ -668,7 +775,7 @@ function M.folded_stat_buffs(unit, profile, player, toggles)
                     local bname = rel[j]
                     local tmpl = BuffTemplates[bname]
                     if not passive[bname] and tmpl and tmpl.buff_category ~= 'aura' then
-                        _fold(result, tmpl, entry.tier, _stacks_for(tmpl, toggles), source)
+                        _fold(result, tmpl, entry.tier, _stacks_for(tmpl, toggles), source, nil, ability_extension)
                     end
                 end
             end
@@ -688,7 +795,7 @@ function M.folded_stat_buffs(unit, profile, player, toggles)
             if stepped and stepped[1] then
                 _merge(result, stepped[math.min(ally_count + 1, #stepped)] or stepped[1], 1, coh_source)
             else
-                _fold(result, template, nil, _stacks_for(template, toggles), coh_source)
+                _fold(result, template, nil, _stacks_for(template, toggles), coh_source, nil, ability_extension)
             end
         end
     end
@@ -744,14 +851,22 @@ function M.folded_stat_buffs(unit, profile, player, toggles)
     end
 
     for _, entry in ipairs(_gadget_buffs(player)) do
-        _fold(result, BuffTemplates[entry.template_name], nil, 1, entry.display_name, entry.lerp_value)
+        _fold(
+            result,
+            BuffTemplates[entry.template_name],
+            nil,
+            1,
+            entry.display_name,
+            entry.lerp_value,
+            ability_extension
+        )
     end
 
     local havoc_rank = toggles.havoc_rank or 0
     if havoc_rank > 0 then
         local havoc_source = mod:localize('source_havoc')
         for _, name in ipairs(_havoc_debuffs(havoc_rank)) do
-            _fold(result, BuffTemplates[name], nil, 1, havoc_source)
+            _fold(result, BuffTemplates[name], nil, 1, havoc_source, nil, ability_extension)
         end
     end
 
