@@ -24,6 +24,13 @@ local function _new_profile(kind)
     return Profiles.clone(Profiles.defaults[kind])
 end
 
+local function _table_or(value, default)
+    if type(value) == 'table' then
+        return value
+    end
+    return default or {}
+end
+
 local function _merge_defaults(profile, defaults)
     for key, value in pairs(defaults) do
         if profile[key] == nil then
@@ -73,23 +80,30 @@ function Profiles.new_data()
 end
 
 function Profiles.ensure(data)
-    data = type(data) == 'table' and data or Profiles.new_data()
+    data = _table_or(data)
+    if next(data) == nil then
+        data = Profiles.new_data()
+    end
 
     for i = 1, 4 do
         local mode = 'mode_' .. i
-        local mode_data = data[mode] or {}
+        local mode_data = _table_or(data[mode])
         data[mode] = mode_data
 
         for _, kind in ipairs(Profiles.kinds) do
-            local profiles = mode_data[kind] or {}
+            local profiles = _table_or(mode_data[kind])
             mode_data[kind] = profiles
 
             local global_key = kind == 'MELEE' and 'global_melee' or 'global_ranged'
-            profiles[global_key] = profiles[global_key] or _new_profile(kind)
+            profiles[global_key] = _table_or(profiles[global_key], _new_profile(kind))
 
             local defaults = Profiles.defaults[kind]
-            for _, profile in pairs(profiles) do
-                _merge_defaults(profile, defaults)
+            for profile_key, profile in pairs(profiles) do
+                if type(profile) == 'table' then
+                    _merge_defaults(profile, defaults)
+                else
+                    profiles[profile_key] = _new_profile(kind)
+                end
             end
         end
     end

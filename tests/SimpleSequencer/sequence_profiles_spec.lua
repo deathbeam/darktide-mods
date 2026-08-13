@@ -78,4 +78,18 @@ describe('SimpleSequencer SequenceProfiles', function()
         assert.are.equal(3, #ranged_keys)
         assert.is_true(contains(ranged_keys, 'auto_charge_threshold'))
     end)
+
+    it('repairs malformed saved profile data', function()
+        local data = {
+            mode_1 = false,
+            mode_2 = { MELEE = false, RANGED = { global_ranged = false, invalid = 'profile' } },
+        }
+
+        Profiles.ensure(data)
+
+        assert.is_table(data.mode_1.MELEE.global_melee)
+        assert.is_table(data.mode_2.MELEE.global_melee)
+        assert.is_table(data.mode_2.RANGED.global_ranged)
+        assert.is_table(data.mode_2.RANGED.invalid)
+    end)
 end)
