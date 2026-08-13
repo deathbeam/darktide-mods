@@ -439,8 +439,10 @@ function SequenceController:_maybe_advance_goal()
         return true
     end
 
+    local action_token = _action_token(action_name, start_t)
+    local terminal = self:_terminal_program()
     local start_input = action_settings and action_settings.start_input
-    local used_input = self:_started_input(_action_token(action_name, start_t))
+    local used_input = self:_started_input(action_token)
     local progress = ActionSemantics.matched_input_index(
         goal,
         start_input,
@@ -450,10 +452,12 @@ function SequenceController:_maybe_advance_goal()
     )
 
     if not progress then
+        if terminal and action_token ~= terminal.token then
+            self:_advance_if_chain_ready(start_t, action_settings)
+        end
+
         return false
     end
-
-    local action_token = _action_token(action_name, start_t)
 
     local program = self.sequence.program
     if program and program.kind == 'chain' then
@@ -465,7 +469,6 @@ function SequenceController:_maybe_advance_goal()
         program.token = nil
     end
 
-    local terminal = self:_terminal_program()
     if terminal then
         if action_token ~= terminal.token then
             self:_advance()
