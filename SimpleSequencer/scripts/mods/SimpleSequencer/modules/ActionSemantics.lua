@@ -330,12 +330,8 @@ function ActionSemantics.matched_input_index(goal, start_input, action_name, tem
     if action_name and template then
         local action = template.actions and template.actions[action_name]
 
-        -- Special melee actions without start inputs replace the current combo step.
-        if
-            action
-            and not action.start_input
-            and (action.activate_special_during_sweep or action.activate_special_during_windup)
-        then
+        -- Powered sweeps omit start_input; their windups are only intermediate actions.
+        if action and not action.start_input and action.activate_special_during_sweep then
             for index = #(goal.inputs or {}), 1, -1 do
                 if
                     _canonical_input(goal.inputs[index]) == 'light_attack'

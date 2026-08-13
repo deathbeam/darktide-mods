@@ -224,6 +224,33 @@ describe('SimpleSequencer ActionSemantics', function()
         assert.are.equal(2, ActionSemantics.matched_input_index(goal, nil, 'action_left_light', template))
     end)
 
+    it('does not count a powered windup as its eventual sweep', function()
+        local template = _template({
+            action_light_special = { activate_special_during_sweep = true, kind = 'sweep' },
+            action_melee_start_special = {
+                activate_special_during_windup = true,
+                allowed_chain_actions = {
+                    light_attack_special = { action_name = 'action_light_special' },
+                },
+                kind = 'windup',
+            },
+        })
+        local light_goal = { inputs = { 'start_attack', 'light_attack' } }
+        local heavy_goal = { inputs = { 'start_attack', 'heavy_attack' } }
+
+        assert.is_nil(ActionSemantics.matched_input_index(light_goal, nil, 'action_melee_start_special', template))
+        assert.are.equal(
+            2,
+            ActionSemantics.matched_input_index(
+                light_goal,
+                nil,
+                'action_light_special',
+                template,
+                'light_attack_special'
+            )
+        )
+    end)
+
     it('prefers the active action start input over a shared chain target', function()
         local template = _template({
             action_push = {

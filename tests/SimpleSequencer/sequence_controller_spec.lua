@@ -1782,6 +1782,52 @@ describe('SimpleSequencer SequenceController integration', function()
         assert.are.equal('chain', engine.sequence.program.kind)
         assert.same({ 'start_attack', 'heavy_attack' }, engine.sequence.program.inputs)
     end)
+    it('advances once after a powered windup reaches its sweep', function()
+        mock:set_weapon('slot_primary', 'test_powered_windup_progress', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            actions = {
+                action_melee_start_special = {
+                    activate_special_during_windup = true,
+                    allowed_chain_actions = {
+                        light_attack_special = { action_name = 'action_light_special' },
+                    },
+                    kind = 'windup',
+                },
+                action_light_special = {
+                    activate_special_during_sweep = true,
+                    kind = 'sweep',
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'sequence_step_1',
+            sequence_step_1 = 'light_attack',
+            sequence_step_2 = 'heavy_attack',
+        }))
+        engine:_refresh_context()
+        engine.activation.primary = true
+
+        mock:set_action('action_melee_start_special', engine.context.template.actions.action_melee_start_special, 1)
+        engine.action.started = { token = 'action_melee_start_special:1', input = nil }
+        engine:_maybe_advance_goal()
+        assert.are.equal(1, engine.sequence.index)
+
+        mock:set_action('action_light_special', engine.context.template.actions.action_light_special, 1.5)
+        engine.action.started = { token = 'action_light_special:1.5', input = nil }
+        engine:_maybe_advance_goal()
+        mock:set_action('action_melee_start_normal', {
+            allowed_chain_actions = {
+                start_attack = { action_name = 'action_melee_start_normal', chain_time = 0 },
+            },
+            kind = 'windup',
+        }, 2)
+        engine:_maybe_advance_goal()
+        mock:set_action('idle')
+        engine:_maybe_advance_goal()
+
+        assert.are.equal(2, engine.sequence.index)
+    end)
 
     it('preserves the combo after a manually started special heavy attack', function()
         mock:set_weapon('slot_primary', 'test_manual_power_sword_heavy_special', {
@@ -2100,6 +2146,66 @@ describe('SimpleSequencer SequenceController integration', function()
         mock.now = 1.11
         mock:run_input_frame(engine, held_inputs)
         assert.are.equal('action_light', mock:current_action_name())
+    end)
+
+    it('chains the next goal from an action that interrupts a completed attack', function()
+        mock:set_weapon('slot_primary', 'test_completed_attack_interrupt', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            action_inputs = {
+                light_attack = {
+                    input_sequence = { { input = 'action_one_hold', time_window = 0.2, value = false } },
+                },
+            },
+            actions = {
+                action_melee_start = {
+                    kind = 'windup',
+                    start_input = 'start_attack',
+                    allowed_chain_actions = {
+                        light_attack = { action_name = 'action_light' },
+                        heavy_attack = { action_name = 'action_heavy' },
+                    },
+                },
+                action_light = { kind = 'sweep' },
+                action_heavy = { kind = 'sweep' },
+                action_wield = {
+                    kind = 'wield',
+                    start_input = 'wield',
+                    allowed_chain_actions = {
+                        start_attack = { action_name = 'action_melee_start', chain_time = 0 },
+                    },
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'sequence_step_1',
+            sequence_step_1 = 'light_attack',
+            sequence_step_2 = 'heavy_attack',
+        }))
+        local held_inputs = { action_one_hold = true }
+
+        mock:run_input_frame(engine, held_inputs)
+        mock.now = 0.01
+        mock:run_input_frame(engine, held_inputs)
+        mock.now = 0.02
+        mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('action_light', mock:current_action_name())
+
+        mock.now = 0.03
+        mock:set_action('action_wield', engine.context.template.actions.action_wield, mock.now, 'wield')
+        local _, input = mock:run_input_frame(engine, held_inputs)
+
+        assert.are.equal('start_attack', input)
+        assert.are.equal('action_melee_start', mock:current_action_name())
+
+        mock.now = 0.04
+        mock:run_input_frame(engine, held_inputs)
+        mock.now = 0.28
+        mock:run_input_frame(engine, held_inputs)
+        mock.now = 0.29
+        _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('heavy_attack', input)
+        assert.are.equal('action_heavy', mock:current_action_name())
     end)
 
     it('allows a manual push while a sequence is active', function()
