@@ -273,21 +273,40 @@ function SequenceController:_started_input(action_token)
 end
 
 -- Action start events are the authoritative progress signal; polling only fills gaps.
-function SequenceController:on_action_started(action_name, t)
+function SequenceController:on_action_started(action_name, t, automatic_input, action_settings)
     if not action_name or action_name == 'none' then
         return
     end
 
+    local input = type(automatic_input) == 'string' and automatic_input or self.interpreter:consume_action_input()
     self.action.started = {
         token = _action_token(action_name, t),
-        input = self.interpreter:consume_action_input(),
+        input = input,
+        settings = action_settings,
     }
 end
 
-function SequenceController:on_damage_window_exited()
-    local action_name, start_t, action_settings = WeaponContext.action(self.context)
+function SequenceController:on_damage_window_exited(action_settings)
+    if action_settings then
+        if
+            action_settings.kind ~= 'sweep'
+            or not action_settings.damage_window_end
+            or not self.action.started
+            or self.action.started.settings ~= action_settings
+        then
+            return
+        end
 
-    if action_settings and action_settings.kind == 'sweep' and action_settings.damage_window_end then
+        self.action.window_token = self.action.started.token
+        return
+    end
+
+    local action_name, start_t, current_action_settings = WeaponContext.action(self.context)
+    if
+        current_action_settings
+        and current_action_settings.kind == 'sweep'
+        and current_action_settings.damage_window_end
+    then
         self.action.window_token = _action_token(action_name, start_t)
     end
 end
@@ -486,7 +505,12 @@ function SequenceController:_charge_ready(start_t, action_settings)
     local goal = self:_goal()
     local action_kind = action_settings and action_settings.kind
 
-    if not goal or goal.command ~= 'charged' or not action_kind or not string.find(action_kind, 'charge', 1, true) then
+    if
+        not goal
+        or goal.command ~= 'charged'
+        or type(action_kind) ~= 'string'
+        or not string.find(action_kind, 'charge', 1, true)
+    then
         return true
     end
 

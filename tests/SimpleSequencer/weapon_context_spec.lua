@@ -242,4 +242,24 @@ describe('SimpleSequencer WeaponContext', function()
         mock.now = 2
         assert.is_false(WeaponContext.can_chain(settings, 1, 'light_attack', context))
     end)
+
+    it('prefers an exact chain alias over its canonical fallback', function()
+        local settings = {
+            allowed_chain_actions = {
+                light_attack_special = { chain_time = 0.2 },
+                light_attack = { chain_time = 0.1 },
+            },
+        }
+        mock:set_action('action_melee_start', settings, 1)
+        local context = WeaponContext.read()
+        local requested_input
+        function context.extension:action_input_is_currently_valid(_, action_input)
+            requested_input = action_input
+            return true
+        end
+        mock.now = 1.3
+
+        assert.is_true(WeaponContext.can_chain(settings, 1, 'light_attack_special', context))
+        assert.are.equal('light_attack_special', requested_input)
+    end)
 end)

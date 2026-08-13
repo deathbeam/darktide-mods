@@ -33,9 +33,12 @@ local COMMAND_TARGETS = {
 }
 
 local function _canonical_input(input_name)
-    return input_name and input_name:gsub('_special$', '')
-end
+    if type(input_name) ~= 'string' then
+        return input_name
+    end
 
+    return input_name:gsub('_special$', '')
+end
 local SPECIAL_ATTACK_TARGETS = {
     special_action = { 'light_attack_special' },
     special_action_heavy = { 'heavy_attack_special' },
@@ -252,38 +255,56 @@ local function _resolve_command(context, command)
     }
 end
 
-local function _action_chain_matches_input(template, input_name, action_name)
-    local canonical_input = _canonical_input(input_name)
-
-    for _, settings in pairs(template.actions or {}) do
-        local allowed_chain_actions = settings.allowed_chain_actions or {}
-        local chain_actions = allowed_chain_actions[input_name]
-
-        if not chain_actions then
-            for chain_input, candidate in pairs(allowed_chain_actions) do
-                if _canonical_input(chain_input) == canonical_input then
-                    chain_actions = candidate
-                    break
-                end
-            end
+local function _chain_action_matches(chain_actions, action_name)
+    if type(chain_actions) ~= 'table' then
+        return false
+    end
+    if chain_actions.action_name == action_name then
+        return true
+    end
+    for _, chain_action in ipairs(chain_actions) do
+        if chain_action and chain_action.action_name == action_name then
+            return true
         end
+    end
+    return false
+end
 
-        if type(chain_actions) == 'table' then
-            if chain_actions.action_name == action_name then
-                return true
-            end
-            for _, chain_action in ipairs(chain_actions) do
-                if chain_action.action_name == action_name then
-                    return true
-                end
-            end
+local function _chain_actions_for_input(allowed_chain_actions, input_name)
+    if type(allowed_chain_actions) ~= 'table' then
+        return nil
+    end
+
+    local chain_actions = allowed_chain_actions[input_name]
+    if type(chain_actions) == 'table' then
+        return chain_actions
+    end
+
+    local canonical_input = _canonical_input(input_name)
+    if type(canonical_input) ~= 'string' then
+        return nil
+    end
+
+    chain_actions = allowed_chain_actions[canonical_input]
+    if type(chain_actions) == 'table' then
+        return chain_actions
+    end
+
+    chain_actions = allowed_chain_actions[canonical_input .. '_special']
+    return type(chain_actions) == 'table' and chain_actions or nil
+end
+
+local function _action_chain_matches_input(template, input_name, action_name)
+    for _, settings in pairs(template.actions or {}) do
+        local chain_actions = _chain_actions_for_input(settings.allowed_chain_actions, input_name)
+        if _chain_action_matches(chain_actions, action_name) then
+            return true
         end
     end
 
     return false
 end
 
--- Runtime action matching
 function ActionSemantics.matched_input_index(goal, start_input, action_name, template, used_input)
     if not goal then
         return nil

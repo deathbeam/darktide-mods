@@ -297,7 +297,7 @@ function DarktideMock.new()
         local controller = mock._controller
 
         if controller and action_name and action_name ~= 'none' then
-            controller:on_action_started(action_name, start_t)
+            controller:on_action_started(action_name, start_t, nil, settings)
         end
     end
 

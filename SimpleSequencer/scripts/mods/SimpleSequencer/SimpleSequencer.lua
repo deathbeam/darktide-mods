@@ -38,7 +38,7 @@ end
 
 local function _is_local_player_unit(unit)
     local player_manager = Managers and Managers.player
-    local player = player_manager and player_manager:local_player_safe(1)
+    local player = player_manager and player_manager.local_player_safe and player_manager:local_player_safe(1)
 
     return unit and player and player.player_unit == unit or false
 end
@@ -153,15 +153,19 @@ mod:hook_safe(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(self)
     end
 end)
 
-mod:hook_safe(CLASS.ActionHandler, 'start_action', function(self, id, _, action_name, _, _, _, t)
-    if mod.ready() and id == 'weapon_action' and _is_local_player_unit(self._unit) then
-        mod.controller:on_action_started(action_name, t)
+mod:hook_safe(
+    CLASS.ActionHandler,
+    'start_action',
+    function(self, id, _, action_name, _, action_settings, _, t, _, _, automatic_input)
+        if mod.ready() and id == 'weapon_action' and _is_local_player_unit(self._unit) then
+            mod.controller:on_action_started(action_name, t, automatic_input, action_settings)
+        end
     end
-end)
+)
 
 mod:hook_safe(CLASS.ActionSweep, '_exit_damage_window', function(self)
     if mod.ready() and _is_local_player_unit(self._player_unit) then
-        mod.controller:on_damage_window_exited()
+        mod.controller:on_damage_window_exited(self._action_settings)
     end
 end)
 

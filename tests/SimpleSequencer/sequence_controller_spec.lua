@@ -81,6 +81,26 @@ describe('SimpleSequencer SequenceController', function()
         assert.are.equal('push_follow_up', engine.action.started.input)
     end)
 
+    it('uses string automatic inputs without consuming parser state', function()
+        local engine = mock:load_controller(new_manager(nil))
+        engine.interpreter.input_name = 'stale_input'
+
+        engine:on_action_started('action_automatic', 1, 'automatic_input')
+
+        assert.are.equal('automatic_input', engine.action.started.input)
+        assert.are.equal('stale_input', engine.interpreter.input_name)
+    end)
+
+    it('falls back to interpreter input for non-string automatic values', function()
+        local engine = mock:load_controller(new_manager(nil))
+        engine.interpreter.input_name = 'queued_input'
+
+        engine:on_action_started('action_finish_reason', 1, true)
+
+        assert.are.equal('queued_input', engine.action.started.input)
+        assert.are.equal('queued_input', engine.interpreter.started_input)
+    end)
+
     it('advances goals from action-input metadata', function()
         local profile = {
             sequence_cycle_point = 'no_repeat',
@@ -1994,6 +2014,28 @@ describe('SimpleSequencer SequenceController integration', function()
         engine:on_damage_window_exited()
 
         assert.is_true(engine:can_switch_mode())
+    end)
+
+    it('ignores a mismatched damage window exit', function()
+        mock:set_weapon('slot_primary', 'test_mismatched_damage_window', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            actions = {
+                action_light = { kind = 'sweep', damage_window_end = 0.46 },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'light_attack',
+            sequence_step_2 = 'heavy_attack',
+        }))
+        engine:_refresh_context()
+        mock:set_action('action_light', engine.context.template.actions.action_light, 0)
+        local mismatched_settings = { kind = 'sweep', damage_window_end = 0.46 }
+
+        engine:on_damage_window_exited(mismatched_settings)
+
+        assert.is_false(engine:can_switch_mode())
     end)
 
     it('keeps held primary out of an external action before the light release', function()

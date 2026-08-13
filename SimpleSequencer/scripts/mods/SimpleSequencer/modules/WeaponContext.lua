@@ -9,7 +9,11 @@ local INVERTED_TIME_SCALE_KINDS = {
 }
 
 local function _canonical_input(input_name)
-    return input_name and input_name:gsub('_special$', '')
+    if type(input_name) ~= 'string' then
+        return input_name
+    end
+
+    return input_name:gsub('_special$', '')
 end
 
 local function _chain_action_at(chain_actions, index)
@@ -22,32 +26,45 @@ end
 
 local function _chain_actions_for_input(settings, chain_name)
     local allowed_chain_actions = settings and settings.allowed_chain_actions
-    local resolved_chain_name = chain_name
-    local chain_actions = allowed_chain_actions and allowed_chain_actions[resolved_chain_name]
 
-    if not chain_actions and allowed_chain_actions then
-        local canonical_input = _canonical_input(chain_name)
+    if type(allowed_chain_actions) ~= 'table' then
+        return chain_name, nil
+    end
 
-        for candidate_name, candidate_actions in pairs(allowed_chain_actions) do
-            if _canonical_input(candidate_name) == canonical_input then
-                resolved_chain_name = candidate_name
-                chain_actions = candidate_actions
-                break
-            end
+    local chain_actions = allowed_chain_actions[chain_name]
+    if chain_actions and type(chain_actions) ~= 'table' then
+        chain_actions = nil
+    end
+    if chain_actions then
+        return chain_name, chain_actions
+    end
+
+    local canonical_input = _canonical_input(chain_name)
+    if type(canonical_input) ~= 'string' then
+        return chain_name, nil
+    end
+
+    local canonical_actions = allowed_chain_actions[canonical_input]
+    if type(canonical_actions) == 'table' then
+        return canonical_input, canonical_actions
+    end
+
+    local special_name = canonical_input .. '_special'
+    local special_actions = allowed_chain_actions[special_name]
+    if type(special_actions) == 'table' then
+        return special_name, special_actions
+    end
+
+    if chain_name == 'heavy_attack' then
+        local special_chain = allowed_chain_actions.special_action_heavy or allowed_chain_actions.heavy_attack_special
+        if type(special_chain) == 'table' then
+            local special_name = allowed_chain_actions.special_action_heavy and 'special_action_heavy'
+                or 'heavy_attack_special'
+            return special_name, special_chain
         end
     end
 
-    if not chain_actions and chain_name == 'heavy_attack' and allowed_chain_actions then
-        if allowed_chain_actions.special_action_heavy then
-            resolved_chain_name = 'special_action_heavy'
-        elseif allowed_chain_actions.heavy_attack_special then
-            resolved_chain_name = 'heavy_attack_special'
-        end
-
-        chain_actions = allowed_chain_actions[resolved_chain_name]
-    end
-
-    return resolved_chain_name, chain_actions
+    return chain_name, nil
 end
 
 local function _scaled_chain_time(value, time_scale, action_kind)

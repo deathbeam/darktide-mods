@@ -247,6 +247,7 @@ describe('SimpleSequencer ActionSemantics', function()
             ActionSemantics.matched_input_index(goal, 'zoom_shoot', 'action_shoot_zoomed', template, 'zoom')
         )
     end)
+
     it('selects the zoom firing path for standard ADS goals', function()
         local template = _template(nil, nil, 'ads')
         template.action_input_hierarchy = {
@@ -259,5 +260,19 @@ describe('SimpleSequencer ActionSemantics', function()
         assert.same({ 'zoom', 'zoom_shoot' }, plan.goals[1].inputs)
         assert.same({ 'zoom_shoot' }, plan.goals[1].repeat_program)
         assert.is_true(plan.goals[1].repeat_at_chain_boundary)
+    end)
+
+    it('matches a canonical chain alias when the exact alias is absent', function()
+        local template = _template({
+            action_melee_start = {
+                allowed_chain_actions = {
+                    light_attack = { action_name = 'action_target' },
+                },
+            },
+            action_target = { kind = 'sweep' },
+        })
+        local goal = { inputs = { 'light_attack_special' } }
+
+        assert.are.equal(1, ActionSemantics.matched_input_index(goal, nil, 'action_target', template))
     end)
 end)
