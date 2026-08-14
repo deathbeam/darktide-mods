@@ -21,6 +21,11 @@ local ACTIVATION_INPUT_NAMES = {
     wield_scroll_up = true,
 }
 
+-- The base template adds this for inspection; it is not a grenade activation.
+local INPUTS_IGNORED_FOR_AUTO_THROW = {
+    inspect_alt_start = true,
+}
+
 local ACTIONS_THAT_END_WAITING = {
     action_give = true,
     action_place_complete = true,
@@ -158,8 +163,11 @@ local function _sequence_contains_primary_input(sequence)
 end
 
 local function _is_auto_throw_eligible(weapon_template)
-    for _, input_definition in pairs(weapon_template and weapon_template.action_inputs or {}) do
-        if _sequence_contains_primary_input(input_definition.input_sequence) then
+    for input_name, input_definition in pairs(weapon_template and weapon_template.action_inputs or {}) do
+        if
+            not INPUTS_IGNORED_FOR_AUTO_THROW[input_name]
+            and _sequence_contains_primary_input(input_definition.input_sequence)
+        then
             return true
         end
     end
