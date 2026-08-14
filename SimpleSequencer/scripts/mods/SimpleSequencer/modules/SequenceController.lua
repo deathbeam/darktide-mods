@@ -265,7 +265,7 @@ function SequenceController:on_action_started(action_name, t, automatic_input, a
         return
     end
 
-    local input = type(automatic_input) == 'string' and automatic_input or self.interpreter:consume_action_input()
+    local input = self.interpreter:consume_action_input(automatic_input)
     self.action.started = {
         token = _action_token(action_name, t),
         input = input,

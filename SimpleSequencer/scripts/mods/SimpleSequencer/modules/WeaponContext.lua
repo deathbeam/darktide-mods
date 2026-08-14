@@ -252,6 +252,7 @@ function WeaponContext.can_buffer_input(settings, start_t, chain_name, context)
         and (template.action_inputs[resolved_chain_name] or template.action_inputs[chain_name])
     local buffer_time = input and input.buffer_time
     local current_time = _current_time(context)
+    local extension = context and context.extension
     local action_component = extension and extension._weapon_action_component
     local time_scale = action_component and action_component.time_scale or 1
 

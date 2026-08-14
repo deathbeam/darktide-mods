@@ -144,6 +144,16 @@ describe('SimpleSequencer SequenceController', function()
         assert.are.equal('stale_input', engine.interpreter.input_name)
     end)
 
+    it('consumes a matching queued input when an action starts automatically', function()
+        local engine = mock:load_controller(new_manager(nil))
+        engine.interpreter.submitted_inputs = { 'shoot_braced' }
+
+        engine:on_action_started('action_shoot_charged', 1, 'shoot_braced')
+
+        assert.are.same({}, engine.interpreter.submitted_inputs)
+        assert.are.equal('shoot_braced', engine.action.started.input)
+    end)
+
     it('falls back to interpreter input for non-string automatic values', function()
         local engine = mock:load_controller(new_manager(nil))
         engine.interpreter.input_name = 'queued_input'

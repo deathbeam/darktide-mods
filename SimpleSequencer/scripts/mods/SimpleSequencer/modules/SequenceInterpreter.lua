@@ -179,9 +179,21 @@ function SequenceInterpreter:requires_input(template, input_name, input_settings
     return false
 end
 
-function SequenceInterpreter:consume_action_input()
+function SequenceInterpreter:consume_action_input(automatic_input)
     local submitted_inputs = self.submitted_inputs
-    local input_name = table.remove(submitted_inputs, 1)
+    local input_name = submitted_inputs[1]
+
+    if type(automatic_input) == 'string' then
+        if input_name == automatic_input then
+            table.remove(submitted_inputs, 1)
+        end
+        if self.started_input == automatic_input then
+            self.started_input = nil
+        end
+        return automatic_input
+    end
+
+    input_name = table.remove(submitted_inputs, 1)
     if input_name then
         return input_name
     end

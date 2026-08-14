@@ -120,6 +120,28 @@ describe('SimpleSequencer WeaponContext', function()
         assert.is_true(WeaponContext.can_buffer_input(settings, 1, 'light_attack', context))
     end)
 
+    it('uses the weapon action time scale while buffering a chain', function()
+        local settings = {
+            kind = 'overload_charge',
+            allowed_chain_actions = {
+                shoot_braced = {
+                    action_name = 'action_shoot_charged',
+                    chain_time = 0.8,
+                },
+            },
+        }
+        mock:set_weapon('slot_secondary', 'test_scaled_buffer', {
+            action_inputs = { shoot_braced = { buffer_time = 0.1 } },
+        })
+        mock:set_wielded_slot('slot_secondary')
+        mock:set_action('action_charge', settings, 1)
+        mock.extension._weapon_action_component.time_scale = 2
+        local context = WeaponContext.read()
+
+        mock.now = 1.35
+        assert.is_true(WeaponContext.can_buffer_input(settings, 1, 'shoot_braced', context))
+    end)
+
     it('does not buffer a chain whose target action condition cannot pass', function()
         local settings = {
             kind = 'windup',
