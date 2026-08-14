@@ -1,14 +1,25 @@
 local SequenceInterpreter = class('SimpleSequencerSequenceInterpreter')
 
-local function _requirements(element, input_settings)
-    local active_element = element
-    local input_setting = element.input_setting
-
-    if input_setting and input_settings and input_settings[input_setting.setting] == input_setting.setting_value then
-        active_element = input_setting
+local function _active_element(element, input_settings)
+    if not element then
+        return nil
     end
 
+    local input_setting = element.input_setting
+    if input_setting and input_settings and input_settings[input_setting.setting] == input_setting.setting_value then
+        return input_setting
+    end
+
+    return element
+end
+
+local function _requirements(element, input_settings)
+    local active_element = _active_element(element, input_settings)
     local result = {}
+
+    if not active_element then
+        return result
+    end
 
     if active_element.inputs then
         local inputs = active_element.inputs
@@ -144,6 +155,28 @@ end
 
 function SequenceInterpreter:active_input_name()
     return self.input_name
+end
+
+function SequenceInterpreter:requires_input(template, input_name, input_settings, required_input, required_value)
+    local config = template and template.action_inputs and template.action_inputs[input_name]
+    local element = config and config.input_sequence and config.input_sequence[1]
+    local active_element = _active_element(element, input_settings)
+
+    if not active_element then
+        return false
+    end
+
+    if active_element.input == required_input and active_element.value == required_value then
+        return true
+    end
+
+    for _, input in ipairs(active_element.inputs or {}) do
+        if input.input == required_input and input.value == required_value then
+            return true
+        end
+    end
+
+    return false
 end
 
 function SequenceInterpreter:consume_action_input()

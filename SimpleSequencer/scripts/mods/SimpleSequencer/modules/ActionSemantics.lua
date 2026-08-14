@@ -124,6 +124,18 @@ local function _find_path(template, candidates)
     return nil
 end
 
+local function _transition_for_input(entries, input_name)
+    if type(entries) ~= 'table' then
+        return nil
+    end
+
+    for _, entry in ipairs(entries) do
+        if entry and entry.input == input_name then
+            return entry.transition
+        end
+    end
+end
+
 local function _transition_after(template, inputs, input_index)
     local entries = template and template.action_input_hierarchy
     if not entries then
@@ -131,13 +143,7 @@ local function _transition_after(template, inputs, input_index)
     end
 
     for index = 1, input_index do
-        local transition
-        for _, entry in ipairs(entries) do
-            if entry.input == inputs[index] then
-                transition = entry.transition
-                break
-            end
-        end
+        local transition = _transition_for_input(entries, inputs[index])
 
         if not transition then
             return nil
@@ -166,13 +172,7 @@ local function _programs(template, inputs)
 
             while type(entries) == 'table' and inputs[next_input_index] do
                 local next_input = inputs[next_input_index]
-                local transition
-                for _, entry in ipairs(entries) do
-                    if entry.input == next_input then
-                        transition = entry.transition
-                        break
-                    end
-                end
+                local transition = _transition_for_input(entries, next_input)
 
                 if not transition then
                     break
@@ -192,6 +192,29 @@ local function _repeat_program(template, inputs, programs)
     local transition = _transition_after(template, inputs, #inputs)
     local repeat_at_chain_boundary = transition == 'stay'
     return repeat_at_chain_boundary and programs[#programs] or programs[1], repeat_at_chain_boundary
+end
+
+function ActionSemantics.terminal_release_input(goal, template)
+    local inputs = goal and goal.inputs
+    local action_inputs = template and template.action_inputs
+
+    if not inputs then
+        return nil
+    end
+
+    local entries = _transition_after(template, inputs, #inputs)
+    if type(entries) ~= 'table' then
+        return nil
+    end
+
+    for _, entry in ipairs(entries) do
+        local input = entry and entry.input
+        local config = input and action_inputs and action_inputs[input]
+
+        if config and config.dont_queue and entry.transition == 'base' then
+            return input
+        end
+    end
 end
 
 local function _resolve_command(context, command)

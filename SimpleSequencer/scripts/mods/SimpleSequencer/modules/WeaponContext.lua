@@ -91,6 +91,12 @@ local function _game_chain_ready(context, chain_name, current_time)
 
     return ok and valid == true
 end
+
+local function _current_time(context)
+    local extension = context and context.extension
+    return extension and extension._last_fixed_t or Managers and Managers.time and Managers.time:time('gameplay')
+end
+
 function WeaponContext.read()
     local player_manager = Managers and Managers.player
     local player = player_manager and player_manager:local_player_safe(1)
@@ -219,9 +225,7 @@ function WeaponContext.can_chain(settings, start_t, chain_name, context)
         return false
     end
 
-    local extension = context and context.extension
-    local current_time = extension and extension._last_fixed_t
-        or Managers and Managers.time and Managers.time:time('gameplay')
+    local current_time = _current_time(context)
 
     if not current_time or not _game_chain_ready(context, resolved_chain_name, current_time) then
         return false
@@ -247,9 +251,7 @@ function WeaponContext.can_buffer_input(settings, start_t, chain_name, context)
         and template.action_inputs
         and (template.action_inputs[resolved_chain_name] or template.action_inputs[chain_name])
     local buffer_time = input and input.buffer_time
-    local extension = context and context.extension
-    local current_time = extension and extension._last_fixed_t
-        or Managers and Managers.time and Managers.time:time('gameplay')
+    local current_time = _current_time(context)
     local action_component = extension and extension._weapon_action_component
     local time_scale = action_component and action_component.time_scale or 1
 

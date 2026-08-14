@@ -73,18 +73,6 @@ local function _mode_index(mode)
     return tonumber(string.match(mode or '', '%d+')) or 1
 end
 
-local function _kind_setting(setting_name)
-    setting_name = setting_name or ''
-
-    if string.sub(setting_name, 1, 6) == 'melee_' then
-        return 'MELEE', string.sub(setting_name, 7)
-    elseif string.sub(setting_name, 1, 7) == 'ranged_' then
-        return 'RANGED', string.sub(setting_name, 8)
-    end
-
-    return nil, nil
-end
-
 function ModeManager:init(mod_instance)
     self.mod = mod_instance
     self.active_mode = 'mode_1'
@@ -263,7 +251,14 @@ function ModeManager:on_setting_changed(setting_name)
         return true
     end
 
-    local kind, key = _kind_setting(setting_name)
+    local kind, key
+    if string.sub(setting_name or '', 1, 6) == 'melee_' then
+        kind = 'MELEE'
+        key = string.sub(setting_name, 7)
+    elseif string.sub(setting_name or '', 1, 7) == 'ranged_' then
+        kind = 'RANGED'
+        key = string.sub(setting_name, 8)
+    end
 
     if not kind then
         return false

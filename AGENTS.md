@@ -58,6 +58,10 @@ ModName/
 
 Split large mods into modules; don't let one file grow unbounded.
 
+## Simplification
+
+Inline simple single-use logic at its call site. Extract a helper when it is reused, captures a distinct domain concept, or provides a meaningful seam; shortening a function alone is not sufficient.
+
 ## Defensive access
 
 Managers, units, and extensions may not exist. Always guard:

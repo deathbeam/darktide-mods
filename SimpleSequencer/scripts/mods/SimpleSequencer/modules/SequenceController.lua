@@ -17,67 +17,18 @@ local function _action_token(action, start_t)
     return action .. ':' .. tostring(start_t or 0)
 end
 
-local function _terminal_release_input(goal, template)
-    local inputs = goal and goal.inputs
-    local action_inputs = template and template.action_inputs
-    local entries = template and template.action_input_hierarchy
-
-    if not inputs or type(entries) ~= 'table' then
-        return nil
-    end
-
-    for _, input in ipairs(inputs) do
-        local transition
-        for _, entry in ipairs(entries) do
-            if entry.input == input then
-                transition = entry.transition
-                break
-            end
-        end
-
-        if type(transition) ~= 'table' then
-            return nil
-        end
-
-        entries = transition
-    end
-
-    for _, entry in ipairs(entries) do
-        local input = entry.input
-        local config = input and action_inputs and action_inputs[input]
-
-        if config and config.dont_queue and entry.transition == 'base' then
-            return input
-        end
-    end
+local function _is_damage_window(action_settings)
+    return action_settings and action_settings.kind == 'sweep' and action_settings.damage_window_end
 end
 
-local function _requires_held_primary(template, input_name, input_settings)
-    local action_inputs = template and template.action_inputs
-    local config = action_inputs and action_inputs[input_name]
-    local element = config and config.input_sequence and config.input_sequence[1]
-    local input_setting = element and element.input_setting
-    local active_element = element
-
-    if input_setting and input_settings and input_settings[input_setting.setting] == input_setting.setting_value then
-        active_element = input_setting
-    end
-
-    if not active_element then
-        return false
-    end
-
-    if active_element.input == 'action_one_hold' and active_element.value == true then
-        return true
-    end
-
-    for _, input in ipairs(active_element.inputs or {}) do
-        if input.input == 'action_one_hold' and input.value == true then
-            return true
-        end
-    end
-
-    return false
+local function _matched_input_index(goal, action_name, action_settings, context, used_input)
+    return ActionSemantics.matched_input_index(
+        goal,
+        action_settings and action_settings.start_input,
+        action_name,
+        context and context.template,
+        used_input
+    )
 end
 
 local function _following_inputs(inputs, index)
@@ -159,7 +110,7 @@ end
 
 function SequenceController:can_switch_mode()
     local action_name, start_t, action_settings = WeaponContext.action(self.context)
-    local has_damage_window = action_settings and action_settings.kind == 'sweep' and action_settings.damage_window_end
+    local has_damage_window = _is_damage_window(action_settings)
     if has_damage_window then
         -- Recovery no longer affects gameplay once the attack cannot deal damage.
         return self.action.window_token == _action_token(action_name, start_t)
@@ -169,11 +120,11 @@ function SequenceController:can_switch_mode()
     end
 
     local goal = self:_goal()
-    local progress = ActionSemantics.matched_input_index(
+    local progress = _matched_input_index(
         goal,
-        action_settings and action_settings.start_input,
         action_name,
-        self.context and self.context.template,
+        action_settings,
+        self.context,
         self:_started_input(_action_token(action_name, start_t))
     )
     local next_input = progress and goal.inputs[progress + 1]
@@ -196,11 +147,11 @@ function SequenceController:_pending_goal_input()
         return goal.inputs and goal.inputs[1] or nil
     end
 
-    local progress = ActionSemantics.matched_input_index(
+    local progress = _matched_input_index(
         goal,
-        action_settings and action_settings.start_input,
         action_name,
-        self.context and self.context.template,
+        action_settings,
+        self.context,
         self:_started_input(_action_token(action_name, start_t))
     )
 
@@ -252,22 +203,13 @@ function SequenceController:_advance_if_chain_ready(start_t, action_settings)
         next_context = transition.context
     end
     local action_name = WeaponContext.action(self.context)
-    if
-        action_settings
-        and action_settings.kind == 'sweep'
-        and action_settings.damage_window_end
-        and self.action.window_token ~= _action_token(action_name, start_t)
-    then
+    local action_token = _action_token(action_name, start_t)
+    if _is_damage_window(action_settings) and self.action.window_token ~= action_token then
         return false
     end
 
-    local next_progress = ActionSemantics.matched_input_index(
-        next_goal,
-        action_settings and action_settings.start_input,
-        action_name,
-        next_context and next_context.template,
-        self:_started_input(_action_token(action_name, start_t))
-    )
+    local next_progress =
+        _matched_input_index(next_goal, action_name, action_settings, next_context, self:_started_input(action_token))
 
     local next_program
     if next_goal and next_progress == #(next_goal.inputs or {}) then
@@ -293,7 +235,7 @@ function SequenceController:_advance_if_chain_ready(start_t, action_settings)
     self:_advance()
     self.sequence.program = {
         kind = 'chain',
-        token = _action_token(action_name, start_t),
+        token = action_token,
         inputs = next_program,
     }
 
@@ -334,8 +276,7 @@ end
 function SequenceController:on_damage_window_exited(action_settings)
     if action_settings then
         if
-            action_settings.kind ~= 'sweep'
-            or not action_settings.damage_window_end
+            not _is_damage_window(action_settings)
             or not self.action.started
             or self.action.started.settings ~= action_settings
         then
@@ -347,11 +288,7 @@ function SequenceController:on_damage_window_exited(action_settings)
     end
 
     local action_name, start_t, current_action_settings = WeaponContext.action(self.context)
-    if
-        current_action_settings
-        and current_action_settings.kind == 'sweep'
-        and current_action_settings.damage_window_end
-    then
+    if _is_damage_window(current_action_settings) then
         self.action.window_token = _action_token(action_name, start_t)
     end
 end
@@ -468,15 +405,8 @@ function SequenceController:_maybe_advance_goal()
 
     local action_token = _action_token(action_name, start_t)
     local terminal = self:_terminal_program()
-    local start_input = action_settings and action_settings.start_input
     local used_input = self:_started_input(action_token)
-    local progress = ActionSemantics.matched_input_index(
-        goal,
-        start_input,
-        action_name,
-        self.context and self.context.template,
-        used_input
-    )
+    local progress = _matched_input_index(goal, action_name, action_settings, self.context, used_input)
 
     if not progress then
         if terminal and action_token ~= terminal.token then
@@ -512,7 +442,7 @@ function SequenceController:_maybe_advance_goal()
 
     if progress == #(goal.inputs or {}) then
         local release_input = self:_next_goal()
-                and _terminal_release_input(goal, self.context and self.context.template)
+                and ActionSemantics.terminal_release_input(goal, self.context and self.context.template)
             or goal.command == 'block' and 'block'
             or nil
         self.sequence.program = {
@@ -582,13 +512,7 @@ function SequenceController:_goal_input()
 
     local used_input = self:_started_input(action_token)
     local progress = action_name == 'idle' and 0
-        or ActionSemantics.matched_input_index(
-            goal,
-            action_settings and action_settings.start_input,
-            action_name,
-            self.context and self.context.template,
-            used_input
-        )
+        or _matched_input_index(goal, action_name, action_settings, self.context, used_input)
 
     if progress == nil and action_settings then
         local first_input = goal.inputs and goal.inputs[1]
@@ -627,7 +551,8 @@ function SequenceController:_sync_interpreter()
     local frame = extension and extension._last_fixed_frame or t
     local sequence = self.sequence
     local action_name, start_t = WeaponContext.action(self.context)
-    local action_started = self.action.started and self.action.started.token == _action_token(action_name, start_t)
+    local action_token = _action_token(action_name, start_t)
+    local action_started = self.action.started and self.action.started.token == action_token
     local program = sequence.program
     if self.pending_transition and self.interpreter:has_submitted() then
         return nil, t
@@ -693,10 +618,12 @@ function SequenceController:_override_input(action_name, raw_value)
     local preserve_primary_hold = not target
         and action_name == 'action_one_hold'
         and raw_value
-        and _requires_held_primary(
+        and self.interpreter:requires_input(
             self.context and self.context.template,
             self:_pending_goal_input(),
-            self.input_settings
+            self.input_settings,
+            'action_one_hold',
+            true
         )
 
     if

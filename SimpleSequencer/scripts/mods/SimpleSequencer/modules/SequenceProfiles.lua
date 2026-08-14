@@ -31,14 +31,6 @@ local function _table_or(value, default)
     return default or {}
 end
 
-local function _merge_defaults(profile, defaults)
-    for key, value in pairs(defaults) do
-        if profile[key] == nil then
-            profile[key] = value
-        end
-    end
-end
-
 function Profiles.clone(value)
     if type(value) ~= 'table' then
         return value
@@ -100,7 +92,11 @@ function Profiles.ensure(data)
             local defaults = Profiles.defaults[kind]
             for profile_key, profile in pairs(profiles) do
                 if type(profile) == 'table' then
-                    _merge_defaults(profile, defaults)
+                    for key, value in pairs(defaults) do
+                        if profile[key] == nil then
+                            profile[key] = value
+                        end
+                    end
                 else
                     profiles[profile_key] = _new_profile(kind)
                 end
