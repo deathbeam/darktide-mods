@@ -100,6 +100,24 @@ local function _empty_plan()
     }
 end
 
+local function _goal_index_at_or_after_step(plan, step)
+    if not plan or not step then
+        return nil
+    end
+
+    local next_index
+    for index, goal in ipairs(plan.goals or {}) do
+        if goal.step == step then
+            return index
+        end
+        if not next_index and goal.step > step then
+            next_index = index
+        end
+    end
+
+    return next_index or (plan.goal_cycle_index > 0 and plan.goal_cycle_index or nil)
+end
+
 function SequenceController:_terminal_program()
     local program = self.sequence.program
 
@@ -204,8 +222,35 @@ function SequenceController:_next_goal()
     return next_index and goals[next_index]
 end
 
+function SequenceController:_apply_transition(transition, continuation_step, continue_sequence)
+    local preserve_activation = transition.preserve_activation
+    local primary_active = preserve_activation and self.activation.primary
+    local secondary_active = preserve_activation and self.activation.secondary
+
+    self:reset()
+    self.context = transition.context
+    self.context_key = transition.key
+    self.sequence.plan = transition.plan
+    self.profile = transition.profile
+
+    if continue_sequence then
+        self.sequence.index = _goal_index_at_or_after_step(transition.plan, continuation_step)
+    end
+    if preserve_activation then
+        self.activation.primary = primary_active
+        self.activation.secondary = secondary_active
+    end
+end
+
 function SequenceController:_advance_if_chain_ready(start_t, action_settings)
     local next_goal = self:_next_goal()
+    local transition = self.pending_transition
+    local next_context = self.context
+    if transition then
+        local next_index = next_goal and _goal_index_at_or_after_step(transition.plan, next_goal.step)
+        next_goal = next_index and transition.plan.goals[next_index] or nil
+        next_context = transition.context
+    end
     local action_name = WeaponContext.action(self.context)
     if
         action_settings
@@ -220,7 +265,7 @@ function SequenceController:_advance_if_chain_ready(start_t, action_settings)
         next_goal,
         action_settings and action_settings.start_input,
         action_name,
-        self.context and self.context.template,
+        next_context and next_context.template,
         self:_started_input(_action_token(action_name, start_t))
     )
 
@@ -235,11 +280,11 @@ function SequenceController:_advance_if_chain_ready(start_t, action_settings)
         and next_progress == #(next_goal.inputs or {})
         and next_goal.repeat_at_chain_boundary
 
-    local can_chain = next_input and WeaponContext.can_chain(action_settings, start_t, next_input, self.context)
+    local can_chain = next_input and WeaponContext.can_chain(action_settings, start_t, next_input, next_context)
     local can_buffer = not repeat_at_chain_boundary
         and next_input
         and next_input ~= 'start_attack'
-        and WeaponContext.can_buffer_input(action_settings, start_t, next_input, self.context)
+        and WeaponContext.can_buffer_input(action_settings, start_t, next_input, next_context)
 
     if not (can_chain or can_buffer) then
         return false
@@ -366,37 +411,13 @@ function SequenceController:_refresh_context()
         preserve_activation = context_state_changed,
     }
     local current_action = WeaponContext.action(context)
-    local goal = self:_goal()
-    local active_input = self.interpreter:active_input_name()
-    local started_input = self.action.started and self.action.started.input
-    local special_attack_program_in_progress = goal
-        and goal.special_attack
-        and (not self.interpreter:has_submitted() or started_input ~= active_input)
-    if
-        context.kind == 'MELEE'
-        and context_state_changed
-        and special_attack_program_in_progress
-        and self.activation.primary
-        and current_action ~= 'idle'
-    then
+    -- Apply charge-driven plans at a goal boundary so the current attack can finish.
+    if context.kind == 'MELEE' and context_state_changed and self.activation.primary and current_action ~= 'idle' then
         self.pending_transition = transition
         return context
     end
 
-    local preserve_activation = transition.preserve_activation
-    local primary_active = preserve_activation and self.activation.primary
-    local secondary_active = preserve_activation and self.activation.secondary
-
-    self:reset()
-    self.context = transition.context
-    self.context_key = transition.key
-    self.sequence.plan = transition.plan
-    self.profile = transition.profile
-
-    if preserve_activation then
-        self.activation.primary = primary_active
-        self.activation.secondary = secondary_active
-    end
+    self:_apply_transition(transition)
     return context
 end
 
@@ -405,6 +426,12 @@ function SequenceController:_advance()
     local goals = sequence.plan.goals
 
     if not goals or #goals == 0 then
+        return
+    end
+    local pending_transition = self.pending_transition
+    if pending_transition then
+        local next_goal = self:_next_goal()
+        self:_apply_transition(pending_transition, next_goal and next_goal.step, true)
         return
     end
 
@@ -821,7 +848,7 @@ function SequenceController:update()
     self:_refresh_context()
 
     local has_goals = self.sequence.plan.goals and #self.sequence.plan.goals > 0
-    if has_goals then
+    if has_goals and (self.activation.primary or self.activation.secondary) then
         self:_maybe_advance_goal()
     else
         self:_restore_after_no_repeat()
