@@ -1,6 +1,7 @@
 local SequenceInterpreter = class('SimpleSequencerSequenceInterpreter')
 
 local RETRY_MARGIN = 0.05
+local MIN_RETRY_WINDOW = 0.1
 
 local function _active_element(element, input_settings)
     if not element then
@@ -80,7 +81,9 @@ function SequenceInterpreter:_begin_input(input_name, t)
         retry_window = math.min(retry_window, element.time_window)
     end
 
-    self.restart_after = retry_window and retry_window > 0.1 and retry_window - RETRY_MARGIN or nil
+    -- Retry a stale buffered tap shortly before its window closes, so a delayed
+    -- follow-up (e.g. a queued Heavy) cannot auto-complete instead.
+    self.restart_after = retry_window and retry_window > MIN_RETRY_WINDOW and retry_window - RETRY_MARGIN or nil
     self.element_index = 1
     self.element_start_t = t
     self.frame_t = nil

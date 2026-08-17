@@ -1,12 +1,7 @@
+local mod = get_mod('SimpleSequencer')
+local ActionSemantics = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ActionSemantics')
+
 local WeaponContext = {}
-
-local function _canonical_input(input_name)
-    if type(input_name) ~= 'string' then
-        return input_name
-    end
-
-    return input_name:gsub('_special$', '')
-end
 
 local function _chain_actions_for_input(settings, chain_name)
     local allowed_chain_actions = settings and settings.allowed_chain_actions
@@ -23,7 +18,7 @@ local function _chain_actions_for_input(settings, chain_name)
         return chain_name, chain_actions
     end
 
-    local canonical_input = _canonical_input(chain_name)
+    local canonical_input = ActionSemantics.canonical_input(chain_name)
     if type(canonical_input) ~= 'string' then
         return chain_name, nil
     end

@@ -54,7 +54,8 @@ function ActionSemantics.is_special_input(input_name)
     return SPECIAL_INPUTS[input_name] or false
 end
 
-local function _canonical_input(input_name)
+-- Strips the special-family suffix; single source of truth for input identity.
+function ActionSemantics.canonical_input(input_name)
     if type(input_name) ~= 'string' then
         return input_name
     end
@@ -332,7 +333,7 @@ local function _chain_actions_for_input(allowed_chain_actions, input_name)
         return chain_actions
     end
 
-    local canonical_input = _canonical_input(input_name)
+    local canonical_input = ActionSemantics.canonical_input(input_name)
     if type(canonical_input) ~= 'string' then
         return nil
     end
@@ -347,7 +348,7 @@ local function _chain_actions_for_input(allowed_chain_actions, input_name)
 end
 
 local function _action_chain_matches_input(template, input_name, action_name)
-    local canonical_input = _canonical_input(input_name)
+    local canonical_input = ActionSemantics.canonical_input(input_name)
     local special_input = type(canonical_input) == 'string' and canonical_input .. '_special' or nil
     for _, settings in pairs(template.actions or {}) do
         local allowed_chain_actions = settings.allowed_chain_actions
@@ -380,7 +381,10 @@ local function _action_chain_matches_followup(template, input_name, used_input, 
                 break
             end
         end
-        if automatic_input and _canonical_input(settings.start_input) == _canonical_input(input_name) then
+        if
+            automatic_input
+            and ActionSemantics.canonical_input(settings.start_input) == ActionSemantics.canonical_input(input_name)
+        then
             local chain_actions = _chain_actions_for_input(settings.allowed_chain_actions, used_input)
             if _chain_action_matches(chain_actions, action_name) then
                 return true
@@ -393,7 +397,7 @@ end
 
 local function _resolve_input_alias(template, input_name, input_values)
     local action_inputs = template and template.action_inputs
-    local canonical_input = _canonical_input(input_name)
+    local canonical_input = ActionSemantics.canonical_input(input_name)
     if type(action_inputs) ~= 'table' or type(canonical_input) ~= 'string' then
         return input_name
     end
@@ -422,7 +426,7 @@ local function _resolve_input_alias(template, input_name, input_values)
 end
 
 local function _family_alias(action_inputs, input_name, special_family)
-    local canonical_input = _canonical_input(input_name)
+    local canonical_input = ActionSemantics.canonical_input(input_name)
     if type(action_inputs) ~= 'table' or type(canonical_input) ~= 'string' then
         return nil
     end
@@ -438,14 +442,15 @@ function ActionSemantics.resolve_input_aliases(template, inputs, input_values, f
 
     local resolved = {}
     local action_inputs = template and template.action_inputs
-    local special_family = type(family_input) == 'string' and _canonical_input(family_input) ~= family_input
+    local special_family = type(family_input) == 'string'
+        and ActionSemantics.canonical_input(family_input) ~= family_input
 
     for index, input_name in ipairs(inputs) do
         if family_input ~= nil then
             resolved[index] = _family_alias(action_inputs, input_name, special_family) or input_name
         elseif index == 1 then
             resolved[index] = _resolve_input_alias(template, input_name, input_values)
-            special_family = _canonical_input(resolved[index]) ~= resolved[index]
+            special_family = ActionSemantics.canonical_input(resolved[index]) ~= resolved[index]
         else
             resolved[index] = _family_alias(action_inputs, input_name, special_family)
                 or _resolve_input_alias(template, input_name, input_values)
@@ -456,11 +461,13 @@ function ActionSemantics.resolve_input_aliases(template, inputs, input_values, f
 end
 
 function ActionSemantics.input_aliases_match(first, second)
-    return type(first) == 'string' and type(second) == 'string' and _canonical_input(first) == _canonical_input(second)
+    return type(first) == 'string'
+        and type(second) == 'string'
+        and ActionSemantics.canonical_input(first) == ActionSemantics.canonical_input(second)
 end
 
 function ActionSemantics.is_attack_start_input(input_name)
-    return _canonical_input(input_name) == 'start_attack'
+    return ActionSemantics.canonical_input(input_name) == 'start_attack'
 end
 
 function ActionSemantics.action_matches_input(template, input_name, action_name, action_settings)
@@ -469,7 +476,11 @@ function ActionSemantics.action_matches_input(template, input_name, action_name,
     end
 
     action_settings = action_settings or template and template.actions and template.actions[action_name]
-    if action_settings and _canonical_input(action_settings.start_input) == _canonical_input(input_name) then
+    if
+        action_settings
+        and ActionSemantics.canonical_input(action_settings.start_input)
+            == ActionSemantics.canonical_input(input_name)
+    then
         return true
     end
 
@@ -484,7 +495,7 @@ function ActionSemantics.matched_input_index(goal, start_input, action_name, tem
     -- The action setting identifies the transition; interpreter submissions fill gaps only.
     if start_input then
         for index, input_name in ipairs(goal.inputs or {}) do
-            if _canonical_input(input_name) == _canonical_input(start_input) then
+            if ActionSemantics.canonical_input(input_name) == ActionSemantics.canonical_input(start_input) then
                 return index
             end
         end
@@ -492,7 +503,7 @@ function ActionSemantics.matched_input_index(goal, start_input, action_name, tem
 
     if used_input then
         for index, input_name in ipairs(goal.inputs or {}) do
-            if _canonical_input(input_name) == _canonical_input(used_input) then
+            if ActionSemantics.canonical_input(input_name) == ActionSemantics.canonical_input(used_input) then
                 return index
             end
         end
@@ -505,8 +516,8 @@ function ActionSemantics.matched_input_index(goal, start_input, action_name, tem
         if action and not action.start_input and action.activate_special_during_sweep then
             for index = #(goal.inputs or {}), 1, -1 do
                 if
-                    _canonical_input(goal.inputs[index]) == 'light_attack'
-                    or _canonical_input(goal.inputs[index]) == 'heavy_attack'
+                    ActionSemantics.canonical_input(goal.inputs[index]) == 'light_attack'
+                    or ActionSemantics.canonical_input(goal.inputs[index]) == 'heavy_attack'
                 then
                     return index
                 end
@@ -514,7 +525,11 @@ function ActionSemantics.matched_input_index(goal, start_input, action_name, tem
         end
 
         for index, input_name in ipairs(goal.inputs or {}) do
-            if action and _canonical_input(action.start_input) == _canonical_input(input_name) then
+            if
+                action
+                and ActionSemantics.canonical_input(action.start_input)
+                    == ActionSemantics.canonical_input(input_name)
+            then
                 return index
             end
         end
