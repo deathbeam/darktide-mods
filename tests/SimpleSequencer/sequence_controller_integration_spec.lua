@@ -829,6 +829,7 @@ describe('SimpleSequencer SequenceController integration', function()
         mock.now = 0.02
         local _, input = mock:run_input_frame(engine, held_inputs)
         assert.are.equal('light_attack', input)
+        assert.is_false(mock:last_network_inputs().action_one_hold)
 
         mock.now = 0.31
         mock:run_input_frame(engine, held_inputs)
@@ -906,8 +907,18 @@ describe('SimpleSequencer SequenceController integration', function()
         mock:run_input_frame(engine, held_inputs)
         assert.are.equal('action_light_1', mock:current_action_name())
 
-        -- The buffered tap expires before the 0.6 chain opens; the retry must re-queue it.
-        for t = 0.05, 0.75, 0.01 do
+        mock.now = 0.6
+        local _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('start_attack', input)
+        assert.are.equal('action_start_2', mock:current_action_name())
+
+        -- Retry soon enough for Light to win before the queued Heavy can chain.
+        mock.now = 0.87
+        mock:run_input_frame(engine, held_inputs)
+        mock.now = 0.88
+        mock:run_input_frame(engine, held_inputs)
+
+        for t = 0.89, 1.3, 0.01 do
             mock.now = t
             mock:run_input_frame(engine, held_inputs)
             assert.is_not_equal('action_heavy_1', mock:current_action_name())
@@ -915,6 +926,166 @@ describe('SimpleSequencer SequenceController integration', function()
         end
 
         assert.are.equal('action_light_2', mock:current_action_name())
+    end)
+
+    it('keeps a special-mode Transonic push attack from continuing as Heavy', function()
+        mock:set_weapon('slot_primary', 'transonic_sword_transonic_knife_p1_m1', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            action_inputs = {
+                start_attack = {
+                    buffer_time = 0.35,
+                    reevaluation_time = 0.18,
+                    input_sequence = { { input = 'action_one_hold', value = true } },
+                },
+                light_attack = {
+                    buffer_time = 0.3,
+                    input_sequence = { { input = 'action_one_hold', time_window = 0.25, value = false } },
+                },
+                push_follow_up = {
+                    buffer_time = 0.3,
+                    input_sequence = {
+                        { duration = 0.3, hold_input = 'action_two_hold', input = 'action_one_hold', value = true },
+                    },
+                },
+                push_follow_up_release = {
+                    buffer_time = 0,
+                    dont_queue = true,
+                    input_sequence = {
+                        {
+                            inputs = {
+                                { input = 'action_one_hold', value = false },
+                                { input = 'action_two_hold', value = false },
+                            },
+                            time_window = math.huge,
+                        },
+                    },
+                },
+            },
+            action_input_hierarchy = {
+                {
+                    input = 'start_attack',
+                    transition = {
+                        { input = 'light_attack', transition = 'base' },
+                        { input = 'heavy_attack', transition = 'base' },
+                    },
+                },
+                {
+                    input = 'block',
+                    transition = {
+                        {
+                            input = 'push',
+                            transition = {
+                                {
+                                    input = 'push_follow_up',
+                                    transition = {
+                                        { input = 'push_follow_up_release', transition = 'base' },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            actions = {
+                action_block = {
+                    kind = 'block',
+                    start_input = 'block',
+                    allowed_chain_actions = {
+                        push = { action_name = 'action_push' },
+                    },
+                },
+                action_push = {
+                    kind = 'push',
+                    allowed_chain_actions = {
+                        push_follow_up = { action_name = 'action_pushfollow_special', chain_time = 0.3 },
+                    },
+                },
+                action_pushfollow_special = {
+                    kind = 'sweep',
+                    damage_window_end = 0.38333333333333336,
+                    allowed_chain_actions = {
+                        start_attack = {
+                            action_name = 'action_start_pushfollow_special_combo',
+                            chain_time = 0.6,
+                        },
+                    },
+                },
+                action_start_pushfollow_special_combo = {
+                    kind = 'windup',
+                    allowed_chain_actions = {
+                        light_attack = { action_name = 'action_light_pushfollow_special_combo' },
+                        heavy_attack = { action_name = 'action_heavy_2_special', chain_time = 0.51 },
+                    },
+                },
+                action_light_pushfollow_special_combo = { kind = 'sweep' },
+                action_heavy_2_special = { kind = 'sweep' },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        mock:set_special_active(true)
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'sequence_step_1',
+            sequence_step_1 = 'light_attack',
+        }))
+
+        mock:run_input_frame(engine, { action_two_hold = true })
+        assert.are.equal('action_block', mock:current_action_name())
+
+        mock.now = 0.01
+        local _, input = mock:run_input_frame(engine, {
+            action_one_pressed = true,
+            action_one_hold = true,
+            action_two_hold = true,
+        })
+        assert.are.equal('push', input)
+        assert.are.equal('action_push', mock:current_action_name())
+
+        local root_queued = false
+        local root_released_before_windup = false
+        for frame = 2, 90 do
+            mock.now = frame * 0.01
+            if frame == 70 then
+                engine:on_damage_window_exited(engine.context.template.actions.action_pushfollow_special)
+            end
+            local overridden, parsed_input = mock:run_input_frame(engine, {
+                action_one_hold = true,
+                action_two_hold = frame <= 31,
+            })
+            root_queued = root_queued or parsed_input == 'start_attack'
+            if
+                root_queued
+                and mock:current_action_name() == 'action_pushfollow_special'
+                and overridden.action_one_hold == false
+            then
+                root_released_before_windup = true
+            end
+        end
+        assert.is_true(root_released_before_windup)
+
+        local start_frame
+        for frame = 91, 200 do
+            mock.now = frame * 0.01
+            mock:run_input_frame(engine, { action_one_hold = true })
+            if mock:current_action_name() == 'action_start_pushfollow_special_combo' then
+                start_frame = frame
+                break
+            end
+        end
+        assert.is_not_nil(start_frame)
+
+        local light_started = false
+        for frame = start_frame + 1, 220 do
+            mock.now = frame * 0.01
+            mock:run_input_frame(engine, { action_one_hold = true })
+            local action_name = mock:current_action_name()
+            assert.is_not_equal('action_heavy_2_special', action_name)
+            if action_name == 'action_light_pushfollow_special_combo' then
+                light_started = true
+                break
+            end
+        end
+
+        assert.is_true(light_started)
     end)
 
     it('keeps primary input out of a combat blade special until its light chain opens', function()
@@ -960,8 +1131,7 @@ describe('SimpleSequencer SequenceController integration', function()
         assert.are.equal('action_special_uppercut', mock:current_action_name())
 
         mock.now = 0.6
-        _, input = mock:run_input_frame(engine, held_inputs)
-        assert.are.equal('start_attack', input)
+        mock:run_input_frame(engine, held_inputs)
         assert.are.equal('action_melee_start_left', mock:current_action_name())
 
         mock.now = 0.61
@@ -1019,6 +1189,200 @@ describe('SimpleSequencer SequenceController integration', function()
         assert.are.equal('action_light_special', mock:current_action_name())
     end)
 
+    it('continues a transformed special combo from Light into Heavy after a buffered windup', function()
+        local special_available = true
+        mock:set_weapon('slot_primary', 'test_replaced_power_sword_attack', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            weapon_special_tweak_data = { num_charges_to_consume_on_activation = 1 },
+            action_inputs = {
+                start_attack = {
+                    buffer_time = 0.35,
+                    reevaluation_time = 0.18,
+                    input_sequence = { { input = 'action_one_hold', value = true } },
+                },
+                light_attack = {
+                    buffer_time = 0.3,
+                    input_sequence = {
+                        { input = 'action_one_hold', time_window = 0.35, value = false },
+                    },
+                },
+                heavy_attack = {
+                    buffer_time = 0.5,
+                    input_sequence = {
+                        { duration = 0.35, input = 'action_one_hold', value = true },
+                        { auto_complete = true, input = 'action_one_hold', time_window = 1, value = false },
+                    },
+                },
+                start_attack_special = {
+                    buffer_time = 0.4,
+                    reevaluation_time = 0.18,
+                    input_sequence = { { input = 'weapon_extra_hold', value = true } },
+                },
+                light_attack_special = {
+                    buffer_time = 0.3,
+                    input_sequence = {
+                        { input = 'weapon_extra_hold', time_window = 0.35, value = false },
+                    },
+                },
+                heavy_attack_special = {
+                    buffer_time = 0.5,
+                    input_sequence = {
+                        { duration = 0.35, input = 'weapon_extra_hold', value = true },
+                        { auto_complete = true, input = 'weapon_extra_hold', time_window = 1.6, value = false },
+                    },
+                },
+            },
+            action_input_hierarchy = {
+                {
+                    input = 'start_attack',
+                    transition = {
+                        { input = 'light_attack', transition = 'base' },
+                        { input = 'heavy_attack', transition = 'base' },
+                    },
+                },
+                {
+                    input = 'start_attack_special',
+                    transition = {
+                        { input = 'light_attack_special', transition = 'base' },
+                        { input = 'heavy_attack_special', transition = 'base' },
+                    },
+                },
+            },
+            actions = {
+                action_melee_start = {
+                    kind = 'windup',
+                    start_input = 'start_attack',
+                    allowed_chain_actions = {
+                        light_attack = { action_name = 'action_light', chain_until = 0.8 },
+                        heavy_attack = { action_name = 'action_heavy', chain_time = 0.8 },
+                    },
+                },
+                action_light = { kind = 'sweep' },
+                action_heavy = { kind = 'sweep' },
+                action_melee_start_special_initial = {
+                    activate_special_during_windup = true,
+                    kind = 'windup',
+                    start_input = 'start_attack_special',
+                    allowed_chain_actions = {
+                        light_attack_special = { action_name = 'action_light_special', chain_until = 0.7 },
+                        heavy_attack_special = { action_name = 'action_heavy_special', chain_time = 0.7 },
+                    },
+                },
+                action_melee_start_special = {
+                    activate_special_during_windup = true,
+                    kind = 'windup',
+                    action_condition_func = function()
+                        return special_available
+                    end,
+                    allowed_chain_actions = {
+                        light_attack_special = { action_name = 'action_light_special', chain_until = 0.7 },
+                        heavy_attack_special = { action_name = 'action_heavy_special', chain_time = 0.7 },
+                    },
+                },
+                action_light_special = {
+                    activate_special_during_sweep = true,
+                    kind = 'sweep',
+                    allowed_chain_actions = {
+                        start_attack = { action_name = 'action_melee_start', chain_time = 0.5 },
+                        start_attack_special = { action_name = 'action_melee_start_special', chain_time = 0.65 },
+                    },
+                },
+                action_heavy_special = {
+                    activate_special_during_sweep = true,
+                    damage_window_end = 0.2,
+                    kind = 'sweep',
+                    allowed_chain_actions = {
+                        start_attack = { action_name = 'action_melee_start', chain_time = 0.4 },
+                        start_attack_special = { action_name = 'action_melee_start_special', chain_time = 0.4 },
+                    },
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        mock:set_special_charges(1)
+        mock:set_input_transform(function(inputs, raw_inputs)
+            inputs.action_one_hold = not special_available and raw_inputs.action_one_hold or false
+            inputs.weapon_extra_hold = special_available and raw_inputs.action_one_hold or false
+        end)
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'sequence_step_1',
+            sequence_step_1 = 'light_attack',
+            sequence_step_2 = 'heavy_attack',
+        }))
+        local _, input = mock:run_input_frame(engine, { action_one_hold = true })
+        assert.are.equal('start_attack_special', input)
+        assert.are.equal('action_melee_start_special_initial', mock:current_action_name())
+
+        local light_started_t
+        for frame = 1, 90 do
+            mock.now = frame * 0.01
+            mock:run_input_frame(engine, { action_one_hold = true })
+            local action_name = mock:current_action_name()
+            assert.is_not_equal('action_heavy_special', action_name)
+            if action_name == 'action_light_special' then
+                light_started_t = mock.now
+                break
+            end
+        end
+
+        assert.is_not_nil(light_started_t)
+        mock:set_input_delay(18)
+
+        local heavy_windup_t
+        local release_t
+        local heavy_started = false
+        local light_replaced_heavy = false
+        for frame = 1, 250 do
+            mock.now = light_started_t + frame * 0.01
+            local inputs = mock:run_input_frame(engine, { action_one_hold = true })
+            local action_name = mock:current_action_name()
+            if action_name == 'action_melee_start_special' and not heavy_windup_t then
+                heavy_windup_t = mock.now
+                mock:set_input_delay(0)
+            end
+            if heavy_windup_t and not inputs.weapon_extra_hold and not release_t then
+                release_t = mock.now
+            end
+            if heavy_windup_t and action_name == 'action_heavy_special' then
+                heavy_started = true
+                break
+            elseif heavy_windup_t and action_name == 'action_light_special' then
+                light_replaced_heavy = true
+                break
+            end
+        end
+
+        assert.is_not_nil(heavy_windup_t)
+        if release_t then
+            assert.is_true(release_t - heavy_windup_t >= 0.34)
+            assert.is_true(release_t - heavy_windup_t <= 0.37)
+        end
+        assert.is_false(light_replaced_heavy)
+        assert.is_true(
+            heavy_started,
+            string.format('%s windup=%s now=%s', mock:current_action_name(), heavy_windup_t, mock.now)
+        )
+
+        special_available = false
+        mock:set_special_charges(0)
+        local depletion_t = mock.now
+        mock.now = depletion_t + 0.2
+        engine:on_damage_window_exited(engine.context.template.actions.action_heavy_special)
+
+        local normal_windup_t
+        for frame = 21, 60 do
+            mock.now = depletion_t + frame * 0.01
+            mock:run_input_frame(engine, { action_one_hold = true })
+            if mock:current_action_name() == 'action_melee_start' then
+                normal_windup_t = mock.now
+                break
+            end
+        end
+
+        assert.is_not_nil(normal_windup_t)
+        assert.is_true(normal_windup_t - depletion_t < 0.5)
+    end)
+
     it('weaves a manual power-sword special into the normal combo', function()
         mock:set_weapon('slot_primary', 'test_manual_power_sword_special', {
             displayed_attacks = { primary = { type = 'melee' } },
@@ -1052,6 +1416,7 @@ describe('SimpleSequencer SequenceController integration', function()
                 action_light_special = {
                     kind = 'sweep',
                     allowed_chain_actions = {
+                        start_attack = { action_name = 'action_melee_start' },
                         start_attack_special = { action_name = 'action_melee_start_special' },
                     },
                 },
@@ -1385,7 +1750,7 @@ describe('SimpleSequencer SequenceController integration', function()
         assert.is_false(engine:can_switch_mode())
     end)
 
-    it('keeps held primary out of an external action before the light release', function()
+    it('passes held primary through an external action before the light release', function()
         mock:set_weapon('slot_primary', 'test_ability_interrupt', {
             displayed_attacks = { primary = { type = 'melee' } },
             actions = {
@@ -1411,6 +1776,7 @@ describe('SimpleSequencer SequenceController integration', function()
                 },
             },
         })
+        mock:set_weapon('slot_combat_ability', 'test_ability', {})
         mock:set_wielded_slot('slot_primary')
         local engine = mock:load_controller(new_manager({
             sequence_cycle_point = 'sequence_step_1',
@@ -1427,10 +1793,17 @@ describe('SimpleSequencer SequenceController integration', function()
             start_input = 'combat_ability',
         }, 0.01, 'combat_ability')
         local inputs = mock:run_input_frame(engine, held_inputs)
+        assert.is_true(inputs.action_one_hold)
 
-        assert.is_false(inputs.action_one_hold)
+        mock:set_wielded_slot('slot_combat_ability')
+        engine:on_slot_wielded()
+        inputs = mock:run_input_frame(engine, held_inputs)
+
+        assert.is_true(inputs.action_one_hold)
 
         mock.now = 1
+        mock:set_wielded_slot('slot_primary')
+        engine:on_slot_wielded()
         mock:set_action('action_wield', {
             kind = 'wield',
             start_input = 'wield',
@@ -1512,6 +1885,14 @@ describe('SimpleSequencer SequenceController integration', function()
     it('allows a manual push while a sequence is active', function()
         mock:set_weapon('slot_primary', 'test_manual_push', {
             displayed_attacks = { primary = { type = 'melee' } },
+            action_inputs = {
+                push_follow_up = {
+                    buffer_time = 0.3,
+                    input_sequence = {
+                        { duration = 0.3, hold_input = 'action_two_hold', input = 'action_one_hold', value = true },
+                    },
+                },
+            },
             actions = {
                 action_block = {
                     kind = 'block',
@@ -1523,6 +1904,18 @@ describe('SimpleSequencer SequenceController integration', function()
                 action_push = {
                     kind = 'push',
                     start_input = 'push',
+                    allowed_chain_actions = {
+                        push_follow_up = { action_name = 'action_pushfollow', chain_time = 0.3 },
+                        start_attack = { action_name = 'action_melee_start', chain_time = 0.3 },
+                    },
+                },
+                action_pushfollow = { kind = 'sweep' },
+                action_melee_start = {
+                    kind = 'windup',
+                    start_input = 'start_attack',
+                    allowed_chain_actions = {
+                        light_attack = { action_name = 'action_light' },
+                    },
                 },
                 action_light = {
                     kind = 'sweep',
@@ -1548,6 +1941,16 @@ describe('SimpleSequencer SequenceController integration', function()
 
         assert.are.equal('push', input)
         assert.are.equal('action_push', mock:current_action_name())
+
+        for frame = 1, 30 do
+            mock.now = frame * 0.01
+            mock:run_input_frame(engine, {
+                action_one_hold = true,
+                action_two_hold = true,
+            })
+        end
+
+        assert.are.equal('action_pushfollow', mock:current_action_name())
     end)
     local function run_heavy_start(action_start_t)
         local mock = DarktideMock.new()
@@ -1589,6 +1992,7 @@ describe('SimpleSequencer SequenceController integration', function()
         }
         mock:set_weapon('slot_primary', 'combatknife_p1_m1', template)
         mock:set_wielded_slot('slot_primary')
+        mock:set_action('action_melee_start', template.actions.action_melee_start, action_start_t)
         local engine = mock:load_controller(new_manager({
             sequence_cycle_point = 'sequence_step_1',
             sequence_step_1 = 'heavy_attack',
@@ -1596,7 +2000,6 @@ describe('SimpleSequencer SequenceController integration', function()
 
         mock.now = 0.2
         mock:run_input_frame(engine, { action_one_hold = true })
-        mock:set_action('action_melee_start', template.actions.action_melee_start, action_start_t)
         -- The parser can begin Heavy after the current windup action has already started.
         for _, t in ipairs({ 0.21, 0.31, 0.35, 0.51, 0.56 }) do
             mock.now = t
@@ -1612,5 +2015,263 @@ describe('SimpleSequencer SequenceController integration', function()
 
     it('does not turn a delayed Heavy parser input into Light', function()
         assert.are.equal('action_left_heavy', run_heavy_start(0))
+    end)
+
+    it('continues after a fast Devil Claw parry transition', function()
+        mock:set_weapon('slot_primary', 'combatsword_p1_m1', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            action_input_hierarchy = {
+                { input = 'start_attack', transition = { { input = 'light_attack', transition = 'base' } } },
+                { input = 'special_action', transition = 'base' },
+                { input = 'parry', transition = 'base' },
+            },
+            actions = {
+                action_melee_start = {
+                    kind = 'windup',
+                    start_input = 'start_attack',
+                    allowed_chain_actions = {
+                        light_attack = { action_name = 'action_light' },
+                    },
+                },
+                action_light = { kind = 'sweep' },
+                action_parry_special = {
+                    kind = 'block',
+                    start_input = 'special_action',
+                    allowed_chain_actions = {
+                        parry = { action_name = 'action_attack_special' },
+                    },
+                    running_action_state_to_action_input = {
+                        has_blocked = { input_name = 'parry' },
+                    },
+                },
+                action_attack_special = {
+                    kind = 'sweep',
+                    allowed_chain_actions = {
+                        start_attack = { action_name = 'action_melee_start', chain_time = 0.4 },
+                    },
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'special_action',
+            sequence_step_2 = 'light_attack',
+        }))
+        local held_inputs = { action_one_hold = true }
+        local _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('special_action', input)
+        assert.are.equal('action_parry_special', mock:current_action_name())
+        assert.are.equal(1, engine.sequence.index)
+        assert.are.equal('normal', engine.sequence.program.kind)
+
+        -- The parry can trigger before the controller polls the parry stance.
+        mock:set_action('action_attack_special', engine.context.template.actions.action_attack_special, 0.1)
+        engine:on_action_started(
+            'action_attack_special',
+            0.1,
+            'parry',
+            engine.context.template.actions.action_attack_special
+        )
+        mock.now = 0.1
+        _, input = mock:run_input_frame(engine, held_inputs)
+        assert.is_nil(input)
+        assert.are.equal(1, engine.sequence.index)
+
+        mock.now = 0.5
+        _, input = mock:run_input_frame(engine, held_inputs)
+        assert.are.equal('start_attack', input)
+        assert.are.equal(2, engine.sequence.index)
+        assert.are.equal('action_melee_start', mock:current_action_name())
+    end)
+
+    it('buffers a held attack during the Devil Claw manual parry window', function()
+        mock:set_weapon('slot_primary', 'combatsword_p1_m3', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            action_inputs = {
+                start_attack = {
+                    buffer_time = 0.3,
+                    reevaluation_time = 0.18,
+                    input_sequence = { { input = 'action_one_hold', value = true } },
+                },
+                light_attack = {
+                    buffer_time = 0.3,
+                    input_sequence = { { input = 'action_one_hold', value = false } },
+                },
+            },
+            action_input_hierarchy = {
+                {
+                    input = 'start_attack',
+                    transition = {
+                        { input = 'light_attack', transition = 'base' },
+                        { input = 'special_action', transition = 'base' },
+                    },
+                },
+                { input = 'special_action', transition = 'base' },
+            },
+            actions = {
+                action_melee_start_left = {
+                    kind = 'windup',
+                    start_input = 'start_attack',
+                    allowed_chain_actions = {
+                        light_attack = { action_name = 'action_left_light' },
+                    },
+                },
+                action_left_light = {
+                    kind = 'sweep',
+                    allowed_chain_actions = {
+                        special_action = { action_name = 'action_parry_special', chain_time = 0.4 },
+                        start_attack = { action_name = 'action_melee_start_left', chain_time = 0.4 },
+                    },
+                },
+                action_block = {
+                    kind = 'block',
+                    start_input = 'block',
+                    allowed_chain_actions = {
+                        special_action = { action_name = 'action_parry_special' },
+                    },
+                },
+                action_parry_special = {
+                    kind = 'block',
+                    start_input = 'special_action',
+                    total_time = 1.5,
+                    allowed_chain_actions = {
+                        start_attack = { action_name = 'action_melee_start_left', chain_time = 0.2 },
+                    },
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'sequence_step_1',
+            sequence_step_1 = 'light_attack',
+        }))
+        mock:run_input_frame(engine, { action_one_hold = true })
+        assert.are.equal('action_melee_start_left', mock:current_action_name())
+
+        mock.now = 0.01
+        mock:run_input_frame(engine, { action_one_hold = true })
+        assert.are.equal('action_left_light', mock:current_action_name())
+
+        for frame = 2, 41 do
+            mock.now = frame * 0.01
+            mock:run_input_frame(engine, { action_one_hold = true })
+        end
+
+        mock:set_input_transform(function(inputs)
+            local action_name = mock:current_action_name()
+            if action_name == 'action_block' or action_name == 'action_parry_special' then
+                inputs.action_one_hold = false
+            end
+        end)
+        mock.now = 0.42
+        mock:set_action('action_block', engine.context.template.actions.action_block, mock.now)
+        mock:reset_input_parser()
+        mock:run_input_frame(engine, { action_one_hold = true, weapon_extra_pressed = true })
+        assert.are.equal('action_parry_special', mock:current_action_name())
+
+        local resumed_t
+        for frame = 44, 80 do
+            mock.now = frame * 0.01
+            mock:run_input_frame(engine, { action_one_hold = true })
+            if mock:current_action_name() == 'action_melee_start_left' then
+                resumed_t = mock.now
+                break
+            end
+            assert.are.equal('action_parry_special', mock:current_action_name())
+        end
+        assert.is_not_nil(resumed_t)
+        assert.is_true(resumed_t < 0.7)
+
+        mock.now = resumed_t + 0.01
+        mock:run_input_frame(engine, { action_one_hold = true })
+        assert.are.equal('action_left_light', mock:current_action_name())
+    end)
+
+    it('restarts a released light sequence during the current attack recovery', function()
+        mock:set_weapon('slot_primary', 'test_light_repress', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            actions = {
+                action_melee_start_left = {
+                    kind = 'windup',
+                    start_input = 'start_attack',
+                    allowed_chain_actions = {
+                        light_attack = { action_name = 'action_left_light' },
+                    },
+                },
+                action_left_light = {
+                    damage_window_end = 0.35,
+                    kind = 'sweep',
+                    allowed_chain_actions = {
+                        start_attack = { action_name = 'action_melee_start_left', chain_time = 0.4 },
+                    },
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'sequence_step_1',
+            sequence_step_1 = 'light_attack',
+        }))
+
+        mock:run_input_frame(engine, { action_one_hold = true })
+        mock.now = 0.01
+        mock:run_input_frame(engine, { action_one_hold = true })
+        assert.are.equal('action_left_light', mock:current_action_name())
+
+        mock.now = 0.1
+        mock:run_input_frame(engine, { action_one_hold = false })
+        mock.now = 0.15
+        mock:run_input_frame(engine, { action_one_pressed = true, action_one_hold = true })
+
+        mock.now = 0.35
+        engine:on_damage_window_exited(engine.context.template.actions.action_left_light)
+
+        local resumed_t
+        for frame = 35, 45 do
+            mock.now = frame * 0.01
+            mock:run_input_frame(engine, { action_one_hold = true })
+            if mock:current_action_name() == 'action_melee_start_left' then
+                resumed_t = mock.now
+                break
+            end
+        end
+
+        assert.is_not_nil(resumed_t)
+        assert.is_true(resumed_t < 0.5)
+    end)
+
+    it('resets the current combo when a combat ability starts', function()
+        mock:set_weapon('slot_primary', 'test_ability_reset', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            action_input_hierarchy = {
+                {
+                    input = 'start_attack',
+                    transition = {
+                        { input = 'light_attack', transition = 'base' },
+                        { input = 'heavy_attack', transition = 'base' },
+                    },
+                },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'no_repeat',
+            sequence_step_1 = 'light_attack',
+            sequence_step_2 = 'heavy_attack',
+        }))
+
+        engine:_refresh_context()
+        engine.sequence.index = 2
+        engine.sequence.program = { kind = 'normal', inputs = { 'start_attack', 'heavy_attack' } }
+        engine.activation.primary = true
+        engine:on_action_started('combat_ability', 0, 'combat_ability', {
+            kind = 'unwield_to_specific',
+            start_input = 'combat_ability',
+        })
+
+        assert.are.equal(1, engine.sequence.index)
+        assert.is_nil(engine.sequence.program)
+        assert.is_false(engine.activation.primary)
     end)
 end)

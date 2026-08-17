@@ -1,27 +1,11 @@
 local WeaponContext = {}
 
-local INVERTED_TIME_SCALE_KINDS = {
-    overload_charge = true,
-    overload_charge_position_finder = true,
-    overload_charge_target_finder = true,
-    overload_charge_weapon_special = true,
-    overload_target_finder = true,
-}
-
 local function _canonical_input(input_name)
     if type(input_name) ~= 'string' then
         return input_name
     end
 
     return input_name:gsub('_special$', '')
-end
-
-local function _chain_action_at(chain_actions, index)
-    if chain_actions[1] then
-        return chain_actions[index]
-    end
-
-    return index == 1 and chain_actions or nil
 end
 
 local function _chain_actions_for_input(settings, chain_name)
@@ -65,18 +49,6 @@ local function _chain_actions_for_input(settings, chain_name)
     end
 
     return chain_name, nil
-end
-
-local function _scaled_chain_time(value, time_scale, action_kind)
-    if not value then
-        return nil
-    end
-
-    if time_scale < 1 and INVERTED_TIME_SCALE_KINDS[action_kind] then
-        return value * time_scale
-    end
-
-    return value / time_scale
 end
 
 local function _game_chain_ready(context, chain_name, current_time)
@@ -218,6 +190,11 @@ function WeaponContext.action(context)
     return action_name, start_t, settings
 end
 
+function WeaponContext.has_chain(settings, chain_name)
+    local _, chain_actions = _chain_actions_for_input(settings, chain_name)
+    return chain_actions ~= nil
+end
+
 function WeaponContext.can_chain(settings, start_t, chain_name, context)
     local resolved_chain_name, chain_actions = _chain_actions_for_input(settings, chain_name)
 
@@ -244,7 +221,7 @@ function WeaponContext.charge_state(context)
         charge_component and charge_component.charge_start_time or nil
 end
 
-function WeaponContext.can_buffer_input(settings, start_t, chain_name, context)
+function WeaponContext.can_buffer_input(settings, chain_name, context)
     local template = context and context.template
     local resolved_chain_name, chain_actions = _chain_actions_for_input(settings, chain_name)
     local input = template
@@ -252,38 +229,12 @@ function WeaponContext.can_buffer_input(settings, start_t, chain_name, context)
         and (template.action_inputs[resolved_chain_name] or template.action_inputs[chain_name])
     local buffer_time = input and input.buffer_time
     local current_time = _current_time(context)
-    local extension = context and context.extension
-    local action_component = extension and extension._weapon_action_component
-    local time_scale = action_component and action_component.time_scale or 1
 
-    if
-        not buffer_time
-        or buffer_time <= 0
-        or not chain_actions
-        or not start_t
-        or not current_time
-        or time_scale <= 0
-    then
+    if not buffer_time or buffer_time <= 0 or not chain_actions or not current_time then
         return false
     end
 
-    if not _game_chain_ready(context, resolved_chain_name, current_time + buffer_time) then
-        return false
-    end
-
-    local time_in_action = current_time - start_t
-    local action_kind = settings and settings.kind
-    for index = 1, chain_actions[1] and #chain_actions or 1 do
-        local chain_action = _chain_action_at(chain_actions, index)
-        local chain_time = _scaled_chain_time(chain_action and chain_action.chain_time or 0, time_scale, action_kind)
-        local queue_start_t = math.max(0, chain_time - buffer_time)
-
-        if queue_start_t <= time_in_action then
-            return true
-        end
-    end
-
-    return false
+    return _game_chain_ready(context, resolved_chain_name, current_time + buffer_time)
 end
 
 return WeaponContext

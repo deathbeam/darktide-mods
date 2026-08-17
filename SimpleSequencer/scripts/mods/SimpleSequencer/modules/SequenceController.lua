@@ -31,19 +31,6 @@ local function _matched_input_index(goal, action_name, action_settings, context,
     )
 end
 
-local function _following_inputs(inputs, index)
-    if not inputs then
-        return nil
-    end
-
-    local following = {}
-    for input_index = index, #inputs do
-        following[#following + 1] = inputs[input_index]
-    end
-
-    return #following > 0 and following or nil
-end
-
 local function _empty_plan()
     return {
         goals = {},
@@ -136,28 +123,6 @@ function SequenceController:_goal()
     return self.sequence.index and self.sequence.plan.goals and self.sequence.plan.goals[self.sequence.index]
 end
 
-function SequenceController:_pending_goal_input()
-    local goal = self:_goal()
-    if not goal or self:_terminal_program() then
-        return nil
-    end
-
-    local action_name, start_t, action_settings = WeaponContext.action(self.context)
-    if action_name == 'idle' then
-        return goal.inputs and goal.inputs[1] or nil
-    end
-
-    local progress = _matched_input_index(
-        goal,
-        action_name,
-        action_settings,
-        self.context,
-        self:_started_input(_action_token(action_name, start_t))
-    )
-
-    return progress and goal.inputs and goal.inputs[progress + 1] or nil
-end
-
 function SequenceController:_next_goal()
     local goals = self.sequence.plan.goals
     local next_index = self.sequence.index and self.sequence.index + 1
@@ -225,8 +190,8 @@ function SequenceController:_advance_if_chain_ready(start_t, action_settings)
     local can_chain = next_input and WeaponContext.can_chain(action_settings, start_t, next_input, next_context)
     local can_buffer = not repeat_at_chain_boundary
         and next_input
-        and next_input ~= 'start_attack'
-        and WeaponContext.can_buffer_input(action_settings, start_t, next_input, next_context)
+        and (not ActionSemantics.is_attack_start_input(next_input) or not self.activation.secondary)
+        and WeaponContext.can_buffer_input(action_settings, next_input, next_context)
 
     if not (can_chain or can_buffer) then
         return false
@@ -242,16 +207,20 @@ function SequenceController:_advance_if_chain_ready(start_t, action_settings)
     return true
 end
 
-function SequenceController:reset()
+function SequenceController:_reset_sequence()
     self.activation.primary = false
     self.activation.secondary = false
     self.sequence.index = 1
     self.sequence.no_repeat_restored = false
     self.sequence.program = nil
-    self.action.started = nil
-    self.action.window_token = nil
     self.pending_transition = nil
     self.interpreter:reset()
+end
+
+function SequenceController:reset()
+    self:_reset_sequence()
+    self.action.started = nil
+    self.action.window_token = nil
 end
 
 function SequenceController:_started_input(action_token)
@@ -259,13 +228,67 @@ function SequenceController:_started_input(action_token)
     return started and started.token == action_token and started.input or nil
 end
 
+function SequenceController:_resolved_inputs(inputs, frame_inputs, family_input, action_settings, start_t)
+    local context = self.context
+    local template = context and context.template
+    local resolved = ActionSemantics.resolve_input_aliases(template, inputs, frame_inputs, family_input)
+
+    if not family_input or not resolved[1] then
+        return resolved
+    end
+
+    local frame_resolved = ActionSemantics.resolve_input_aliases(template, inputs, frame_inputs)
+    if frame_resolved[1] == resolved[1] then
+        return resolved
+    end
+
+    local family_open = WeaponContext.can_chain(action_settings, start_t, resolved[1], context)
+        or WeaponContext.can_buffer_input(action_settings, resolved[1], context)
+    local frame_open = WeaponContext.can_chain(action_settings, start_t, frame_resolved[1], context)
+        or WeaponContext.can_buffer_input(action_settings, frame_resolved[1], context)
+
+    return not family_open and frame_open and frame_resolved or resolved
+end
+
 -- Action start events are the authoritative progress signal; polling only fills gaps.
-function SequenceController:on_action_started(action_name, t, automatic_input, action_settings)
+function SequenceController:on_action_started(action_name, t, automatic_input, action_settings, parser_input)
     if not action_name or action_name == 'none' then
         return
     end
 
-    local input = self.interpreter:consume_action_input(automatic_input)
+    if action_settings and action_settings.kind == 'unwield_to_specific' then
+        self:reset()
+    elseif automatic_input then
+        local goal = self:_goal()
+        local progress = _matched_input_index(goal, action_name, action_settings, self.context, automatic_input)
+        if goal and not progress then
+            self.interpreter:reset()
+            self.sequence.program = nil
+        end
+    end
+
+    local pending_input = self.interpreter:pending_action_input()
+    local input_matches_action
+    if automatic_input or not pending_input then
+        input_matches_action = true
+    elseif parser_input then
+        input_matches_action = ActionSemantics.input_aliases_match(pending_input, parser_input)
+    else
+        input_matches_action = ActionSemantics.action_matches_input(
+            self.context and self.context.template,
+            pending_input,
+            action_name,
+            action_settings
+        )
+    end
+    local input
+    if input_matches_action then
+        input = self.interpreter:consume_action_input(automatic_input, t)
+    else
+        self.interpreter:reset()
+        self.sequence.program = nil
+    end
+    input = parser_input or action_settings and action_settings.start_input or input
     self.action.started = {
         token = _action_token(action_name, t),
         input = input,
@@ -486,7 +509,7 @@ function SequenceController:_charge_ready(start_t, action_settings)
     return charge_level >= required_charge
 end
 
-function SequenceController:_goal_input()
+function SequenceController:_goal_program()
     local goal = self:_goal()
 
     if not goal then
@@ -495,7 +518,7 @@ function SequenceController:_goal_input()
 
     local terminal = self:_terminal_program()
     if terminal then
-        return terminal.inputs and terminal.inputs[1] or nil
+        return terminal.inputs
     end
 
     local action_name, start_t, action_settings = WeaponContext.action(self.context)
@@ -503,7 +526,7 @@ function SequenceController:_goal_input()
     local armed_program = self.sequence.program
     if armed_program and armed_program.kind == 'chain' then
         if armed_program.token == action_token then
-            return armed_program.inputs[1], _following_inputs(armed_program.inputs, 2)
+            return armed_program.inputs
         end
 
         armed_program.kind = 'normal'
@@ -517,42 +540,39 @@ function SequenceController:_goal_input()
     if progress == nil and action_settings then
         local first_input = goal.inputs and goal.inputs[1]
         local can_start = first_input and WeaponContext.can_chain(action_settings, start_t, first_input, self.context)
+        if not can_start and first_input and not self.activation.secondary then
+            can_start = WeaponContext.can_buffer_input(action_settings, first_input, self.context)
+        end
 
         progress = can_start and 0 or nil
     end
 
-    if progress == nil then
-        return nil
-    end
-
-    if not self:_charge_ready(start_t, action_settings) then
+    if progress == nil or not self:_charge_ready(start_t, action_settings) then
         return nil
     end
 
     local program = ActionSemantics.program_after(goal, progress)
     local next_input = program and program[1]
-    local followup_inputs = _following_inputs(program, 2)
     local can_chain = progress == 0
         or next_input and WeaponContext.can_chain(action_settings, start_t, next_input, self.context)
     local can_buffer = next_input
-        and next_input ~= 'start_attack'
-        and WeaponContext.can_buffer_input(action_settings, start_t, next_input, self.context)
+        and (not ActionSemantics.is_attack_start_input(next_input) or not self.activation.secondary)
+        and WeaponContext.can_buffer_input(action_settings, next_input, self.context)
 
-    if can_chain or can_buffer then
-        return next_input, followup_inputs
-    end
+    return (can_chain or can_buffer) and program or nil
 end
 
-function SequenceController:_sync_interpreter()
+function SequenceController:_sync_interpreter(frame_inputs)
     local extension = self.context and self.context.extension
     local t = extension and extension._last_fixed_t
         or Managers and Managers.time and Managers.time:time('gameplay')
         or 0
     local frame = extension and extension._last_fixed_frame or t
     local sequence = self.sequence
-    local action_name, start_t = WeaponContext.action(self.context)
+    local action_name, start_t, action_settings = WeaponContext.action(self.context)
     local action_token = _action_token(action_name, start_t)
     local action_started = self.action.started and self.action.started.token == action_token
+    local started_input = self:_started_input(action_token)
     local program = sequence.program
     if self.pending_transition and self.interpreter:has_submitted() then
         return nil, t
@@ -564,30 +584,37 @@ function SequenceController:_sync_interpreter()
         return nil, t
     end
 
+    local resolved_inputs
     if self:_terminal_program() then
         if not program.inputs then
             return nil, t
         end
     else
-        local input_name, followup_inputs = self:_goal_input()
+        local candidate = self:_goal_program()
+        local resolved_candidate = candidate
+                and self:_resolved_inputs(candidate, frame_inputs, started_input, action_settings, start_t)
+            or nil
+        local candidate_input = resolved_candidate and resolved_candidate[1]
         local active_input = self.interpreter:active_input_name()
-        if
-            not program
-            or program.kind == 'normal'
-                and input_name
-                and active_input ~= input_name
-                and (self.interpreter:has_submitted() or action_started)
-        then
-            if not input_name then
+
+        if not program then
+            if not candidate then
                 return nil, t
             end
-
-            local inputs = { input_name }
-            for _, followup_input in ipairs(followup_inputs or {}) do
-                inputs[#inputs + 1] = followup_input
-            end
-            program = { kind = 'normal', inputs = inputs }
+            program = { kind = 'normal', inputs = candidate }
             sequence.program = program
+        elseif
+            program.kind == 'normal'
+            and candidate_input
+            and active_input ~= candidate_input
+            and (self.interpreter:has_submitted() or action_started)
+        then
+            program = { kind = 'normal', inputs = candidate }
+            sequence.program = program
+        end
+
+        if candidate == program.inputs then
+            resolved_inputs = resolved_candidate
         end
     end
 
@@ -595,42 +622,47 @@ function SequenceController:_sync_interpreter()
         return nil, t
     end
 
-    self.interpreter:set_target(
+    resolved_inputs = resolved_inputs
+        or self:_resolved_inputs(program.inputs, frame_inputs, started_input, action_settings, start_t)
+    self.interpreter:set_program(
         self.context and self.context.template,
-        program.inputs[1],
+        resolved_inputs,
         t,
         self.input_settings,
-        start_t,
-        _following_inputs(program.inputs, 2)
+        action_started and start_t or t
     )
     self.interpreter:update(t, frame)
 
     return self.interpreter:active_input_name(), t, frame
 end
 
-function SequenceController:_override_input(action_name, raw_value)
+function SequenceController:_override_input(action_name, raw_value, frame_inputs)
     if self.interpreter:is_missing_sequence() then
         return raw_value
     end
 
-    local target, t, frame = self:_sync_interpreter()
+    local target, t, frame = self:_sync_interpreter(frame_inputs)
     local terminal = self:_terminal_program()
-    local preserve_primary_hold = not target
-        and action_name == 'action_one_hold'
-        and raw_value
-        and self.interpreter:requires_input(
-            self.context and self.context.template,
-            self:_pending_goal_input(),
-            self.input_settings,
-            'action_one_hold',
-            true
-        )
+    local terminal_blocks_primary = false
+    if terminal and not terminal.release_input then
+        local current_action, start_t = WeaponContext.action(self.context)
+        terminal_blocks_primary = terminal.token == _action_token(current_action, start_t)
+    end
+
+    local waiting_for_attack_start = false
+    if not target and not self.activation.secondary then
+        local goal = self:_goal()
+        local first_input = goal and goal.inputs and goal.inputs[1]
+        local _, _, action_settings = WeaponContext.action(self.context)
+        waiting_for_attack_start = ActionSemantics.is_attack_start_input(first_input)
+            and WeaponContext.has_chain(action_settings, first_input)
+    end
 
     if
         _is_primary_input(action_name)
         and (
-            terminal and not terminal.release_input
-            or not target and not self.activation.secondary and not preserve_primary_hold
+            terminal_blocks_primary
+            or waiting_for_attack_start
             or target == 'block'
             or ActionSemantics.is_special_input(target) and not self.interpreter:controls(action_name)
         )
@@ -746,7 +778,7 @@ function SequenceController:handle_input(input)
     end
 
     if released_primary then
-        self:reset()
+        self:_reset_sequence()
         return raw_value
     end
 
@@ -757,10 +789,6 @@ function SequenceController:handle_input(input)
     end
 
     if not self.sequence.index then
-        if _is_primary_input(action_name) then
-            return false
-        end
-
         return raw_value
     end
 
@@ -768,7 +796,7 @@ function SequenceController:handle_input(input)
         return raw_value
     end
 
-    return self:_override_input(action_name, raw_value)
+    return self:_override_input(action_name, raw_value, input.frame_inputs)
 end
 
 function SequenceController:update()

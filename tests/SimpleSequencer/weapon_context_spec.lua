@@ -114,10 +114,10 @@ describe('SimpleSequencer WeaponContext', function()
         local context = WeaponContext.read()
 
         mock.now = 1.009
-        assert.is_false(WeaponContext.can_buffer_input(settings, 1, 'light_attack', context))
+        assert.is_false(WeaponContext.can_buffer_input(settings, 'light_attack', context))
 
         mock.now = 1.01
-        assert.is_true(WeaponContext.can_buffer_input(settings, 1, 'light_attack', context))
+        assert.is_true(WeaponContext.can_buffer_input(settings, 'light_attack', context))
     end)
 
     it('uses the weapon action time scale while buffering a chain', function()
@@ -139,7 +139,7 @@ describe('SimpleSequencer WeaponContext', function()
         local context = WeaponContext.read()
 
         mock.now = 1.35
-        assert.is_true(WeaponContext.can_buffer_input(settings, 1, 'shoot_braced', context))
+        assert.is_true(WeaponContext.can_buffer_input(settings, 'shoot_braced', context))
     end)
 
     it('does not buffer a chain whose target action condition cannot pass', function()
@@ -169,7 +169,7 @@ describe('SimpleSequencer WeaponContext', function()
         local context = WeaponContext.read()
 
         mock.now = 1.01
-        assert.is_false(WeaponContext.can_buffer_input(settings, 1, 'light_attack', context))
+        assert.is_false(WeaponContext.can_buffer_input(settings, 'light_attack', context))
     end)
 
     it('uses the weapon extension as the source of chain validity', function()
@@ -194,6 +194,32 @@ describe('SimpleSequencer WeaponContext', function()
 
         assert.is_false(WeaponContext.can_chain(settings, 1, 'shoot_pressed', context))
         assert.are.equal(1, calls)
+    end)
+
+    it('uses the weapon extension as the sole source of buffered chain timing', function()
+        local settings = {
+            kind = 'windup',
+            allowed_chain_actions = {
+                light_attack = { action_name = 'action_light', chain_time = 10 },
+            },
+        }
+        mock:set_weapon('slot_primary', 'test_validator_buffer', {
+            action_inputs = { light_attack = { buffer_time = 0.3 } },
+        })
+        mock:set_wielded_slot('slot_primary')
+        mock:set_action('action_melee_start', settings, 1)
+        local context = WeaponContext.read()
+        local checked_t
+
+        function context.extension:action_input_is_currently_valid(_, action_input, _, current_t)
+            assert.are.equal('light_attack', action_input)
+            checked_t = current_t
+            return true
+        end
+
+        mock.now = 1.1
+        assert.is_true(WeaponContext.can_buffer_input(settings, 'light_attack', context))
+        assert.is_true(math.abs(checked_t - 1.4) < 0.000001)
     end)
 
     it('uses the game chain time for heavy attacks', function()
@@ -263,6 +289,18 @@ describe('SimpleSequencer WeaponContext', function()
         }
         mock.now = 2
         assert.is_false(WeaponContext.can_chain(settings, 1, 'light_attack', context))
+    end)
+
+    it('recognizes a chain before its timing window opens', function()
+        local settings = {
+            allowed_chain_actions = {
+                start_attack = { action_name = 'action_melee_start', chain_time = 0.5 },
+            },
+        }
+
+        assert.is_true(WeaponContext.has_chain(settings, 'start_attack'))
+        assert.is_true(WeaponContext.has_chain(settings, 'start_attack_special'))
+        assert.is_false(WeaponContext.has_chain(settings, 'light_attack'))
     end)
 
     it('prefers an exact chain alias over its canonical fallback', function()

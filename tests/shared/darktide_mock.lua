@@ -5,6 +5,8 @@ root = root .. (root:sub(-1) == '/' and '' or '/')
 
 local DarktideMock = {}
 
+local TIME_EPSILON = 1e-9
+
 local DEFAULT_ACTION_INPUT_HIERARCHY = {
     {
         input = 'start_attack',
@@ -248,7 +250,7 @@ function DarktideMock.new()
             local chain_time = chain_action.chain_time and chain_action.chain_time / time_scale
             local chain_until = chain_action.chain_until and chain_action.chain_until / time_scale
             local chain_ready = not chain_time
-                or chain_time <= time_in_action
+                or chain_time <= time_in_action + TIME_EPSILON
                 or chain_until and time_in_action <= chain_until
             local state_requirement = chain_action.running_action_state_requirement
             local handler_data = self._action_handler._registered_components.weapon_action
@@ -289,7 +291,7 @@ function DarktideMock.new()
         return dofile(root .. filename)
     end
 
-    function mock:set_action(action_name, settings, start_t)
+    function mock:set_action(action_name, settings, start_t, parser_input)
         action_component.current_action_name = action_name or 'none'
         action_component.start_t = start_t
         mock.extension._running_action_settings = settings
@@ -297,7 +299,7 @@ function DarktideMock.new()
         local controller = mock._controller
 
         if controller and action_name and action_name ~= 'none' then
-            controller:on_action_started(action_name, start_t, nil, settings)
+            controller:on_action_started(action_name, start_t, nil, settings, parser_input)
         end
     end
 
@@ -336,6 +338,10 @@ function DarktideMock.new()
         mock.input_delay_frames = frames or 0
     end
 
+    function mock:set_input_transform(transform)
+        mock.input_transform = transform
+    end
+
     local function _wielded_template()
         local weapon = weapons[inventory.wielded_slot]
         return weapon and weapon.weapon_template or nil
@@ -353,6 +359,12 @@ function DarktideMock.new()
                 running = true,
             }
         end
+    end
+
+    function mock:reset_input_parser()
+        local template = _wielded_template()
+        mock._input_queue = {}
+        _set_input_hierarchy(template, template and template.action_input_hierarchy)
     end
 
     local function _transition_input_hierarchy(template, input_name)
@@ -446,7 +458,7 @@ function DarktideMock.new()
         if not action_name or action_name == 'none' then
             for next_action_name, settings in pairs(template.actions or {}) do
                 if settings.start_input == input_name then
-                    mock:set_action(next_action_name, settings, mock.now)
+                    mock:set_action(next_action_name, settings, mock.now, input_name)
 
                     return true
                 end
@@ -465,7 +477,7 @@ function DarktideMock.new()
             return false
         end
 
-        mock:set_action(next_action_name, next_settings, mock.now)
+        mock:set_action(next_action_name, next_settings, mock.now, input_name)
 
         return true
     end
@@ -491,7 +503,7 @@ function DarktideMock.new()
 
             if mock.frame < entry.ready_frame then
                 index = index + 1
-            elseif mock.now > entry.expires_t then
+            elseif mock.now - entry.expires_t > TIME_EPSILON then
                 table.remove(queue, index)
             elseif _apply_input(template, entry.input_name) then
                 table.remove(queue, index)
@@ -526,15 +538,38 @@ function DarktideMock.new()
         raw_inputs = raw_inputs or {}
         local inputs = {}
         local primary_was_held = mock.input.primary_held
+        mock.input:clear_events()
 
         for _, input_name in ipairs(FRAME_INPUTS) do
             local raw_value = raw_inputs[input_name] or false
-            inputs[input_name] = mock:handle_input(engine, input_name, raw_value, raw_inputs)
+            inputs[input_name] = raw_value
+            mock.input:observe(input_name, raw_value, function(physical_action_name)
+                return raw_inputs[physical_action_name] or false
+            end)
         end
+
         -- The parser samples the pressed action before the same-frame hold release.
         if primary_was_held and not raw_inputs.action_one_hold then
             inputs.action_one_pressed = false
         end
+        if mock.input_transform then
+            mock.input_transform(inputs, raw_inputs)
+        end
+
+        local primary_release_handled = false
+        if not mock.input.primary_held then
+            local event = mock.input:frame_event('action_one_hold', inputs.action_one_hold, inputs)
+            inputs.action_one_hold = engine:handle_input(event)
+            primary_release_handled = true
+        end
+
+        for _, input_name in ipairs(FRAME_INPUTS) do
+            if input_name ~= 'action_one_hold' or not primary_release_handled then
+                local event = mock.input:frame_event(input_name, inputs[input_name], inputs)
+                inputs[input_name] = engine:handle_input(event)
+            end
+        end
+        mock.network_inputs = _clone(inputs)
 
         local template = _wielded_template()
         local input_name
@@ -558,6 +593,10 @@ function DarktideMock.new()
         mock.frame = mock.frame + 1
         mock.extension._last_fixed_frame = mock.frame
         return inputs, input_name or applied_input
+    end
+
+    function mock:last_network_inputs()
+        return mock.network_inputs
     end
 
     function mock:current_action_name()

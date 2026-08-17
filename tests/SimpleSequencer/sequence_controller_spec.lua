@@ -134,6 +134,41 @@ describe('SimpleSequencer SequenceController', function()
         assert.are.equal('push_follow_up', engine.action.started.input)
     end)
 
+    it('records the parser input when an external replacement action starts', function()
+        local engine = mock:load_controller(new_manager(nil))
+        engine.interpreter.input_name = 'heavy_attack'
+        engine.interpreter.submitted_inputs = { 'start_attack' }
+
+        engine:on_action_started('action_melee_start_special', 1, nil, { kind = 'windup' }, 'start_attack_special')
+
+        assert.are.equal('start_attack_special', engine.action.started.input)
+        assert.same({}, engine.interpreter.submitted_inputs)
+    end)
+
+    it('does not consume a pending attack input when a manual parry starts', function()
+        mock:set_weapon('slot_primary', 'test_manual_parry', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            actions = {
+                action_pushfollow = {
+                    allowed_chain_actions = {
+                        start_attack = { action_name = 'action_melee_start' },
+                    },
+                },
+                action_melee_start = { kind = 'windup' },
+                action_parry_special = { kind = 'block', start_input = 'special_action' },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+        local engine = mock:load_controller(new_manager(nil))
+        engine:_refresh_context()
+        engine.interpreter.input_name = 'start_attack'
+
+        engine:on_action_started('action_parry_special', 1, nil, engine.context.template.actions.action_parry_special)
+
+        assert.are.equal('special_action', engine.action.started.input)
+        assert.is_nil(engine.interpreter.input_name)
+    end)
+
     it('uses string automatic inputs without consuming parser state', function()
         local engine = mock:load_controller(new_manager(nil))
         engine.interpreter.input_name = 'stale_input'
@@ -353,9 +388,7 @@ describe('SimpleSequencer SequenceController', function()
             },
         }, 0)
 
-        local input_name, followup_inputs = engine:_goal_input()
-        assert.are.equal('push', input_name)
-        assert.same({ 'push_follow_up' }, followup_inputs)
+        assert.same({ 'push', 'push_follow_up' }, engine:_goal_program())
     end)
 
     it('continues from a push into its follow-up chain', function()
@@ -414,7 +447,7 @@ describe('SimpleSequencer SequenceController', function()
         assert.are.equal('terminal', engine.sequence.program.kind)
     end)
 
-    it('uses the action-start event input when chain metadata cannot resolve progress', function()
+    it('does not use an unverified action-start input as sequence progress', function()
         local profile = {
             sequence_cycle_point = 'no_repeat',
             sequence_step_1 = 'light_attack',
@@ -434,7 +467,9 @@ describe('SimpleSequencer SequenceController', function()
         mock:set_action('action_light_1_special', { kind = 'sweep' }, 1)
         input(engine, 'action_one_hold', true)
 
-        assert.are.equal('terminal', engine.sequence.program.kind)
+        assert.is_nil(engine.sequence.program)
+        assert.is_nil(engine.action.started.input)
+        assert.is_nil(engine.interpreter.input_name)
     end)
 
     it('advances to the next goal at an action chain boundary', function()
@@ -472,10 +507,10 @@ describe('SimpleSequencer SequenceController', function()
 
         assert.are.equal(2, engine.sequence.index)
         assert.same({ 'start_attack', 'light_attack' }, engine.sequence.plan.goals[2].inputs)
-        assert.are.equal('start_attack', engine:_goal_input())
+        assert.same({ 'start_attack', 'light_attack' }, engine:_goal_program())
     end)
 
-    it('blocks unsupported inputs instead of falling back', function()
+    it('passes physical input through when the configured action input is unsupported', function()
         local profile = {
             sequence_cycle_point = 'no_repeat',
             sequence_step_1 = 'light_attack',
@@ -486,7 +521,7 @@ describe('SimpleSequencer SequenceController', function()
         engine.context.template.action_inputs.start_attack = nil
         engine.activation.primary = true
 
-        assert.is_false(engine:_override_input('action_one_pressed', false))
+        assert.is_true(engine:_override_input('action_one_pressed', true))
         assert.is_true(engine.interpreter:is_missing_sequence())
     end)
 
@@ -572,7 +607,7 @@ describe('SimpleSequencer SequenceController', function()
         assert.are.equal(1, manager.toggles)
     end)
 
-    it('waits for a start attack chain instead of buffering it early', function()
+    it('buffers a start attack when the game validator opens its input window', function()
         mock:set_weapon('slot_primary', 'test_light_recovery', {
             displayed_attacks = { primary = { type = 'melee' } },
             action_inputs = {
@@ -635,12 +670,9 @@ describe('SimpleSequencer SequenceController', function()
         assert.is_false(input(engine, 'action_one_hold', true))
 
         mock.now = 0.2
-        assert.is_false(input(engine, 'action_one_hold', true))
-
-        mock.now = 0.5
         assert.is_true(input(engine, 'action_one_hold', true))
 
-        mock.now = 0.52
+        mock.now = 0.22
         assert.is_false(input(engine, 'action_one_hold', true))
     end)
 

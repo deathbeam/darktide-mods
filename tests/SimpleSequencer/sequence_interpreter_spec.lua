@@ -24,7 +24,7 @@ describe('SimpleSequencer SequenceInterpreter', function()
             },
         }
 
-        interpreter:set_target(template, 'light_attack', 0)
+        interpreter:set_program(template, { 'light_attack' }, 0)
 
         assert.is_true(interpreter:can_interpret())
         assert.is_false(interpreter:value('action_one_hold', true, 0))
@@ -35,11 +35,11 @@ describe('SimpleSequencer SequenceInterpreter', function()
         local interpreter = Interpreter:new()
         local template = { action_inputs = {} }
 
-        interpreter:set_target(template, 'start_attack', 0)
+        interpreter:set_program(template, { 'start_attack' }, 0)
         assert.is_false(interpreter:can_interpret())
         assert.is_true(interpreter:is_missing_sequence())
 
-        interpreter:set_target(template, nil, 0)
+        interpreter:set_program(template, nil, 0)
         assert.is_false(interpreter:is_missing_sequence())
     end)
 
@@ -56,7 +56,7 @@ describe('SimpleSequencer SequenceInterpreter', function()
             },
         }
 
-        interpreter:set_target(template, 'heavy_attack', 0)
+        interpreter:set_program(template, { 'heavy_attack' }, 0)
 
         assert.is_true(interpreter:value('action_one_hold', false, 0))
         assert.is_true(interpreter:value('action_one_hold', false, 0.1))
@@ -77,7 +77,7 @@ describe('SimpleSequencer SequenceInterpreter', function()
             },
         }
 
-        interpreter:set_target(template, 'heavy_attack', 0)
+        interpreter:set_program(template, { 'heavy_attack' }, 0)
         interpreter:value('action_one_hold', false, 0)
         interpreter:update(0.25)
         assert.same({}, interpreter.submitted_inputs)
@@ -95,6 +95,60 @@ describe('SimpleSequencer SequenceInterpreter', function()
         assert.same({}, interpreter.submitted_inputs)
     end)
 
+    it('starts a buffered follow-up duration from the action boundary', function()
+        local interpreter = Interpreter:new()
+        local template = {
+            action_inputs = {
+                start_attack = { input_sequence = { { input = 'action_one_hold', value = true } } },
+                heavy_attack = {
+                    input_sequence = {
+                        { duration = 0.35, input = 'action_one_hold', value = true },
+                        { input = 'action_one_hold', value = false },
+                    },
+                },
+            },
+        }
+
+        interpreter:set_program(template, { 'start_attack', 'heavy_attack' }, 0, nil, 0)
+        interpreter:value('action_one_hold', true, 0, 0)
+        interpreter:update(0.01, 1)
+        interpreter:value('action_one_hold', true, 0.1, 2)
+
+        assert.are.equal('start_attack', interpreter:consume_action_input(nil, 0.2))
+        assert.is_true(interpreter:value('action_one_hold', true, 0.4, 3))
+        assert.is_true(interpreter:value('action_one_hold', true, 0.56, 4))
+        assert.is_false(interpreter:value('action_one_hold', true, 0.57, 5))
+    end)
+
+    it('restarts a completed duration follow-up when its buffered root action starts', function()
+        local interpreter = Interpreter:new()
+        local template = {
+            action_inputs = {
+                start_attack = { input_sequence = { { input = 'action_one_hold', value = true } } },
+                heavy_attack = {
+                    input_sequence = {
+                        { duration = 0.25, input = 'action_one_hold', value = true },
+                        { input = 'action_one_hold', value = false },
+                    },
+                },
+            },
+        }
+
+        interpreter:set_program(template, { 'start_attack', 'heavy_attack' }, 0, nil, 0)
+        interpreter:value('action_one_hold', true, 0, 0)
+        interpreter:update(0.01, 1)
+        interpreter:value('action_one_hold', true, 0.01, 1)
+        interpreter:update(0.25, 2)
+        interpreter:value('action_one_hold', true, 0.26, 3)
+        interpreter:update(0.27, 4)
+
+        assert.is_true(interpreter:has_submitted())
+        assert.are.equal('start_attack', interpreter:consume_action_input(nil, 0.3))
+        assert.is_false(interpreter:has_submitted())
+        assert.same({}, interpreter.submitted_inputs)
+        assert.is_true(interpreter:value('action_one_hold', true, 0.31, 5))
+    end)
+
     it('marks the current input when the action event arrives first', function()
         local interpreter = Interpreter:new()
         local template = {
@@ -103,7 +157,7 @@ describe('SimpleSequencer SequenceInterpreter', function()
             },
         }
 
-        interpreter:set_target(template, 'light_attack', 0)
+        interpreter:set_program(template, { 'light_attack' }, 0)
 
         assert.are.equal('light_attack', interpreter:consume_action_input())
         assert.are.equal('light_attack', interpreter.started_input)
@@ -125,7 +179,7 @@ describe('SimpleSequencer SequenceInterpreter', function()
                 },
             },
         }
-        interpreter:set_target(template, 'push_follow_up', 0.25, nil, 0)
+        interpreter:set_program(template, { 'push_follow_up' }, 0.25, nil, 0)
 
         assert.is_true(interpreter:value('action_one_hold', false, 0.25))
         assert.is_true(interpreter:value('action_two_hold', false, 0.25))
@@ -148,7 +202,7 @@ describe('SimpleSequencer SequenceInterpreter', function()
             },
         }
 
-        interpreter:set_target(template, 'push', 0)
+        interpreter:set_program(template, { 'push' }, 0)
 
         assert.is_true(interpreter:value('action_two_hold', false, 0))
         assert.is_true(interpreter:value('action_one_pressed', false, 0))
@@ -171,7 +225,7 @@ describe('SimpleSequencer SequenceInterpreter', function()
             },
         }
 
-        interpreter:set_target(template, 'block', 0, nil, nil, { 'push' })
+        interpreter:set_program(template, { 'block', 'push' }, 0)
         assert.is_true(interpreter:value('action_two_hold', false, 0))
         interpreter:update(0.02)
         assert.are.equal('push', interpreter:active_input_name())
@@ -196,7 +250,7 @@ describe('SimpleSequencer SequenceInterpreter', function()
             },
         }
 
-        interpreter:set_target(template, 'special_action', 0)
+        interpreter:set_program(template, { 'special_action' }, 0)
 
         assert.is_true(interpreter:value('action_one_pressed', false, 0))
         assert.is_false(interpreter:value('action_two_pressed', false, 0))
@@ -215,7 +269,7 @@ describe('SimpleSequencer SequenceInterpreter', function()
             },
         }
 
-        interpreter:set_target(template, 'start_attack', 0, nil, nil, { 'light_attack' })
+        interpreter:set_program(template, { 'start_attack', 'light_attack' }, 0)
 
         assert.is_true(interpreter:value('action_one_hold', true, 0))
         assert.is_false(interpreter:value('action_one_hold', true, 0.02))
@@ -232,11 +286,27 @@ describe('SimpleSequencer SequenceInterpreter', function()
             },
         }
 
-        interpreter:set_target(template, 'start_attack', 0)
+        interpreter:set_program(template, { 'start_attack' }, 0)
         assert.is_true(interpreter:value('action_one_hold', true, 0))
         assert.is_false(interpreter:value('action_one_hold', true, 0.02))
         assert.is_false(interpreter:value('action_one_pressed', true, 0.02))
         assert.is_true(interpreter:value('action_two_hold', true, 0.02))
+    end)
+
+    it('preserves a submitted release on a transformed input', function()
+        local interpreter = Interpreter:new()
+        local template = {
+            action_inputs = {
+                light_attack_special = {
+                    input_sequence = { { input = 'weapon_extra_hold', value = false } },
+                },
+            },
+        }
+
+        interpreter:set_program(template, { 'light_attack_special' }, 0)
+        assert.is_false(interpreter:value('weapon_extra_hold', true, 0))
+        assert.is_false(interpreter:value('weapon_extra_hold', true, 0.01))
+        assert.is_false(interpreter:value('weapon_extra_hold', true, 0.02))
     end)
 
     it('restarts a stale submitted input before its buffer expires', function()
@@ -250,7 +320,7 @@ describe('SimpleSequencer SequenceInterpreter', function()
             },
         }
 
-        interpreter:set_target(template, 'start_attack', 0)
+        interpreter:set_program(template, { 'start_attack' }, 0)
         interpreter:value('action_one_hold', true, 0)
         interpreter:value('action_one_hold', true, 0.02)
         assert.is_false(interpreter:value('action_one_hold', true, 0.31))
@@ -273,7 +343,7 @@ describe('SimpleSequencer SequenceInterpreter', function()
             },
         }
 
-        interpreter:set_target(template, 'test_input', 0)
+        interpreter:set_program(template, { 'test_input' }, 0)
 
         assert.is_false(interpreter:value('action_two_hold', true, 0))
     end)
@@ -294,11 +364,34 @@ describe('SimpleSequencer SequenceInterpreter', function()
             },
         }
 
-        interpreter:set_target(template, 'start_attack', 0, nil, nil, { 'heavy_attack' })
+        interpreter:set_program(template, { 'start_attack', 'heavy_attack' }, 0)
 
         assert.is_true(interpreter:value('action_one_hold', true, 0))
         assert.is_true(interpreter:value('action_one_hold', true, 0.24))
         assert.is_true(interpreter:value('action_one_hold', true, 0.25))
         assert.is_false(interpreter:value('action_one_hold', true, 0.26))
+    end)
+
+    it('releases a reevaluated root before its queued action starts', function()
+        local interpreter = Interpreter:new()
+        local template = {
+            action_inputs = {
+                start_attack = {
+                    reevaluation_time = 0.18,
+                    input_sequence = { { input = 'action_one_hold', value = true } },
+                },
+                light_attack = {
+                    input_sequence = { { input = 'action_one_hold', value = false } },
+                },
+            },
+        }
+
+        interpreter:set_program(template, { 'start_attack', 'light_attack' }, 0)
+        assert.is_true(interpreter:value('action_one_hold', true, 0))
+        assert.is_false(interpreter:value('action_one_hold', true, 0.01))
+        assert.are.equal('start_attack', interpreter:pending_action_input())
+
+        assert.are.equal('start_attack', interpreter:consume_action_input())
+        assert.are.equal('light_attack', interpreter:pending_action_input())
     end)
 end)

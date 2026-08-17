@@ -32,13 +32,6 @@ local COMMAND_TARGETS = {
     special_charged = { 'special_action_heavy', 'special_action_execute' },
 }
 
-local function _canonical_input(input_name)
-    if type(input_name) ~= 'string' then
-        return input_name
-    end
-
-    return input_name:gsub('_special$', '')
-end
 local SPECIAL_ATTACK_TARGETS = {
     special_action = { 'light_attack_special' },
     special_action_heavy = { 'heavy_attack_special' },
@@ -59,6 +52,42 @@ local SPECIAL_INPUTS = {
 
 function ActionSemantics.is_special_input(input_name)
     return SPECIAL_INPUTS[input_name] or false
+end
+
+local function _canonical_input(input_name)
+    if type(input_name) ~= 'string' then
+        return input_name
+    end
+
+    return input_name:gsub('_special$', '')
+end
+
+local function _input_matches_frame(config, input_values)
+    local element = config and config.input_sequence and config.input_sequence[1]
+    if not element or not input_values then
+        return false
+    end
+
+    local input_setting = element.input_setting
+    if input_setting and input_values[input_setting.setting] == input_setting.setting_value then
+        element = input_setting
+    end
+
+    if element.inputs then
+        local matched = element.input_mode == 'all'
+        for _, input in ipairs(element.inputs) do
+            if input_values[input.input] == input.value then
+                if element.input_mode ~= 'all' then
+                    return true
+                end
+            elseif element.input_mode == 'all' then
+                return false
+            end
+        end
+        return matched
+    end
+
+    return element.input and input_values[element.input] == element.value or false
 end
 
 -- Runtime plan derivation
@@ -318,14 +347,130 @@ local function _chain_actions_for_input(allowed_chain_actions, input_name)
 end
 
 local function _action_chain_matches_input(template, input_name, action_name)
+    local canonical_input = _canonical_input(input_name)
+    local special_input = type(canonical_input) == 'string' and canonical_input .. '_special' or nil
     for _, settings in pairs(template.actions or {}) do
-        local chain_actions = _chain_actions_for_input(settings.allowed_chain_actions, input_name)
-        if _chain_action_matches(chain_actions, action_name) then
+        local allowed_chain_actions = settings.allowed_chain_actions
+        if
+            type(allowed_chain_actions) == 'table'
+            and (
+                _chain_action_matches(allowed_chain_actions[input_name], action_name)
+                or _chain_action_matches(allowed_chain_actions[canonical_input], action_name)
+                or special_input and _chain_action_matches(allowed_chain_actions[special_input], action_name)
+            )
+        then
             return true
         end
     end
 
     return false
+end
+
+local function _action_chain_matches_followup(template, input_name, used_input, action_name)
+    if not used_input then
+        return false
+    end
+
+    for _, settings in pairs(template.actions or {}) do
+        local state_to_input = settings.running_action_state_to_action_input
+        local automatic_input = false
+        for _, state in pairs(state_to_input or {}) do
+            if state.input_name == used_input then
+                automatic_input = true
+                break
+            end
+        end
+        if automatic_input and _canonical_input(settings.start_input) == _canonical_input(input_name) then
+            local chain_actions = _chain_actions_for_input(settings.allowed_chain_actions, used_input)
+            if _chain_action_matches(chain_actions, action_name) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+local function _resolve_input_alias(template, input_name, input_values)
+    local action_inputs = template and template.action_inputs
+    local canonical_input = _canonical_input(input_name)
+    if type(action_inputs) ~= 'table' or type(canonical_input) ~= 'string' then
+        return input_name
+    end
+
+    local exact_config = action_inputs[input_name]
+    if input_name ~= canonical_input and exact_config then
+        return input_name
+    end
+
+    local canonical_config = action_inputs[canonical_input]
+    local special_input = canonical_input .. '_special'
+    local special_config = action_inputs[special_input]
+
+    if
+        special_config
+        and _input_matches_frame(special_config, input_values)
+        and not _input_matches_frame(canonical_config, input_values)
+    then
+        return special_input
+    end
+
+    return canonical_config and canonical_input or special_config and special_input or input_name
+end
+
+local function _family_alias(action_inputs, input_name, special_family)
+    local canonical_input = _canonical_input(input_name)
+    if type(action_inputs) ~= 'table' or type(canonical_input) ~= 'string' then
+        return nil
+    end
+
+    local alias = special_family and canonical_input .. '_special' or canonical_input
+    return action_inputs[alias] and alias or nil
+end
+
+function ActionSemantics.resolve_input_aliases(template, inputs, input_values, family_input)
+    if not inputs then
+        return nil
+    end
+
+    local resolved = {}
+    local action_inputs = template and template.action_inputs
+    local special_family = type(family_input) == 'string' and _canonical_input(family_input) ~= family_input
+
+    for index, input_name in ipairs(inputs) do
+        if family_input ~= nil then
+            resolved[index] = _family_alias(action_inputs, input_name, special_family) or input_name
+        elseif index == 1 then
+            resolved[index] = _resolve_input_alias(template, input_name, input_values)
+            special_family = _canonical_input(resolved[index]) ~= resolved[index]
+        else
+            resolved[index] = _family_alias(action_inputs, input_name, special_family)
+                or _resolve_input_alias(template, input_name, input_values)
+        end
+    end
+
+    return resolved
+end
+
+function ActionSemantics.input_aliases_match(first, second)
+    return type(first) == 'string' and type(second) == 'string' and _canonical_input(first) == _canonical_input(second)
+end
+
+function ActionSemantics.is_attack_start_input(input_name)
+    return _canonical_input(input_name) == 'start_attack'
+end
+
+function ActionSemantics.action_matches_input(template, input_name, action_name, action_settings)
+    if type(input_name) ~= 'string' or type(action_name) ~= 'string' then
+        return false
+    end
+
+    action_settings = action_settings or template and template.actions and template.actions[action_name]
+    if action_settings and _canonical_input(action_settings.start_input) == _canonical_input(input_name) then
+        return true
+    end
+
+    return template and _action_chain_matches_input(template, input_name, action_name) or false
 end
 
 function ActionSemantics.matched_input_index(goal, start_input, action_name, template, used_input)
@@ -372,7 +517,10 @@ function ActionSemantics.matched_input_index(goal, start_input, action_name, tem
         end
 
         for index, input_name in ipairs(goal.inputs or {}) do
-            if _action_chain_matches_input(template, input_name, action_name) then
+            if
+                _action_chain_matches_input(template, input_name, action_name)
+                or _action_chain_matches_followup(template, input_name, used_input, action_name)
+            then
                 return index
             end
         end
@@ -443,7 +591,6 @@ function ActionSemantics.same_plan(first, second)
     return true
 end
 
--- Compile profile steps into template-derived goals.
 function ActionSemantics.compile(sequence, context)
     local plan = {
         goals = {},

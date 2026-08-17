@@ -302,4 +302,60 @@ describe('SimpleSequencer ActionSemantics', function()
 
         assert.are.equal(1, ActionSemantics.matched_input_index(goal, nil, 'action_target', template))
     end)
+
+    it('recognizes normal and special attack-start inputs', function()
+        assert.is_true(ActionSemantics.is_attack_start_input('start_attack'))
+        assert.is_true(ActionSemantics.is_attack_start_input('start_attack_special'))
+        assert.is_false(ActionSemantics.is_attack_start_input('light_attack'))
+    end)
+
+    it('recognizes a replacement alias when the canonical chain also exists', function()
+        local template = _template({
+            action_source = {
+                allowed_chain_actions = {
+                    start_attack = { action_name = 'action_melee_start' },
+                    start_attack_special = { action_name = 'action_melee_start_special' },
+                },
+            },
+            action_melee_start = { kind = 'windup' },
+            action_melee_start_special = { kind = 'windup' },
+        })
+
+        assert.is_true(ActionSemantics.action_matches_input(template, 'start_attack', 'action_melee_start_special'))
+    end)
+
+    it('resolves an input alias from externally transformed frame values', function()
+        local template = _template(nil, {
+            start_attack = { input_sequence = { { input = 'action_one_hold', value = true } } },
+            start_attack_special = { input_sequence = { { input = 'weapon_extra_hold', value = true } } },
+            heavy_attack = { input_sequence = { { input = 'action_one_hold', value = true } } },
+            heavy_attack_special = { input_sequence = { { input = 'weapon_extra_hold', value = true } } },
+        })
+
+        local input_values = {
+            action_one_hold = false,
+            weapon_extra_hold = true,
+        }
+        local resolved =
+            ActionSemantics.resolve_input_aliases(template, { 'start_attack', 'heavy_attack' }, input_values)
+
+        assert.same({ 'start_attack_special', 'heavy_attack_special' }, resolved)
+        assert.is_true(ActionSemantics.input_aliases_match('start_attack', resolved[1]))
+        assert.is_false(ActionSemantics.input_aliases_match('start_attack', 'light_attack_special'))
+    end)
+
+    it('distinguishes an input action from an unrelated manual action', function()
+        local template = _template({
+            action_pushfollow = {
+                allowed_chain_actions = {
+                    start_attack = { action_name = 'action_melee_start' },
+                },
+            },
+            action_melee_start = { kind = 'windup' },
+            action_parry_special = { kind = 'block', start_input = 'special_action' },
+        })
+
+        assert.is_true(ActionSemantics.action_matches_input(template, 'start_attack', 'action_melee_start'))
+        assert.is_false(ActionSemantics.action_matches_input(template, 'start_attack', 'action_parry_special'))
+    end)
 end)

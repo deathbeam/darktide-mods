@@ -51,4 +51,29 @@ describe('SimpleSequencer Input', function()
         assert.is_true(held.primary_held)
         assert.is_false(released.primary_held)
     end)
+
+    it('keeps physical hold state when a later input hook suppresses the value', function()
+        local input = Input:new()
+        input:clear_events()
+        input:observe('action_one_hold', true)
+
+        local frame_inputs = { action_one_hold = false }
+        local event = input:frame_event('action_one_hold', false, frame_inputs)
+
+        assert.is_false(event.value)
+        assert.is_true(event.primary_held)
+        assert.are.equal(frame_inputs, event.frame_inputs)
+    end)
+
+    it('latches a physical press until its buffered frame is consumed', function()
+        local input = Input:new()
+        input:observe('action_one_pressed', true)
+        input:observe('action_one_pressed', false)
+
+        assert.is_true(input:frame_event('action_one_pressed', false, {}).primary_pressed)
+
+        input:clear_events()
+
+        assert.is_false(input:frame_event('action_one_pressed', false, {}).primary_pressed)
+    end)
 end)

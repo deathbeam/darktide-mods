@@ -1,5 +1,7 @@
 local SequenceInterpreter = class('SimpleSequencerSequenceInterpreter')
 
+local RETRY_MARGIN = 0.05
+
 local function _active_element(element, input_settings)
     if not element then
         return nil
@@ -48,12 +50,12 @@ end
 
 function SequenceInterpreter:reset()
     self.template = nil
-    self.target_name = nil
+    self.root_input = nil
     self.input_name = nil
     self.elements = nil
     self.input_settings = nil
-    self.followup_inputs = nil
-    self.followup_index = 1
+    self.program_inputs = nil
+    self.next_input_index = 2
     self.element_index = 1
     self.element_start_t = nil
     self.frame_t = nil
@@ -72,6 +74,13 @@ function SequenceInterpreter:_begin_input(input_name, t)
 
     self.input_name = input_name
     self.elements = config and config.input_sequence or nil
+    local element = self.elements and _active_element(self.elements[1], self.input_settings)
+    local retry_window = config and config.buffer_time
+    if retry_window and element and element.time_window then
+        retry_window = math.min(retry_window, element.time_window)
+    end
+
+    self.restart_after = retry_window and retry_window > 0.1 and retry_window - RETRY_MARGIN or nil
     self.element_index = 1
     self.element_start_t = t
     self.frame_t = nil
@@ -81,15 +90,14 @@ function SequenceInterpreter:_begin_input(input_name, t)
     self.submitted = false
 end
 
-function SequenceInterpreter:_begin_next_followup(t)
-    local followups = self.followup_inputs
-    local input_name = followups and followups[self.followup_index]
+function SequenceInterpreter:_begin_next_input(t)
+    local input_name = self.program_inputs and self.program_inputs[self.next_input_index]
 
     if not input_name then
         return false
     end
 
-    self.followup_index = self.followup_index + 1
+    self.next_input_index = self.next_input_index + 1
     self:_begin_input(input_name, t)
 
     return true
@@ -103,18 +111,20 @@ function SequenceInterpreter:_record_submission()
     end
 end
 
-function SequenceInterpreter:set_target(template, input_name, t, input_settings, sequence_start_t, followup_inputs)
+function SequenceInterpreter:set_program(template, inputs, t, input_settings, sequence_start_t)
+    local input_name = inputs and inputs[1]
+
     -- The parser advances at match time, before the controller's next update.
     if not template or not input_name then
         self:reset()
         return
     end
 
-    local followup_name = self.followup_inputs and self.followup_inputs[self.followup_index]
+    local next_input = self.program_inputs and self.program_inputs[self.next_input_index]
     local element = self.elements and self.elements[self.element_index]
-    if self.template == template and followup_name == input_name then
+    if self.template == template and next_input == input_name then
         if self.matched and element and not element.duration then
-            self.followup_index = self.followup_index + 1
+            self.next_input_index = self.next_input_index + 1
             self:_begin_input(input_name, self.matched_t or t or 0)
         end
 
@@ -122,7 +132,7 @@ function SequenceInterpreter:set_target(template, input_name, t, input_settings,
         return
     end
 
-    if self.template == template and (self.target_name == input_name or self.input_name == input_name) then
+    if self.template == template and (self.root_input == input_name or self.input_name == input_name) then
         self.input_settings = input_settings
         return
     end
@@ -130,14 +140,10 @@ function SequenceInterpreter:set_target(template, input_name, t, input_settings,
     self:reset()
 
     self.template = template
-    self.target_name = input_name
+    self.root_input = input_name
     self.input_settings = input_settings
-    self.followup_inputs = followup_inputs
+    self.program_inputs = inputs
 
-    local config = template.action_inputs and template.action_inputs[input_name]
-    local buffer_time = config and config.buffer_time
-
-    self.restart_after = buffer_time and buffer_time > 0.1 and buffer_time - 0.05 or nil
     self:_begin_input(input_name, sequence_start_t or t or 0)
 end
 
@@ -157,49 +163,52 @@ function SequenceInterpreter:active_input_name()
     return self.input_name
 end
 
-function SequenceInterpreter:requires_input(template, input_name, input_settings, required_input, required_value)
-    local config = template and template.action_inputs and template.action_inputs[input_name]
-    local element = config and config.input_sequence and config.input_sequence[1]
-    local active_element = _active_element(element, input_settings)
-
-    if not active_element then
-        return false
-    end
-
-    if active_element.input == required_input and active_element.value == required_value then
-        return true
-    end
-
-    for _, input in ipairs(active_element.inputs or {}) do
-        if input.input == required_input and input.value == required_value then
-            return true
-        end
-    end
-
-    return false
+function SequenceInterpreter:pending_action_input()
+    return self.submitted_inputs[1] or self.input_name
 end
 
-function SequenceInterpreter:consume_action_input(automatic_input)
+function SequenceInterpreter:consume_action_input(automatic_input, t)
     local submitted_inputs = self.submitted_inputs
+    local active_input = self.input_name
     local input_name = submitted_inputs[1]
+    local consumed_submission = false
+    local first_element = self.elements and _active_element(self.elements[1], self.input_settings)
 
     if type(automatic_input) == 'string' then
         if input_name == automatic_input then
             table.remove(submitted_inputs, 1)
+            consumed_submission = true
         end
         if self.started_input == automatic_input then
             self.started_input = nil
         end
-        return automatic_input
+        input_name = automatic_input
+    else
+        input_name = table.remove(submitted_inputs, 1)
+        consumed_submission = input_name ~= nil
+        if not input_name then
+            self.started_input = self.input_name
+            input_name = self.input_name
+        end
     end
 
-    input_name = table.remove(submitted_inputs, 1)
-    if input_name then
-        return input_name
+    -- A buffered root may enter its duration follow-up before the windup action starts.
+    if
+        consumed_submission
+        and self.template
+        and active_input
+        and input_name ~= active_input
+        and first_element
+        and first_element.duration
+        and t
+    then
+        while submitted_inputs[1] == active_input do
+            table.remove(submitted_inputs, 1)
+        end
+        self:_begin_input(active_input, t)
     end
 
-    self.started_input = self.input_name
-    return self.input_name
+    return input_name
 end
 
 function SequenceInterpreter:update(t, frame)
@@ -216,8 +225,8 @@ function SequenceInterpreter:_advance_frame(t, frame)
 
     if self.submitted then
         if self.restart_after and self.submitted_t and t - self.submitted_t >= self.restart_after then
-            self.followup_index = 1
-            self:_begin_input(self.target_name, t)
+            self.next_input_index = 2
+            self:_begin_input(self.root_input, t)
             self.frame_t = frame
         end
 
@@ -250,7 +259,7 @@ function SequenceInterpreter:_advance_frame(t, frame)
 
         if not self.elements[self.element_index] then
             self:_record_submission()
-            if not self:_begin_next_followup(completion_t) then
+            if not self:_begin_next_input(completion_t) then
                 self.submitted = true
                 self.submitted_t = t
             end
@@ -282,8 +291,15 @@ function SequenceInterpreter:value(action_name, raw_value, t, frame)
         return raw_value
     end
 
-    -- Keep physical primary input out of the parser while a queued entry awaits its chain.
+    -- Preserve a submitted release while the queued action awaits its chain.
     if self.submitted then
+        local final_element = self.elements and self.elements[#self.elements]
+        local requirements = _requirements(final_element, self.input_settings)
+        local requirement = requirements[action_name]
+        if requirement and requirement.value == false then
+            return false
+        end
+
         if action_name == 'action_one_pressed' or action_name == 'action_one_hold' then
             return false
         end
