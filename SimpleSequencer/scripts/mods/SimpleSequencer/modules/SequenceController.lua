@@ -242,12 +242,16 @@ function SequenceController:_resolved_inputs(inputs, frame_inputs, family_input,
         return resolved
     end
 
-    local family_open = WeaponContext.can_chain(action_settings, start_t, resolved[1], context)
-        or WeaponContext.can_buffer_input(action_settings, resolved[1], context)
+    -- Only an attack-start root can carry a held family switch; follow-ups follow the started-action family.
+    if not ActionSemantics.is_attack_start_input(inputs[1]) then
+        return resolved
+    end
+
     local frame_open = WeaponContext.can_chain(action_settings, start_t, frame_resolved[1], context)
         or WeaponContext.can_buffer_input(action_settings, frame_resolved[1], context)
 
-    return not family_open and frame_open and frame_resolved or resolved
+    -- The frame carries external input transforms, so a chainable frame family wins over the started-action family.
+    return frame_open and frame_resolved or resolved
 end
 
 -- Action start events are the authoritative progress signal; polling only fills gaps.

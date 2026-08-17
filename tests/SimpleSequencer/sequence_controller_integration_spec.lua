@@ -1383,6 +1383,103 @@ describe('SimpleSequencer SequenceController integration', function()
         assert.is_true(normal_windup_t - depletion_t < 0.5)
     end)
 
+    it('switches to the transformed special family when the special activates mid-light', function()
+        mock:set_weapon('slot_primary', 'test_mid_light_special_toggle', {
+            displayed_attacks = { primary = { type = 'melee' } },
+            action_inputs = {
+                light_attack = {
+                    buffer_time = 0.3,
+                    input_sequence = { { input = 'action_one_hold', time_window = 0.35, value = false } },
+                },
+                start_attack_special = {
+                    buffer_time = 0.3,
+                    input_sequence = { { input = 'weapon_extra_hold', value = true } },
+                },
+                light_attack_special = {
+                    buffer_time = 0.3,
+                    input_sequence = { { input = 'weapon_extra_hold', time_window = 0.35, value = false } },
+                },
+            },
+            action_input_hierarchy = {
+                {
+                    input = 'start_attack',
+                    transition = { { input = 'light_attack', transition = 'base' } },
+                },
+                {
+                    input = 'start_attack_special',
+                    transition = { { input = 'light_attack_special', transition = 'base' } },
+                },
+            },
+            actions = {
+                action_melee_start = {
+                    kind = 'windup',
+                    start_input = 'start_attack',
+                    allowed_chain_actions = {
+                        light_attack = { action_name = 'action_light' },
+                    },
+                },
+                action_light = {
+                    kind = 'sweep',
+                    start_input = 'light_attack',
+                    allowed_chain_actions = {
+                        start_attack = { action_name = 'action_melee_start' },
+                        start_attack_special = { action_name = 'action_melee_start_special' },
+                    },
+                },
+                action_melee_start_special = {
+                    kind = 'windup',
+                    start_input = 'start_attack_special',
+                    allowed_chain_actions = {
+                        light_attack_special = { action_name = 'action_light_special' },
+                    },
+                },
+                action_light_special = { kind = 'sweep', start_input = 'light_attack_special' },
+            },
+        })
+        mock:set_wielded_slot('slot_primary')
+
+        local special_toggled = false
+        mock:set_input_transform(function(inputs, raw_inputs)
+            if special_toggled then
+                inputs.action_one_hold = false
+                inputs.weapon_extra_hold = raw_inputs.action_one_hold or false
+            end
+        end)
+
+        local engine = mock:load_controller(new_manager({
+            sequence_cycle_point = 'sequence_step_1',
+            sequence_step_1 = 'light_attack',
+        }))
+        local held_inputs = { action_one_hold = true }
+
+        mock:run_input_frame(engine, held_inputs)
+        local light_started_t
+        for frame = 1, 90 do
+            mock.now = frame * 0.01
+            mock:run_input_frame(engine, held_inputs)
+            if mock:current_action_name() == 'action_light' then
+                light_started_t = mock.now
+                break
+            end
+        end
+        assert.is_not_nil(light_started_t)
+
+        special_toggled = true
+        local special_light_started = false
+        for frame = 1, 120 do
+            mock.now = light_started_t + frame * 0.01
+            mock:run_input_frame(engine, held_inputs)
+            local action_name = mock:current_action_name()
+            assert.is_not_equal('action_melee_start', action_name)
+            if action_name == 'action_light_special' then
+                special_light_started = true
+                break
+            end
+        end
+
+        assert.is_true(special_light_started)
+    end)
+
     it('weaves a manual power-sword special into the normal combo', function()
         mock:set_weapon('slot_primary', 'test_manual_power_sword_special', {
             displayed_attacks = { primary = { type = 'melee' } },

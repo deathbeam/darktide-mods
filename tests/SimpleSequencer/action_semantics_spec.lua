@@ -344,6 +344,24 @@ describe('SimpleSequencer ActionSemantics', function()
         assert.is_false(ActionSemantics.input_aliases_match('start_attack', 'light_attack_special'))
     end)
 
+    it('does not resolve a special alias from released frame values', function()
+        local template = _template(nil, {
+            start_attack = { input_sequence = { { input = 'action_one_hold', value = true } } },
+            start_attack_special = { input_sequence = { { input = 'weapon_extra_hold', value = true } } },
+            light_attack = {
+                input_sequence = { { input = 'action_one_hold', time_window = 0.3, value = false } },
+            },
+            light_attack_special = {
+                input_sequence = { { input = 'weapon_extra_hold', time_window = 0.3, value = false } },
+            },
+        })
+
+        local input_values = { action_one_hold = true }
+        local resolved = ActionSemantics.resolve_input_aliases(template, { 'light_attack' }, input_values)
+
+        assert.same({ 'light_attack' }, resolved)
+    end)
+
     it('distinguishes an input action from an unrelated manual action', function()
         local template = _template({
             action_pushfollow = {

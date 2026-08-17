@@ -407,8 +407,11 @@ local function _resolve_input_alias(template, input_name, input_values)
     local special_input = canonical_input .. '_special'
     local special_config = action_inputs[special_input]
 
+    -- Only actively held requirements discriminate families; released requirements match any idle frame.
+    local element = special_config and special_config.input_sequence and special_config.input_sequence[1]
     if
-        special_config
+        element
+        and element.value == true
         and _input_matches_frame(special_config, input_values)
         and not _input_matches_frame(canonical_config, input_values)
     then
