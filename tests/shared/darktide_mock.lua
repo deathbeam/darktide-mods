@@ -285,6 +285,8 @@ function DarktideMock.new()
         return mock.settings[setting_id]
     end
 
+    function mock.mod:info() end
+
     function mock.mod:io_dofile(path)
         local filename = path:sub(-4) == '.lua' and path or path .. '.lua'
 

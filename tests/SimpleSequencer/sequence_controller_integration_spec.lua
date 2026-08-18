@@ -2049,6 +2049,7 @@ describe('SimpleSequencer SequenceController integration', function()
 
         assert.are.equal('action_pushfollow', mock:current_action_name())
     end)
+
     local function run_heavy_start(action_start_t)
         local mock = DarktideMock.new()
         local template = {
