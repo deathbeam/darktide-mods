@@ -436,18 +436,22 @@ function SharedUtils.register_stats_view(mod, config)
         if content then
             patched = {}
             for state_key, list in pairs(content) do
-                local cloned = table.clone(list)
-                local insert_at = #cloned + 1
-                for i = 1, #cloned do
-                    if cloned[i].type == 'spacing_vertical' then
-                        insert_at = i
-                        break
+                if type(list) ~= 'table' or list[1] == nil then
+                    patched[state_key] = list
+                else
+                    local cloned = table.clone(list)
+                    local insert_at = #cloned + 1
+                    for i = 1, #cloned do
+                        if cloned[i].type == 'spacing_vertical' then
+                            insert_at = i
+                            break
+                        end
                     end
+                    if mod:get('add_to_esc_menu') then
+                        table.insert(cloned, insert_at, menu_button)
+                    end
+                    patched[state_key] = cloned
                 end
-                if mod:get('add_to_esc_menu') then
-                    table.insert(cloned, insert_at, menu_button)
-                end
-                patched[state_key] = cloned
             end
         end
         return func(self, patched, ...)
