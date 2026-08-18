@@ -23,8 +23,6 @@ local Managers = Managers
 local Vector3 = Vector3
 local ScriptUnit = ScriptUnit
 
-local movement_components = {}
-
 local hold_to_crouch = true
 local diagonal_forward_dodge = true
 local stationary_dodge = false
@@ -41,7 +39,6 @@ local mod_enabled = false
 local previous_state_name = 'walking'
 local current_state_name = 'walking'
 local is_action_blocking_sprint = false
-local sliding_speed = 0
 
 local sprint_press = false
 local move_forward = 0
@@ -66,9 +63,33 @@ local function _is_local_unit(unit_data_extension)
     return unit_data_extension and unit_data_extension.is_local_unit and unit_data_extension:is_local_unit() or false
 end
 
+local function _local_unit_data_extension()
+    local unit = _local_player_unit()
+    local ext = unit and ScriptUnit.has_extension(unit, 'unit_data_system')
+    if not _is_local_unit(ext) then
+        return nil
+    end
+    return ext
+end
+
+local function _component(name)
+    local ext = _local_unit_data_extension()
+    return ext and ext:read_component(name) or nil
+end
+
+local function _flat_speed()
+    local locomotion = _component('locomotion')
+    local velocity = locomotion and locomotion.velocity_current
+    return velocity and Vector3.length(Vector3.flat(velocity)) or 0
+end
+
+local function _current_state_name()
+    local character_state = _component('character_state')
+    return (character_state and character_state.state_name) or 'walking'
+end
+
 local function _clear_input_intent()
     is_action_blocking_sprint = false
-    sliding_speed = 0
     sprint_press = false
     move_forward = 0
     move_backward = 0
@@ -86,22 +107,6 @@ local function _reset_state()
     previous_state_name = 'walking'
     current_state_name = 'walking'
     _clear_input_intent()
-end
-
-local function _init_movement_components(unit_data_extension)
-    if not unit_data_extension then
-        return
-    end
-
-    movement_components.movement_state = unit_data_extension:read_component('movement_state')
-    movement_components.sprint_character_state = unit_data_extension:read_component('sprint_character_state')
-    movement_components.dodge_character_state = unit_data_extension:read_component('dodge_character_state')
-    movement_components.locomotion = unit_data_extension:read_component('locomotion')
-    movement_components.character_state = unit_data_extension:read_component('character_state')
-end
-
-local function _clear_movement_components()
-    movement_components = {}
 end
 
 local function _init_mod_settings()
@@ -126,17 +131,6 @@ local function _init_game_settings()
     diagonal_forward_dodge = input_settings.diagonal_forward_dodge
     stationary_dodge = input_settings.stationary_dodge
     always_dodge = input_settings.always_dodge
-end
-
-local function _refresh_movement_components()
-    local unit = _local_player_unit()
-    local unit_data_extension = unit and ScriptUnit.has_extension(unit, 'unit_data_system')
-    if not _is_local_unit(unit_data_extension) then
-        _clear_movement_components()
-        return
-    end
-
-    _init_movement_components(unit_data_extension)
 end
 
 local function _enable_hold_to_sprint()
@@ -181,8 +175,8 @@ local function _update_sprint_mode()
 end
 
 local function _can_dodge_slide()
-    local locomotion = movement_components.locomotion
-    local dodge_state = movement_components.dodge_character_state
+    local locomotion = _component('locomotion')
+    local dodge_state = _component('dodge_character_state')
 
     if not locomotion or not dodge_state or not locomotion.velocity_current then
         return true
@@ -198,7 +192,7 @@ local function _can_dodge_slide()
 end
 
 local function _is_sprint_jumping()
-    local sprint_state = movement_components.sprint_character_state
+    local sprint_state = _component('sprint_character_state')
 
     return sprint_state and (sprint_state.is_sprinting or sprint_state.is_sprint_jumping) or false
 end
@@ -278,8 +272,8 @@ local function _should_abort_sprint(action_settings)
 end
 
 local function _can_hold_dodge_slide()
-    local character_state = movement_components.character_state
-    local dodge_state = movement_components.dodge_character_state
+    local character_state = _component('character_state')
+    local dodge_state = _component('dodge_character_state')
 
     if not dodge_hold or not character_state or not dodge_state then
         return false
@@ -293,7 +287,7 @@ local function _can_hold_dodge_slide()
 end
 
 local function _can_keep_dodging()
-    local dodge_state = movement_components.dodge_character_state
+    local dodge_state = _component('dodge_character_state')
     local player_unit = _local_player_unit()
     local weapon_extension = player_unit and ScriptUnit.has_extension(player_unit, 'weapon_system')
     local buff_extension = player_unit and ScriptUnit.has_extension(player_unit, 'buff_system')
@@ -314,12 +308,46 @@ local function _can_keep_dodging()
     return consecutive_dodges < diminishing_return_start + extra_dodges
 end
 
+local function _on_state_change()
+    if current_state_name == 'sprinting' then
+        sprint_press = false
+    end
+
+    if not _is_sprint_jumping() then
+        attempt_sprint_slide = false
+    end
+
+    if current_state_name ~= 'dodging' then
+        attempt_dodge_slide = false
+    end
+
+    if current_state_name == 'sliding' then
+        attempt_sprint_slide = false
+        attempt_dodge_slide = false
+    end
+
+    if current_state_name ~= 'walking' then
+        attempt_sprint_dodge = false
+    end
+end
+
+local function _sync_state()
+    local new_state = _current_state_name()
+    if new_state ~= current_state_name then
+        previous_state_name = current_state_name
+        current_state_name = new_state
+        _on_state_change()
+    end
+end
+
 local function _input_service_hook(func, self, action_name)
     local result = func(self, action_name)
 
     if not mod_enabled then
         return result
     end
+
+    _sync_state()
 
     if action_name == 'sprint' then
         if walk_while_melee_attacking and is_action_blocking_sprint then
@@ -408,7 +436,7 @@ local function _input_service_hook(func, self, action_name)
             dodge_slide
             and current_state_name == 'sliding'
             and dodge_hold
-            and (hold_to_crouch or sliding_speed > 0.5)
+            and (hold_to_crouch or _flat_speed() > 0.5)
         then
             if previous_state_name == 'dodging' or previous_state_name == 'sprinting' then
                 return true
@@ -429,7 +457,7 @@ local function _input_service_hook(func, self, action_name)
             end
         end
     elseif action_name == 'crouch' and not hold_to_crouch then
-        local movement_state = movement_components.movement_state
+        local movement_state = _component('movement_state')
         if movement_state then
             local is_crouching = movement_state.is_crouching
 
@@ -451,67 +479,6 @@ local function _input_service_hook(func, self, action_name)
 
     return result
 end
-
-local function _on_state_change()
-    if current_state_name == 'sprinting' then
-        sprint_press = false
-    end
-
-    if not _is_sprint_jumping() then
-        attempt_sprint_slide = false
-    end
-
-    if current_state_name ~= 'dodging' then
-        attempt_dodge_slide = false
-    end
-
-    if current_state_name == 'sliding' then
-        attempt_sprint_slide = false
-        attempt_dodge_slide = false
-    else
-        sliding_speed = 0
-    end
-
-    if current_state_name ~= 'walking' then
-        attempt_sprint_dodge = false
-    end
-end
-
--- State transitions reset input intent so a held key cannot leak between states.
-mod:hook_safe(CLASS.CharacterStateMachine, '_change_state', function(self, unit, dt, t, next_state)
-    local unit_data_extension = self._unit_data_extension
-    if not mod_enabled or not _is_local_unit(unit_data_extension) then
-        return
-    end
-
-    previous_state_name = current_state_name
-    current_state_name = next_state
-    _on_state_change()
-end)
-
-mod:hook_safe(CLASS.CharacterStateMachine, 'server_correction_occurred', function(self, unit)
-    local unit_data_extension = self._unit_data_extension
-    if not mod_enabled or not _is_local_unit(unit_data_extension) then
-        return
-    end
-
-    local state_name = self:current_state_name()
-    if state_name ~= current_state_name then
-        previous_state_name = current_state_name
-        current_state_name = state_name
-        _on_state_change()
-    end
-end)
-
-mod:hook_safe(
-    CLASS.PlayerCharacterStateSliding,
-    '_check_transition',
-    function(self, unit, dt, t, next_state_params, input_source, commit_period_over, max_mass_hit, current_speed)
-        if mod_enabled and _is_local_unit(self._unit_data_extension) then
-            sliding_speed = current_speed
-        end
-    end
-)
 
 mod:hook(CLASS.PlayerCharacterStateSprinting, '_check_transition', function(func, self, ...)
     local next_state = func(self, ...)
@@ -602,24 +569,20 @@ mod:hook_safe(CLASS.EventManager, 'trigger', function(self, event_name)
     end
 end)
 
-mod:hook_require('scripts/settings/input/default_ingame_input_settings', function(instance)
+local function _hook_require_now(path, callback)
+    mod:hook_require(path, callback)
+    local loaded = package.loaded and package.loaded[path]
+    if loaded ~= nil then
+        callback(loaded)
+    end
+end
+
+_hook_require_now('scripts/settings/input/default_ingame_input_settings', function(instance)
+    instance.settings = instance.settings or {}
     instance.settings.dodge_hold = {
         key_alias = 'dodge',
         type = 'held',
     }
-end)
-
-mod:hook_safe(CLASS.PlayerUnitDataExtension, 'init', function(self)
-    if _is_local_unit(self) then
-        _init_movement_components(self)
-    end
-end)
-
-mod:hook_safe(CLASS.PlayerUnitDataExtension, 'destroy', function(self)
-    if _is_local_unit(self) then
-        _clear_movement_components()
-        _reset_state()
-    end
 end)
 
 mod:hook(CLASS.InputService, '_get', _input_service_hook)
@@ -627,7 +590,6 @@ mod:hook(CLASS.InputService, '_get', _input_service_hook)
 mod.on_enabled = function()
     mod_enabled = true
     _init_mod_settings()
-    _refresh_movement_components()
     _init_game_settings()
     _update_sprint_mode()
 end
@@ -635,7 +597,6 @@ end
 mod.on_disabled = function()
     mod_enabled = false
     _restore_hold_to_sprint()
-    _clear_movement_components()
     _reset_state()
 end
 
@@ -649,7 +610,6 @@ end
 
 mod.on_all_mods_loaded = function()
     _init_mod_settings()
-    _refresh_movement_components()
     _init_game_settings()
     _update_sprint_mode()
 end
@@ -661,11 +621,9 @@ mod.on_game_state_changed = function(status, state_name)
 
     if status == 'enter' then
         _init_mod_settings()
-        _refresh_movement_components()
         _init_game_settings()
         _update_sprint_mode()
     elseif status == 'exit' then
-        _clear_movement_components()
         _reset_state()
     end
 end
