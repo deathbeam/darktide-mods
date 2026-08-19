@@ -45,10 +45,6 @@ local function _display_setting_key(mode, key)
 end
 
 local function _display_value(value, default_value)
-    if type(value) == 'table' then
-        value = value[1]
-    end
-
     if value == nil or value == '' then
         return default_value
     end

@@ -261,12 +261,8 @@ local function _mode_display_widgets(mode)
         {
             setting_id = mode .. '_display_name',
             title = 'mode_display_name',
-            type = 'text_input',
-            default_value = {},
-            -- DMF currently validates text inputs through its keybind path.
-            keybind_trigger = 'pressed',
-            keybind_type = 'function_call',
-            function_name = '_simple_sequencer_text_input',
+            type = 'text',
+            default_value = '',
         },
         {
             setting_id = mode .. '_display_icon',
