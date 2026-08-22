@@ -331,6 +331,7 @@ def upload_mod(api: NexusAPI, mod_name: str, zip_path: str, version: str, file_g
             "name": mod_name,
             "version": version,
             "file_category": "main",
+            "update_mod_version": True,
             "archive_existing_file": False,
             "primary_mod_manager_download": True,
         },
