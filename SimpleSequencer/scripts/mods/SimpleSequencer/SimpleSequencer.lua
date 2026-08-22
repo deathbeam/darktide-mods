@@ -140,6 +140,13 @@ function mod.on_all_mods_loaded()
     initialized = true
 end
 
+function mod.on_settings_reset()
+    mod.mode_manager:reset_settings()
+    mod.controller:reset()
+    mod.input:reset()
+    mod.controller:invalidate()
+end
+
 function mod.on_setting_changed(setting_name)
     mod.mode_manager:on_setting_changed(setting_name)
 end
@@ -198,6 +205,14 @@ function mod.select_mode_toggle()
     if not _ui_using_input() then
         mod.mode_manager:toggle()
     end
+end
+
+function mod.use_current_melee_weapon()
+    return mod.mode_manager:_use_current_weapon('MELEE')
+end
+
+function mod.use_current_ranged_weapon()
+    return mod.mode_manager:_use_current_weapon('RANGED')
 end
 
 mod:hook(CLASS.InputService, '_get', _capture_input_hook)

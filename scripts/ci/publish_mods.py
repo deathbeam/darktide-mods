@@ -2,10 +2,10 @@
 """Release mods to Nexus Mods, using the published version there as the source
 of truth (no git diffing).
 
-For every mod folder with a ``.mod`` file that declares ``version`` and
+For every mod folder with an ``info.json`` that declares ``version`` and
 ``mod_id``:
   1. Fetch the mod's currently published MAIN version from the Nexus Mods API.
-  2. Compare it to the local ``version`` in the ``.mod`` file.
+  2. Compare it to the local ``version`` in ``info.json``.
   3. If they differ (or --force), zip the mod folder and upload a new version.
 
 ``mod_id`` is the NexusMods mod id (the number in the mod's URL). The
@@ -36,7 +36,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -92,22 +91,27 @@ def log_section(title: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# .mod file parsing
+# info.json metadata parsing
 # ---------------------------------------------------------------------------
 
-def extract_mod_info(file_path: str) -> dict | None:
-    """Parse version and mod_id from a Darktide .mod file (Lua table syntax)."""
+def extract_mod_info(mod_name: str) -> dict | None:
+    """Read release metadata from a mod's info.json file."""
+    file_path = Path(mod_name) / "info.json"
     try:
-        content = Path(file_path).read_text(encoding="utf-8")
-    except OSError as e:
+        metadata = json.loads(file_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
         print(f"Warning: could not read {file_path}: {e}", file=sys.stderr)
         return None
-    # Match single or double quoted values (StyLua prefers single quotes).
-    version_m = re.search(r"\bversion\s*=\s*[\"']([^\"']+)[\"']", content)
-    mod_id_m = re.search(r"\bmod_id\s*=\s*[\"']([^\"']+)[\"']", content)
+
+    if not isinstance(metadata, dict):
+        print(f"Warning: {file_path} must contain a JSON object", file=sys.stderr)
+        return None
+
+    version = metadata.get("version")
+    mod_id = metadata.get("mod_id")
     return {
-        "version": version_m.group(1) if version_m else None,
-        "mod_id": mod_id_m.group(1) if mod_id_m else None,
+        "version": str(version) if version is not None else None,
+        "mod_id": str(mod_id) if mod_id is not None else None,
     }
 
 
@@ -479,7 +483,7 @@ def sync_collection(
     # Resolve the current file_id for every published mod.
     collection_mods: list[dict] = []
     for mod_name in find_mod_folders():
-        info = extract_mod_info(f"{mod_name}/{mod_name}.mod")
+        info = extract_mod_info(mod_name)
         if not info or not info["version"] or not info["mod_id"]:
             continue
         try:
@@ -602,14 +606,14 @@ def main() -> int:
     failed: list[str] = []
 
     for mod_name in folders:
-        cur = extract_mod_info(f"{mod_name}/{mod_name}.mod")
+        cur = extract_mod_info(mod_name)
 
         if not cur or not cur["version"]:
-            log_skip(f"{mod_name}: no version in .mod file")
+            log_skip(f"{mod_name}: no version in info.json")
             skipped.append(mod_name)
             continue
         if not cur["mod_id"]:
-            log_skip(f"{mod_name}: no mod_id in .mod file")
+            log_skip(f"{mod_name}: no mod_id in info.json")
             skipped.append(mod_name)
             continue
 

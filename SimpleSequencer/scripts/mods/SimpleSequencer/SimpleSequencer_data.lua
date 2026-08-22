@@ -263,6 +263,8 @@ local function _mode_display_widgets(mode)
             title = 'mode_display_name',
             type = 'text',
             default_value = '',
+            placeholder_text = mode,
+            max_length = 16,
         },
         {
             setting_id = mode .. '_display_icon',
@@ -272,28 +274,11 @@ local function _mode_display_widgets(mode)
             options = _clone_options(ICON_OPTIONS),
         },
         {
-            setting_id = mode .. '_display_color_r',
-            title = 'mode_display_color_r',
-            type = 'numeric',
-            default_value = defaults.color[1],
-            range = { 0, 255 },
-            decimals_number = 0,
-        },
-        {
-            setting_id = mode .. '_display_color_g',
-            title = 'mode_display_color_g',
-            type = 'numeric',
-            default_value = defaults.color[2],
-            range = { 0, 255 },
-            decimals_number = 0,
-        },
-        {
-            setting_id = mode .. '_display_color_b',
-            title = 'mode_display_color_b',
-            type = 'numeric',
-            default_value = defaults.color[3],
-            range = { 0, 255 },
-            decimals_number = 0,
+            setting_id = mode .. '_display_color',
+            title = 'mode_display_color',
+            type = 'color',
+            has_alpha = false,
+            default_value = { 255, defaults.color[1], defaults.color[2], defaults.color[3] },
         },
     }
 end
@@ -353,8 +338,10 @@ local melee_widgets = {
     },
     {
         setting_id = MELEE_PREFIX .. 'use_current_weapon',
-        type = 'checkbox',
-        default_value = false,
+        type = 'button',
+        button_text = 'use_current_weapon_button',
+        button_trigger = 'pressed',
+        function_name = 'use_current_melee_weapon',
     },
     {
         setting_id = MELEE_PREFIX .. 'sequence_cycle_point',
@@ -383,8 +370,10 @@ local ranged_widgets = {
     },
     {
         setting_id = RANGED_PREFIX .. 'use_current_weapon',
-        type = 'checkbox',
-        default_value = false,
+        type = 'button',
+        button_text = 'use_current_weapon_button',
+        button_trigger = 'pressed',
+        function_name = 'use_current_ranged_weapon',
     },
     {
         setting_id = RANGED_PREFIX .. 'automatic_fire_hip',
@@ -426,10 +415,10 @@ return {
                         type = 'dropdown',
                         default_value = 'icon_and_name',
                         options = {
-                            { text = 'hud_display_disabled', value = 'disabled' },
-                            { text = 'hud_display_icon', value = 'icon' },
-                            { text = 'hud_display_name', value = 'name' },
-                            { text = 'hud_display_icon_and_name', value = 'icon_and_name' },
+                            { text = 'hud_display_disabled', value = 'disabled', show_widgets = {} },
+                            { text = 'hud_display_icon', value = 'icon', show_widgets = { 5, 6 } },
+                            { text = 'hud_display_name', value = 'name', show_widgets = { 5, 6 } },
+                            { text = 'hud_display_icon_and_name', value = 'icon_and_name', show_widgets = { 5, 6 } },
                         },
                     },
                     {

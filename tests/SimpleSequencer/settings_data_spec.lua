@@ -72,7 +72,14 @@ describe('SimpleSequencer settings data', function()
         assert.are.equal('select_mode', find_widget(data.options.widgets, 'mode_1_select').title)
         assert.is_nil(find_widget(data.options.widgets, 'mode_1_display_settings'))
         assert.is_not_nil(find_widget(data.options.widgets, 'mode_1_display_name'))
-        assert.is_not_nil(find_widget(data.options.widgets, 'mode_4_display_color_b'))
+        local color_widget = find_widget(data.options.widgets, 'mode_4_display_color')
+        assert.is_not_nil(color_widget)
+        assert.are.equal('color', color_widget.type)
+        assert.is_false(color_widget.has_alpha)
+
+        local melee_button = find_widget(data.options.widgets, 'melee_use_current_weapon')
+        assert.are.equal('button', melee_button.type)
+        assert.are.equal('use_current_melee_weapon', melee_button.function_name)
 
         local melee_step = find_widget(data.options.widgets, 'melee_sequence_step_1')
         local has_special_action_heavy = false

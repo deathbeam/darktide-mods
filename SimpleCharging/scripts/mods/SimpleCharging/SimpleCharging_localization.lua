@@ -9,18 +9,6 @@ return {
     bar_color = {
         en = 'Charge Bar Color',
     },
-    bar_color_red = {
-        en = 'Charge Bar Red',
-    },
-    bar_color_green = {
-        en = 'Charge Bar Green',
-    },
-    bar_color_blue = {
-        en = 'Charge Bar Blue',
-    },
-    bar_color_alpha = {
-        en = 'Charge Bar Alpha',
-    },
     show_only_longest_charge = {
         en = 'Only Show the Longest Charge',
     },

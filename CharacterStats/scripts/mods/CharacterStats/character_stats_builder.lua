@@ -785,7 +785,7 @@ function build_stats()
             _sources(records, folded, 'toughness_regen_rate_multiplier', 'mult')
             _sources(records, folded, 'toughness_coherency_regen_rate_modifier', 'add')
             _sources(records, folded, 'toughness_extra_regen_rate', 'add')
-            _sources(records, folded, 'toughness_coherency_regen_rate_multiplier', 'mult')
+            _sources(records, folded, 'toughness_coherency_regen_rate_multiplier', 'add')
             if regen_sources then
                 for i = 1, #regen_sources do
                     local src = regen_sources[i]

@@ -44,6 +44,9 @@ local localizations = {
     ranged_use_current_weapon = {
         en = 'Use Current Ranged Weapon',
     },
+    use_current_weapon_button = {
+        en = 'Use Current',
+    },
     melee_sequence_cycle_point = {
         en = 'Cycle Point',
     },
@@ -92,14 +95,8 @@ local localizations = {
     mode_display_icon = {
         en = 'Mode Icon',
     },
-    mode_display_color_r = {
-        en = 'Mode Color Red',
-    },
-    mode_display_color_g = {
-        en = 'Mode Color Green',
-    },
-    mode_display_color_b = {
-        en = 'Mode Color Blue',
+    mode_display_color = {
+        en = 'Mode Color',
     },
     none = {
         en = 'None',

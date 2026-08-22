@@ -31,13 +31,11 @@ local DISPLAY_DEFAULTS = {
     },
 }
 
-local DISPLAY_KEYS = { 'name', 'icon', 'color_r', 'color_g', 'color_b' }
+local DISPLAY_KEYS = { 'name', 'icon', 'color' }
 local DISPLAY_KEY_SET = {
     name = true,
     icon = true,
-    color_r = true,
-    color_g = true,
-    color_b = true,
+    color = true,
 }
 
 local function _display_setting_key(mode, key)
@@ -54,14 +52,16 @@ end
 
 local function _display_settings(mod_instance, mode)
     local defaults = DISPLAY_DEFAULTS[mode] or DISPLAY_DEFAULTS.mode_1
-    local default_color = defaults.color
+    local color = mod_instance:get(_display_setting_key(mode, 'color'))
+
+    if type(color) ~= 'table' or #color < 4 then
+        color = { 255, defaults.color[1], defaults.color[2], defaults.color[3] }
+    end
 
     return {
         name = _display_value(mod_instance:get(_display_setting_key(mode, 'name')), defaults.name),
         icon = _display_value(mod_instance:get(_display_setting_key(mode, 'icon')), defaults.icon),
-        color_r = tonumber(mod_instance:get(_display_setting_key(mode, 'color_r'))) or default_color[1],
-        color_g = tonumber(mod_instance:get(_display_setting_key(mode, 'color_g'))) or default_color[2],
-        color_b = tonumber(mod_instance:get(_display_setting_key(mode, 'color_b'))) or default_color[3],
+        color = color,
     }
 end
 
@@ -101,6 +101,13 @@ function ModeManager:init(mod_instance)
     mod_instance:set('editing_mode', self.editing_mode, false)
 end
 
+function ModeManager:reset_settings()
+    self.mod:set(PROFILE_DATA_KEY, nil, false)
+    self.mod:set(SELECTED_WEAPONS_KEY, nil, false)
+    self:init(self.mod)
+    self:sync_settings()
+end
+
 function ModeManager:active()
     return self.active_mode
 end
@@ -111,7 +118,7 @@ function ModeManager:display(mode)
     return {
         name = tostring(values.name),
         icon = values.icon,
-        color = { 255, values.color_r, values.color_g, values.color_b },
+        color = values.color,
     }
 end
 
@@ -259,14 +266,6 @@ function ModeManager:on_setting_changed(setting_name)
     if not kind then
         return false
     end
-
-    if key == 'use_current_weapon' then
-        self:_use_current_weapon(kind)
-        self.mod:set(setting_name, false, false)
-
-        return true
-    end
-
     if key == 'weapon_selection' then
         self.selected_weapons[self.editing_mode][kind] = self.mod:get(setting_name)
         self:_save()

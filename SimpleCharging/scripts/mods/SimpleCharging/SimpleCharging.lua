@@ -16,12 +16,6 @@ local NATIVE_MASK_LEFT = 'charge_mask_left'
 local NATIVE_MASK_RIGHT = 'charge_mask_right'
 local NATIVE_BAR_STYLE_IDS = { NATIVE_LEFT, NATIVE_RIGHT, NATIVE_MASK_LEFT, NATIVE_MASK_RIGHT }
 local INJECTED_MARKER = 'simple_charging_frame_left_1'
-local BAR_COLOR_SETTING_IDS = {
-    bar_color_red = true,
-    bar_color_green = true,
-    bar_color_blue = true,
-    bar_color_alpha = true,
-}
 local DEFAULT_BAR_COLOR = { 255, 216, 229, 207 }
 
 local BAR_PARTS = {
@@ -79,17 +73,13 @@ end
 local current_element
 local hooked_element_class
 
-local function _get_setting(setting_id)
-    return mod:get(setting_id)
-end
-
 local function _bar_color()
-    local red = math.max(0, math.min(tonumber(_get_setting('bar_color_red')) or DEFAULT_BAR_COLOR[2], 255))
-    local green = math.max(0, math.min(tonumber(_get_setting('bar_color_green')) or DEFAULT_BAR_COLOR[3], 255))
-    local blue = math.max(0, math.min(tonumber(_get_setting('bar_color_blue')) or DEFAULT_BAR_COLOR[4], 255))
-    local alpha = math.max(0, math.min(tonumber(_get_setting('bar_color_alpha')) or DEFAULT_BAR_COLOR[1], 255))
+    local color = mod:get('bar_color')
+    if type(color) == 'table' and #color >= 4 then
+        return color
+    end
 
-    return { alpha, red, green, blue }
+    return DEFAULT_BAR_COLOR
 end
 
 local function _apply_color(style, style_ids, color)
@@ -330,7 +320,7 @@ mod:hook_require('scripts/ui/hud/elements/crosshair/hud_element_crosshair', func
 end)
 
 mod.on_setting_changed = function(setting_id)
-    if not BAR_COLOR_SETTING_IDS[setting_id] then
+    if setting_id ~= 'bar_color' then
         return
     end
 

@@ -966,7 +966,7 @@ function M.toughness_regen(unit, live_stat_buffs, tough_template, max_toughness,
     local regen = tough_template.regeneration_speed
     local base_rate = regen and (regen.still or regen.moving or 0)
     local wep_mod_t = wep_tough and wep_tough.regeneration_speed_modifier
-    local wep_mod = wep_mod_t and (wep_mod_t.still or wep_mod_t.moving or 1)
+    local wep_mod = wep_mod_t and (wep_mod_t.still or wep_mod_t.moving or 1) or 1
 
     local rate_modifier = (fv and fv.toughness_regen_rate_modifier or s.toughness_regen_rate_modifier or 1)
         * (fv and fv.toughness_regen_rate_multiplier or s.toughness_regen_rate_multiplier or 1)
