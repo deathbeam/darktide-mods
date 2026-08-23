@@ -50,11 +50,25 @@ local function _display_value(value, default_value)
     return value
 end
 
+local function _is_valid_color(color)
+    if type(color) ~= 'table' or #color ~= 4 then
+        return false
+    end
+
+    for i = 1, 4 do
+        if type(color[i]) ~= 'number' or color[i] < 0 or color[i] > 255 then
+            return false
+        end
+    end
+
+    return true
+end
+
 local function _display_settings(mod_instance, mode)
     local defaults = DISPLAY_DEFAULTS[mode] or DISPLAY_DEFAULTS.mode_1
     local color = mod_instance:get(_display_setting_key(mode, 'color'))
 
-    if type(color) ~= 'table' or #color < 4 then
+    if not _is_valid_color(color) then
         color = { 255, defaults.color[1], defaults.color[2], defaults.color[3] }
     end
 

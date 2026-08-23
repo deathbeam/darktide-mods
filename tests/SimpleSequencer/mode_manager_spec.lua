@@ -73,4 +73,21 @@ describe('SimpleSequencer ModeManager', function()
         assert.are.equal('mode_2', manager:active())
         assert.are.equal(1, reset_count)
     end)
+    it('uses the default when saved display color data is invalid', function()
+        local mock = DarktideMock.new()
+        mock.settings.mode_1_display_color = { 85, 226, 255 }
+        mock.settings.mode_1_color_r = 0
+        mock.settings.mode_1_color_g = 0
+        mock.settings.mode_1_color_b = 0
+        function mock.mod:set(setting_id, value)
+            mock.settings[setting_id] = value
+        end
+        local ModeManager = dofile(root .. '/SimpleSequencer/scripts/mods/SimpleSequencer/modules/ModeManager.lua')
+        local manager = ModeManager:new(mock.mod)
+        assert.are.same({ 255, 255, 190, 80 }, manager:display('mode_1').color)
+        assert.are.same({ 255, 255, 190, 80 }, mock.settings.mode_1_display_color)
+        assert.are.equal(0, mock.settings.mode_1_color_r)
+        assert.are.equal(0, mock.settings.mode_1_color_g)
+        assert.are.equal(0, mock.settings.mode_1_color_b)
+    end)
 end)

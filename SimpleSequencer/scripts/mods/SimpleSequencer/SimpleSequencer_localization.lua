@@ -84,10 +84,10 @@ local localizations = {
         en = 'Modes',
     },
     melee_settings = {
-        en = 'Melee',
+        en = 'Melee (Current Mode)',
     },
     ranged_settings = {
-        en = 'Ranged',
+        en = 'Ranged (Current Mode)',
     },
     mode_display_name = {
         en = 'Mode Name',
