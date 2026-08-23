@@ -485,6 +485,41 @@ describe('SimpleCharging ChargeSources', function()
         assert.are.equal(0, #sources)
     end)
 
+    it('ignores charge-time weapon blessings', function()
+        local mock = DarktideMock.new()
+        local ChargeSources = _load_sources(mock)
+        local buffs = {
+            {
+                _template = {
+                    name = 'weapon_trait_bespoke_faster_charge_on_chained_attacks',
+                    class_name = 'stepped_stat_buff',
+                    max_stacks = 5,
+                },
+                visual_stack_count = function()
+                    return 1
+                end,
+            },
+            {
+                _template = {
+                    name = 'weapon_trait_bespoke_forcestaff_p3_faster_charge_on_chained_secondary_attacks',
+                    class_name = 'stepped_stat_buff',
+                    max_stacks = 5,
+                },
+                visual_stack_count = function()
+                    return 1
+                end,
+            },
+        }
+        local context = {
+            buff_extension = { _buffs = buffs },
+            wielded_slot = 'slot_secondary',
+        }
+
+        local sources = ChargeSources.collect(context)
+
+        assert.are.equal(0, #sources)
+    end)
+
     it('ignores non-progress windup buffs', function()
         local mock = DarktideMock.new()
         local ChargeSources = _load_sources(mock)

@@ -20,6 +20,7 @@ local PROGRESS_SOURCE_RULES = {
         },
         excluded_patterns = {
             'continuous_fire',
+            'faster_charge_on_chained',
             'heat',
             'overheat',
             'warp_charge',
